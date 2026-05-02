@@ -8,25 +8,15 @@ The check-in panel is what staff use on the day of the event to mark people as a
 
 ## When check-in becomes available
 
-In the **Event** phase (sub-states **Live** and **Preparing**) the **Check-in** item appears in the sidebar for everyone with check-in access — that's where you'll spend most of your time during the event.
+Check-in screens are role-aware — what you see depends on who you are.
 
-In the **Registration** phase (before the event starts), Check-in is **not** in the sidebar — the focus during registration is on getting people signed up, not on ticking them in. But you can still reach the panel ahead of time to **configure your check-in columns** so you're ready on the day. Two paths:
+**Admins** (Super Admin or per-event admin) reach check-in via the Enter check-in mode → button on the event's main view, visible during the Preparing and Live sub-states of the Event phase. This opens immersive mode at /admin/events/{eventId}/checkin — a full-screen overlay with no sidebar, designed for the registration desk on a tablet. A "Back to board" button returns to the normal admin view.
 
-- **Admins** (Super Admin or the event's admins) — open the **Registration overview** page (the default landing in Registration phase) and click the small **→ Set up the check-in panel** link below the Close registration / Share form buttons.
-- **Staff with check-in write access AND the "Access before the event starts" sub-permission** — same link appears for them too. The sub-permission is set by an event admin in the Staff card (covered in section 11). Without it, staff get check-in only once the event starts.
+**Staff with only check-in permission** are taken straight to immersive mode when they open the event during the Event phase. They have no exit button — this is their dedicated view.
 
-In the **Setup** phase (event is `draft`, no registrations yet), Check-in isn't reachable for anyone. Configure things in the order: Setup hub → open registration → Registration phase → set up check-in columns → close registration → Event phase begins.
+**Staff with check-in plus other permissions** (e.g. check-in + people) see a Check-in entry in the sidebar. Clicking it loads the check-in screen inside the normal admin layout, alongside their other tools. This lets them switch between duties without leaving the layout.
 
----
-
-## Two views: panel vs immersive mode
-
-There are two ways to use Check-in:
-
-- **Inline panel** (`Check-in` in the sidebar) — embedded in the normal admin layout. Useful when you want to glance at check-in stats while doing other admin work, or for adjustments mid-event.
-- **Immersive mode** (`Enter check-in mode →` button on the Organise page during the Event phase) — full-page overlay with no sidebar. The route is `/admin/events/{eventId}/checkin`. This is the view to use at the registration desk on a tablet.
-
-The data is the same in both views — ticks made in either show up immediately in the other (and on every other connected device, see [Real-time sync](#real-time-sync) below).
+The data is the same in every case — ticks made on one device propagate immediately to every other connected screen (see Real-time sync below).
 
 ---
 
@@ -63,26 +53,19 @@ Use cases worth noting:
 
 ## What ticks mean and how they propagate
 
-When a tick lands, three things happen:
+When a tick lands, two things happen:
 
-1. **The DB row updates.** The tick is persistent — no separate save step.
-2. **The check-in time records.** For the main check-in column only, the timestamp captures when the tick was placed.
-3. **Other connected devices update within ~1–2 seconds** without a refresh — see below.
-
-Multiple devices can check people in simultaneously — Postgres handles concurrent writes correctly. If two staff members tick the same person at the same moment, the result is just "ticked"; nobody sees an error. **Updates also propagate live across devices** — when one staff member ticks someone in, the change appears within a second or two on every other open Check-in screen for the same event, with no refresh needed.
+1. The DB row updates. The tick is persistent — no separate save step.
+2. The check-in time records. For the main check-in column only, the timestamp captures when the tick was placed.
 
 ---
 
 ## Real-time sync
 
-Both views (inline and immersive) subscribe to a server-sent event stream for the event's check-in topic. When any tick happens — on any device — every connected client receives the change and updates its display within ~1–2 seconds.
+Every check-in screen subscribes to a server-sent event stream for the event. When any tick happens — main column or custom column, on any device — every connected client updates its display within ~1–2 seconds. No refresh button anywhere.
 
-The stream covers:
-
-- The main **Check-in** tick + timestamp.
-- All **custom column** ticks.
-
-What you'll see in practice: a participant arrives at the door, staff member A ticks them in on her phone, staff member B watching the immersive screen at a different desk sees the row update instantly. No refresh button anywhere.
+What you'll see in practice: a participant arrives at the door, staff member A ticks them in on her phone, staff member B watching a different screen sees the row update instantly.
+Multiple devices can tick the same person at the same moment without conflict — Postgres handles concurrent writes correctly, and the result is just "ticked". Nobody sees an error.
 
 The connection is automatic — open the page, you're subscribed; close it, you're disconnected. There's no setup. If the network drops briefly the stream auto-reconnects when it returns.
 
