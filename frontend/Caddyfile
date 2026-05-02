@@ -1,0 +1,76 @@
+# Caddy serves the production Vite bundle out of /srv and reverse-
+# proxies /api/* and /health to the backend container.
+#
+# Listens on :5173 internally so the docker-compose port mapping
+# (6120:5173) is consistent.
+#
+# Ordering note: handle blocks match top-to-bottom. The default
+# `handle` at the end catches everything else, including SPA routes
+# like /admin/events/:id that have no file — `try_files` rewrites
+# them to /index.html so React Router can take over.
+
+:5173 {
+    # v0.83 #32 / v0.84: SSE endpoints need flush_interval=-1 to bypass
+    # Caddy's default response buffering. Without this, server-sent events
+    # get held until the connection closes — meaning real-time sync
+    # (Check-in, Organise) appears broken even though the backend
+    # correctly publishes. v0.84: simplified — `transport http` with
+    # `read_buffer` was incorrect for HTTP/1.1 SSE traffic.
+    @sse path /api/events/*/checkin/stream /api/events/*/organise/stream
+    handle @sse {
+        reverse_proxy http://backend:8000 {
+            flush_interval -1
+        }
+    }
+
+    # Reverse-proxy the API. `backend` resolves to the backend
+    # service on the moimio_default network (created by compose).
+    handle /api/* {
+        reverse_proxy http://backend:8000
+    }
+
+    # Health endpoint, same routing rules as /api.
+    handle /health {
+        reverse_proxy http://backend:8000
+    }
+
+    # v0.99c update-prompt reliability fix:
+    # The service worker, its registration shim, the Workbox runtime,
+    # and the manifest must NEVER be served from HTTP cache. When
+    # registration.update() fires, the browser does an HTTP request
+    # for /sw.js — if Caddy's static file serving (or an upstream
+    # proxy) returns a cached copy, the browser sees no byte change
+    # and decides "no update available", even when a new build has
+    # been deployed. This is the "Chrome/DDG: prompt doesn't come
+    # up" symptom. Explicit Cache-Control with no-cache + must-
+    # revalidate forces every check to confirm against the origin.
+    @sw {
+        path /sw.js /registerSW.js /workbox-*.js /manifest.webmanifest
+    }
+    handle @sw {
+        header Cache-Control "no-cache, no-store, must-revalidate"
+        header Pragma "no-cache"
+        header Expires "0"
+        root * /srv
+        file_server
+    }
+
+    # Everything else: static files from the Vite build output, with
+    # SPA fallback. `try_files {path} /index.html` serves the
+    # requested file if it exists, otherwise index.html — this is
+    # what makes React Router routes like /admin/events/123 work
+    # on a full-page load or refresh.
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+        encode zstd gzip
+    }
+
+    # Server log goes to the container's stderr so `docker compose
+    # logs frontend` shows requests, matching backend/db logging.
+    log {
+        output stderr
+        format console
+    }
+}

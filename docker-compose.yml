@@ -1,0 +1,66 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-moimio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-moimio_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-moimio}
+    ports:
+      - "${DB_PORT:-6122}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-moimio}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-moimio}:${POSTGRES_PASSWORD:-moimio_dev}@db:5432/${POSTGRES_DB:-moimio}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production-use-64-chars-minimum}
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:6120}
+      RATE_LIMIT_REGISTRATION: ${RATE_LIMIT_REGISTRATION:-10}
+      APP_URL: ${APP_URL:-http://localhost:6120}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Moimio}
+      SMTP_TLS: ${SMTP_TLS:-true}
+      SMTP_SSL: ${SMTP_SSL:-false}
+    ports:
+      - "${BACKEND_PORT:-6121}:8000"
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:6121}
+    ports:
+      - "${FRONTEND_PORT:-6120}:5173"
+    # The frontend container runs a multistage production build:
+    # Vite produces the static bundle, Caddy serves it from /srv and
+    # reverse-proxies /api/* and /health to the backend. There is no
+    # source volume mount — host edits to ./frontend/src do not affect
+    # the running container. To pick up frontend code changes, rebuild
+    # the image: `docker compose build --no-cache frontend`.
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

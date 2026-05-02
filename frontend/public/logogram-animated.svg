@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500" viewBox="-340 -340 1908 1903" style="overflow: visible;">
+  <style>
+    @keyframes mm-gather {
+      0%   { transform: translate(var(--dx, 0), var(--dy, 0)); opacity: 0; }
+      30%  { opacity: 1; }
+      55%, 100% { transform: translate(0, 0); opacity: 1; }
+    }
+    circle {
+      animation: mm-gather 4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+      transform-box: fill-box;
+    }
+    circle.b { animation-delay: 0s; }
+    circle.y { animation-delay: 0.45s; }
+    circle.r { animation-delay: 0.9s; }
+    @media (prefers-reduced-motion: reduce) {
+      circle { animation: none; }
+    }
+  </style>
+  <circle class="b" cx="455" cy="142" r="50" fill="rgb(70,130,180)" style="--dx:-80px;--dy:-235px"/>
+  <circle class="b" cx="287" cy="332" r="75" fill="rgb(70,130,180)" style="--dx:-164px;--dy:-140px"/>
+  <circle class="b" cx="165.5" cy="805.5" r="87.5" fill="rgb(47,87,121)" style="--dx:-224px;--dy:97px"/>
+  <circle class="b" cx="431.5" cy="1051.5" r="87.5" fill="rgb(29,55,76)" style="--dx:-91px;--dy:220px"/>
+  <circle class="b" cx="137" cy="458" r="75" fill="rgb(70,130,180)" style="--dx:-239px;--dy:-77px"/>
+  <circle class="b" cx="116" cy="637" r="50" fill="rgb(47,87,121)" style="--dx:-249px;--dy:13px"/>
+  <circle class="b" cx="239" cy="574" r="50" fill="rgb(70,130,180)" style="--dx:-188px;--dy:-19px"/>
+  <circle class="b" cx="253" cy="986" r="50" fill="rgb(47,87,121)" style="--dx:-180px;--dy:187px"/>
+  <circle class="b" cx="345" cy="886" r="50" fill="rgb(47,87,121)" style="--dx:-134px;--dy:137px"/>
+  <circle class="b" cx="187" cy="267" r="25" fill="rgb(70,130,180)" style="--dx:-213px;--dy:-172px"/>
+  <circle class="b" cx="320.5" cy="193.5" r="37.5" fill="rgb(70,130,180)" style="--dx:-147px;--dy:-209px"/>
+  <circle class="b" cx="404.5" cy="229.5" r="37.5" fill="rgb(70,130,180)" style="--dx:-105px;--dy:-191px"/>
+  <circle class="y" cx="616" cy="106" r="50" fill="rgb(255,215,0)" style="--dx:1px;--dy:-253px"/>
+  <circle class="y" cx="750.5" cy="139.5" r="62.5" fill="rgb(255,215,0)" style="--dx:68px;--dy:-236px"/>
+  <circle class="y" cx="934.5" cy="431.5" r="62.5" fill="rgb(213,179,0)" style="--dx:160px;--dy:-90px"/>
+  <circle class="y" cx="922.5" cy="206.5" r="87.5" fill="rgb(255,215,0)" style="--dx:154px;--dy:-202px"/>
+  <circle class="y" cx="1089" cy="463" r="75" fill="rgb(171,144,0)" style="--dx:237px;--dy:-74px"/>
+  <circle class="y" cx="1028.5" cy="331.5" r="37.5" fill="rgb(213,179,0)" style="--dx:207px;--dy:-140px"/>
+  <circle class="r" cx="750.5" cy="1117.5" r="37.5" fill="rgb(86,0,21)" style="--dx:68px;--dy:253px"/>
+  <circle class="r" cx="1116" cy="606" r="50" fill="rgb(128,0,32)" style="--dx:251px;--dy:-3px"/>
+  <circle class="r" cx="979" cy="631" r="50" fill="rgb(128,0,32)" style="--dx:182px;--dy:10px"/>
+  <circle class="r" cx="1089" cy="772" r="75" fill="rgb(128,0,32)" style="--dx:237px;--dy:80px"/>
+  <circle class="r" cx="616.5" cy="1105.5" r="62.5" fill="rgb(54,0,13)" style="--dx:1px;--dy:247px"/>
+  <circle class="r" cx="813.5" cy="992.5" r="87.5" fill="rgb(86,0,21)" style="--dx:100px;--dy:190px"/>
+  <circle class="r" cx="991.5" cy="929.5" r="62.5" fill="rgb(128,0,32)" style="--dx:189px;--dy:159px"/>
+  <circle class="r" cx="916.5" cy="785.5" r="62.5" fill="rgb(128,0,32)" style="--dx:151px;--dy:87px"/>
+</svg>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!--
+      §v0.59a PWA foundations.
+      - viewport-fit=cover: required for env(safe-area-inset-*) to return
+        non-zero values on notched iOS devices. Without this the notch/home
+        bar would obscure fixed UI (hamburger, sidebar logo, bottom sheets).
+      - theme-color: matches the app background so the iOS/Android browser
+        chrome blends with the page. Two entries with media queries so the
+        colour follows the device's light/dark preference. Values mirror
+        --app-bg in index.css.
+      - apple-mobile-web-app-* + mobile-web-app-capable: prime the app for
+        "Add to Home Screen" in v0.59b (manifest ship). Safe to set now;
+        they only take effect once the user installs.
+    -->
+    <meta name="theme-color" content="#F7F5F2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0F1E2E" media="(prefers-color-scheme: dark)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Moimio" />
+    <title>Moimio — Gather · Organise</title>
+    <!-- §9.2 Typography — Nunito (variable, all weights) for headings +
+         wordmark; Nunito Sans (variable) for body + tracked labels.
+         v0.70d-3c (R14): self-hosted from /fonts/. Subset to Latin
+         (with extended Latin + common punctuation + arrows + geometric
+         shapes for · markers and → arrows). 186 KB combined.
+         Pretendard for Hangul is loaded conditionally per locale —
+         see index.css. -->
+    <link rel="preload" href="/fonts/nunito-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/nunito-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <!--
+      Theme bootstrap: runs before React mounts so the first paint is
+      in the correct theme (no light-to-dark flash). Mirrors useTheme.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('moimio.theme');
+          var wantDark;
+          if (stored === 'dark') wantDark = true;
+          else if (stored === 'light') wantDark = false;
+          else {
+            // 'system' or missing — follow OS
+            wantDark = window.matchMedia &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches;
+          }
+          if (wantDark) document.documentElement.classList.add('dark');
+        } catch (e) { /* ignore — default to light */ }
+      })();
+    </script>
+    <style>
+      html, body { overscroll-behavior: none; }
+      [draggable="true"] { touch-action: none; -webkit-touch-callout: none; }
+    </style>
+  </head>
+  <body class="font-body">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

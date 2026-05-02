@@ -1,0 +1,90 @@
+# ─── Environment ──────────────────────────────────────────────────
+# Never commit your local environment. .env.example is the template.
+.env
+.env.local
+.env.prod
+.env.*.bak
+
+# ─── Python ───────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+*.egg
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# ─── Node / Vite / Frontend ───────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output
+frontend/dist/
+.vite/
+.vite-cache/
+
+# ─── Docker ───────────────────────────────────────────────────────
+# Local Postgres data volume — sometimes ends up on disk during
+# experimentation. Never commit.
+pgdata/
+
+# ─── IDE & Editor ─────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# JetBrains
+*.iml
+.idea_modules/
+
+# ─── Operating system ─────────────────────────────────────────────
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# ─── Logs ─────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── Local scratch ────────────────────────────────────────────────
+# Working directory for ad-hoc experiments — keep out of version control.
+scratch/
+tmp/
+*.tmp

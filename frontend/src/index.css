@@ -1,0 +1,277 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  MOIMIO TYPOGRAPHY (§9.2) — v0.70d-3c (R14)
+  ===========================================
+  Self-hosted from /public/fonts/. Variable woff2 means one file per
+  family covers all weights (400/500/600/700/800). Subset to Latin
+  + extended Latin + common punctuation + arrows + geometric shapes
+  for the · markers and → arrows used in copy.
+
+  Pretendard for Hangul is loaded conditionally — only when the
+  rendered text contains Korean characters (via unicode-range), so
+  non-KR users never download the 268 KB woff2.
+
+  font-display: swap means text renders immediately in the system
+  fallback while the variable font loads, then swaps in seamlessly.
+  Preload links in index.html prime the cache so the swap happens
+  before the user notices.
+*/
+
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 400 800;          /* variable axis range */
+  font-display: swap;
+  src: url('/fonts/nunito-latin.woff2') format('woff2-variations'),
+       url('/fonts/nunito-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/nunito-sans-latin.woff2') format('woff2-variations'),
+       url('/fonts/nunito-sans-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Pretendard';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  /* Only loaded when rendering glyphs in this range (Hangul +
+     Hangul Compat Jamo + Hangul Syllables + Halfwidth Hangul).
+     Non-KR sessions skip the 268 KB download entirely. */
+  unicode-range: U+AC00-D7AF, U+1100-11FF, U+3130-318F, U+FFA0-FFDC;
+  src: url('/fonts/pretendard-medium.subset.woff2') format('woff2');
+}
+
+/*
+  MOIMIO DESIGN SYSTEM — CSS VARIABLES
+  =====================================
+  Variables below implement §9.5 (Light & dark mode) as CSS custom properties.
+  Components use them via Tailwind arbitrary-value syntax:  bg-[var(--app-bg)]
+  Dark mode is activated by the `.dark` class on <html>, set by useTheme hook.
+*/
+
+:root {
+  /* Light theme (default) — §9.5 */
+  --app-bg:        #F7F5F2;              /* Off White */
+  --card-bg:       rgba(255,255,255,0.55); /* Semi-transparent card §9.5 */
+  --card-bg-solid: #FFFFFF;              /* Use when transparency is wrong */
+  --card-border:   rgba(15,30,46,0.08);  /* 0.5px border */
+  --text-primary: #0F1E2E;               /* Deep Navy */
+  --text-muted:   #4b5a6b;               /* Calm body muted */
+  --text-subtle:  #8893a0;               /* Subtle/hint */
+  --io-accent:    #4682B4;               /* Steel Blue io on light */
+  --on-accent:    #FFFFFF;               /* v0.70d-1: foreground on --io-accent surfaces.
+                                            White on Steel Blue (light mode); flips to
+                                            Deep Navy in dark mode where --io-accent = Gold.
+                                            Used by saturated CTAs, success toasts, and
+                                            the allocation review Commit button. */
+  --sidebar-bg:   #1c2538;               /* Light-mode sidebar surface */
+  --tick-color:   #4682B4;               /* ✓ indicator */
+  --accent-checked: #4682B4;             /* Check-in row left edge (light) */
+  --alert-burgundy: #800020;             /* v0.55.1: alert/warning family (light) */
+
+  /* v0.70b — semantic tints for the brand-aligned 2-color status system.
+     These pair with the Tailwind plugin in tailwind.config.js that exposes
+     them as `bg-accent-tint`, `border-accent`, `bg-alert-tint`, etc. The
+     colours are tinted versions of --io-accent and --alert-burgundy so
+     they read as backgrounds without competing for attention. */
+  --accent-tint:   rgba(70,130,180,0.10);  /* Steel Blue at 10% — bg fills */
+  --accent-border: rgba(70,130,180,0.22);  /* Steel Blue at 22% — borders */
+  --alert-tint:    rgba(128,0,32,0.08);    /* Burgundy at 8% — bg fills (matches v0.57 ErrorBanner pattern) */
+  --alert-border:  rgba(128,0,32,0.16);    /* Burgundy at 16% — borders (matches v0.57 ErrorBanner pattern) */
+  --neutral-tint:  rgba(15,30,46,0.04);    /* Navy at 4% — non-semantic inset/chip backgrounds */
+
+  /* v0.70d-2a (R8c) — "pending" semantic tier. Reserved strictly for
+     states the organiser will revisit: unassigned participants, pending
+     registrations, capacity approaching-full, deactivated users, etc.
+     NOT for phase labels, NOT for closed states, NOT as a generic
+     "caution" colour. The brand colour is a muted amber (#B06800
+     light / #F0B84D dark) that reads as honest warmth without
+     competing with io-accent for "primary action" attention. */
+  --pending-color:  #B06800;                 /* Muted amber on light */
+  --pending-tint:   rgba(255,159,28,0.14);   /* Amber at 14% — bg fills */
+  --pending-border: rgba(255,159,28,0.32);   /* Amber at 32% — borders */
+
+  /* v0.70d-2c (R3-C-hybrid) — Moimio logogram palette, light mode.
+     These are the canonical shades for the brand mark (logogram.svg,
+     26 shapes). Three families × three shades each. On light the
+     values match the brand asset exactly; on dark (see block below)
+     the three brand-true bright values are preserved and only the
+     structural mid/deep shades are lifted for legibility on the navy
+     surface. Decision recorded in the brand companion doc
+     `brand-kit/moimio-logogram-darkmode.html` ("Option 5d").
+     These vars should be consumed by any surface rendering the
+     logogram; they are NOT general UI semantic tokens. UI colour
+     needs should use --io-accent / --alert-burgundy / --pending-color
+     / etc. */
+  --logogram-blue-bright:     #4682B4;
+  --logogram-navy-mid:        #2F5779;
+  --logogram-navy-deep:       #1D374C;
+  --logogram-gold-bright:     #FFD700;
+  --logogram-gold-mid:        #D5B300;
+  --logogram-gold-deep:       #AB9000;
+  --logogram-burgundy-bright: #800020;
+  --logogram-burgundy-mid:    #560015;
+  --logogram-burgundy-deep:   #36000D;
+}
+
+.dark {
+  /* Dark theme — §9.5 */
+  --app-bg:        #0F1E2E;
+  --card-bg:       #1a2c40;
+  --card-bg-solid: #1a2c40;
+  --card-border:   rgba(255,255,255,0.06);
+  --text-primary: #F7F5F2;
+  --text-muted:   #b4c0cc;
+  --text-subtle:  #6e7d8e;
+  --io-accent:    #FFD700;               /* Gold io on dark */
+  --on-accent:    #0F1E2E;               /* v0.70d-1: Deep Navy on Gold (dark mode).
+                                            Pairs with --io-accent flip above. */
+  --sidebar-bg:   #050d18;
+  --tick-color:   #FFD700;
+  --accent-checked: #FFD700;             /* Check-in row left edge (dark) */
+  --alert-burgundy: #CF6679;             /* v0.55.1: legible burgundy on dark bg
+                                            (Material dark-mode error tone).
+                                            Pure #800020 is unreadable on #1a2c40. */
+
+  /* v0.70b — semantic tints, dark-mode values. Gold tint pairs with the
+     dark mode --io-accent flip; burgundy tint uses the brighter pink-red
+     (#CF6679) base so it stays legible on the dark card surface. */
+  --accent-tint:   rgba(255,215,0,0.10);   /* Gold at 10% */
+  --accent-border: rgba(255,215,0,0.20);   /* Gold at 20% */
+  --alert-tint:    rgba(207,102,121,0.10); /* Pink-red at 10% */
+  --alert-border:  rgba(207,102,121,0.22); /* Pink-red at 22% */
+  --neutral-tint:  rgba(255,255,255,0.04); /* White at 4% — non-semantic inset/chip backgrounds */
+
+  /* v0.70d-2a (R8c) — pending tier, dark-mode values. Lighter amber
+     (#F0B84D) for legibility on the deep navy surface; tints stay at
+     similar opacities but use the lighter base colour. */
+  --pending-color:  #F0B84D;                 /* Light amber on dark */
+  --pending-tint:   rgba(240,184,77,0.12);   /* Light amber at 12% */
+  --pending-border: rgba(240,184,77,0.28);   /* Light amber at 28% */
+
+  /* v0.70d-2c (R3-C-hybrid) — logogram palette, dark mode (Option 5d).
+     The three brand-true BRIGHT shades are identical to light mode —
+     #4682B4 Steel Blue, #FFD700 Gold, #800020 Burgundy. Only the
+     structural MID and DEEP shades are lifted so they don't flatten
+     into the deep-navy background. Decision recorded in the brand
+     companion doc `brand-kit/moimio-logogram-darkmode.html`. */
+  --logogram-blue-bright:     #4682B4;
+  --logogram-navy-mid:        #6B96BC;
+  --logogram-navy-deep:       #4A7293;
+  --logogram-gold-bright:     #FFD700;
+  --logogram-gold-mid:        #D5B300;
+  --logogram-gold-deep:       #AB9000;
+  --logogram-burgundy-bright: #800020;
+  --logogram-burgundy-mid:    #6B1F2A;
+  --logogram-burgundy-deep:   #551A24;
+}
+
+/* Apply page background + default text colour from the active theme */
+html, body {
+  background-color: var(--app-bg);
+  color: var(--text-primary);
+  overscroll-behavior: none;
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /*
+    §v0.59a Safe-area convention.
+    Any element that is `fixed`-positioned against the viewport top, bottom,
+    left, or right edge must respect iOS notch / home-bar insets by using
+    `env(safe-area-inset-*)` in its positioning or padding. We do this
+    inline with Tailwind arbitrary-value syntax rather than creating named
+    utilities, because each call-site needs to COMBINE the inset with its
+    existing spacing (e.g. `top-[calc(0.75rem+env(safe-area-inset-top))]`).
+    Named utilities would collapse those into one-off helpers that don't
+    compose cleanly.
+
+    Non-notched devices (desktop, older phones, most Android) return 0 for
+    all env(safe-area-inset-*) values, so this convention is a no-op there
+    and harmless to apply unconditionally.
+
+    Requires `viewport-fit=cover` on the viewport meta (set in index.html).
+  */
+
+  /* Card surfaces per §9.6 — use .card-surface anywhere a card is wanted.
+     Components may still override with Tailwind utilities, but this
+     centralises the radius, border, and theme-aware backgrounds. */
+  .card-surface {
+    background-color: var(--card-bg);
+    border: 0.5px solid var(--card-border);
+    border-radius: 6px;
+  }
+  .card-surface-solid {
+    background-color: var(--card-bg-solid);
+    border: 0.5px solid var(--card-border);
+    border-radius: 6px;
+  }
+
+  /* Status pill §9.7 — tracked uppercase. Structural properties only;
+     background and text colour come from the per-status class
+     (EVENT_STATUS_COLORS in services/display.js → bg-neutral-tint /
+     bg-accent-tint / bg-alert-tint, text-muted / text-accent /
+     text-alert). v0.70d-2d-2 (S7): hardcoded Steel Blue background
+     was previously winning over the per-status class — DRAFT pills
+     read as Steel Blue in light mode + Gold in dark, regardless of
+     status. Now the per-status class wins and Setup-phase DRAFT
+     reads neutral as the audit intended. */
+  .pill-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-family: 'Nunito Sans', 'Pretendard', sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.4;
+  }
+}
+
+/* Draggable touch behaviour (unchanged from v45) */
+[draggable="true"] {
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+
+/* v0.70d-2e-2 (S3 Q2): gate-card "ready" moment.
+   Triggered by adding the `.gate-flash` class for ~400ms when
+   canOpenReg transitions false → true. Composed transition,
+   not celebration: opacity 0.7 → 1 + scale 1.0 → 1.02 → 1.0,
+   ease-out-quint timing (mirrors Gather animation's signature).
+   `transform-origin: center` keeps the bump symmetrical.
+   Reduced-motion users skip the flash via the JS gate;
+   this @media block is defence-in-depth in case the class
+   were ever applied without the JS check. */
+@keyframes gate-flash {
+  0%   { opacity: 0.7;  transform: scale(1); }
+  50%  { opacity: 1;    transform: scale(1.02); }
+  100% { opacity: 1;    transform: scale(1); }
+}
+.gate-flash {
+  animation: gate-flash 400ms cubic-bezier(0.23, 1, 0.32, 1);
+  transform-origin: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gate-flash {
+    animation: none;
+  }
+}

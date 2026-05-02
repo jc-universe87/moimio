@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500" viewBox="0 0 1228 1223">
+  <rect width="1228" height="1223" fill="#F7F5F2"/>
+
+  <ellipse cx="616" cy="106" rx="50" ry="50" fill="rgb(255,215,0)"/>
+  <ellipse cx="455" cy="142" rx="50" ry="50" fill="rgb(70,130,180)"/>
+  <ellipse cx="287" cy="332" rx="75" ry="75" fill="rgb(70,130,180)"/>
+  <ellipse cx="165.5" cy="805.5" rx="87.5" ry="87.5" fill="rgb(47,87,121)"/>
+  <ellipse cx="431.5" cy="1051.5" rx="87.5" ry="87.5" fill="rgb(29,55,76)"/>
+  <ellipse cx="137" cy="458" rx="75" ry="75" fill="rgb(70,130,180)"/>
+  <ellipse cx="116" cy="637" rx="50" ry="50" fill="rgb(47,87,121)"/>
+  <ellipse cx="239" cy="574" rx="50" ry="50" fill="rgb(70,130,180)"/>
+  <ellipse cx="253" cy="986" rx="50" ry="50" fill="rgb(47,87,121)"/>
+  <ellipse cx="345" cy="886" rx="50" ry="50" fill="rgb(47,87,121)"/>
+  <ellipse cx="187" cy="267" rx="25" ry="25" fill="rgb(70,130,180)"/>
+  <ellipse cx="320.5" cy="193.5" rx="37.5" ry="37.5" fill="rgb(70,130,180)"/>
+  <ellipse cx="404.5" cy="229.5" rx="37.5" ry="37.5" fill="rgb(70,130,180)"/>
+  <ellipse cx="750.5" cy="139.5" rx="62.5" ry="62.5" fill="rgb(255,215,0)"/>
+  <ellipse cx="934.5" cy="431.5" rx="62.5" ry="62.5" fill="rgb(213,179,0)"/>
+  <ellipse cx="922.5" cy="206.5" rx="87.5" ry="87.5" fill="rgb(255,215,0)"/>
+  <ellipse cx="1089" cy="463" rx="75" ry="75" fill="rgb(171,144,0)"/>
+  <ellipse cx="1028.5" cy="331.5" rx="37.5" ry="37.5" fill="rgb(213,179,0)"/>
+  <ellipse cx="750.5" cy="1117.5" rx="37.5" ry="37.5" fill="rgb(86,0,21)"/>
+  <ellipse cx="1116" cy="606" rx="50" ry="50" fill="rgb(128,0,32)"/>
+  <ellipse cx="979" cy="631" rx="50" ry="50" fill="rgb(128,0,32)"/>
+  <ellipse cx="1089" cy="772" rx="75" ry="75" fill="rgb(128,0,32)"/>
+  <ellipse cx="616.5" cy="1105.5" rx="62.5" ry="62.5" fill="rgb(54,0,13)"/>
+  <path d="M813.5,905C861.79,905,901,944.21,901,992.5C901,1040.79,861.79,1080,813.5,1080C765.21,1080,726,1040.79,726,992.5C726,944.21,765.21,905,813.5,905" fill="rgb(86,0,21)"/>
+  <ellipse cx="991.5" cy="929.5" rx="62.5" ry="62.5" fill="rgb(128,0,32)"/>
+  <ellipse cx="916.5" cy="785.5" rx="62.5" ry="62.5" fill="rgb(128,0,32)"/>
+
+</svg>
