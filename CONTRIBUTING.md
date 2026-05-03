@@ -4,6 +4,8 @@ Thanks for your interest in contributing. Moimio CE is a small project with a cl
 
 ## Project philosophy
 
+A fuller architectural reference is at [`ARCHITECTURE.md`](ARCHITECTURE.md) — read it before designing any non-trivial change. The short version:
+
 Moimio CE is built for **small and mid-sized event organisers** — churches, missions, retreats. Decisions about features, scope, and architecture are filtered through that lens. A request that makes Moimio more enterprise-flexible at the cost of being harder to set up for a volunteer organiser is, almost always, the wrong direction.
 
 We also care about:
@@ -79,10 +81,11 @@ ESLint v9 with a flat config. Some `react-hooks/exhaustive-deps` warnings are ac
 
 ## Architecture notes
 
-There's no separate developer documentation in this public repository — the architecture lives in the source code, with module-level docstrings doing the heavy lifting. Good places to start:
+The product- and architecture-level *why* is in [`ARCHITECTURE.md`](ARCHITECTURE.md). Beyond that, the architecture lives in the source code, with module-level docstrings doing the heavy lifting. Good places to start:
 
 | Topic | Where to look |
 |---|---|
+| Product invariants and design principles | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | Allocation engine algorithm | `backend/app/services/engine_service.py` (top-of-file docstring) |
 | Database schema | [`docs/data-model.md`](docs/data-model.md) |
 | GDPR architecture | [`docs/gdpr-compliance.md`](docs/gdpr-compliance.md) |

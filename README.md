@@ -59,6 +59,7 @@ First-run setup (creating the initial admin account, configuring email, creating
 | **[FAQ](docs/faq.md)** | Common questions about features, scale, hosting, GDPR. |
 | **[Glossary](docs/glossary.md)** | Moimio-specific terms: clusters, marks, group codes, allocation categories. |
 | **[GDPR Compliance](docs/gdpr-compliance.md)** | Privacy posture, data flow, Article 20 / Article 17 fulfilment. |
+| **[Architecture](ARCHITECTURE.md)** | The *why* behind the product and code: invariants, the allocation engine, the three-phase lifecycle, design principles. |
 | **[Data Model](docs/data-model.md)** | Schema overview for developers and integrators. |
 | **[Translation Rule](TRANSLATION_RULE.md)** | How the i18n system works; how to add a language. |
 

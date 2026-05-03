@@ -16,6 +16,32 @@ The first time you do this, plan for **about two hours**. Most of that is waitin
 
 ---
 
+## Should you self-host? A reality check
+
+Installation is the easy part. The harder question is what running a production server looks like in the months that follow — especially during a live event when something breaks and you need it back in twenty minutes.
+
+A self-hosted Moimio is a small Linux server you are now responsible for. Concretely, that means:
+
+- **The server has to stay on.** If your office loses power, the venue Wi-Fi goes down, or the VPS provider has an outage — registration is offline until you bring it back.
+- **Updates need applying.** New Moimio versions, security patches to Ubuntu, occasional Docker updates. Not weekly, but not zero.
+- **Things will fail at inconvenient times.** SSL certificate renewal can fail; a database migration can refuse to run after an update; the database container can refuse to restart. The fix is usually one or two commands — *if you know which commands*.
+- **Backups are your problem.** Moimio has a backup feature, but actually running it before a major change, and storing the result somewhere safe, is on you.
+- **DNS, certificates, and tunnels are operationally fragile.** A domain expires, an IP changes, a Cloudflare token rotates — and the registration form goes 404.
+
+**A self-assessment.** Before continuing, please check honestly:
+
+- [ ] You're comfortable running terminal commands and reading error output.
+- [ ] If a service won't start, you know how to find and read its logs.
+- [ ] If the server's IP address changes, you know how to update DNS.
+- [ ] If something breaks at 11pm during the event, you have someone (or the skills) to fix it.
+- [ ] You have a backup strategy, not just an intention.
+
+**If any of these is *no*, please consider [moimio.app](https://moimio.app) — the managed hosted version of the same product.** It runs the same code, the same allocation engine, the same registration flow. Hosting, backups, updates, and SSL are handled. Hosting starts from €10/month; current pricing is on the website.
+
+This guide will continue to walk you through self-hosting if you want it. The cost of self-hosting is not the few euros a month for a VPS — it's the on-call posture during a live event. Make the decision with your eyes open.
+
+---
+
 ## Pick your hosting path
 
 There are two reasonable ways to run Moimio. Pick whichever fits your situation:
@@ -32,9 +58,9 @@ Continue at [Path A — VPS setup](#path-a--rent-a-vps) below.
 
 Run Moimio on a computer you already own, then expose it to the internet through a free service called Cloudflare Tunnel. Zero hosting fees.
 
-**Best if:** you have a spare laptop, mini-PC, or Raspberry Pi that can stay on, and you want to keep all your data physically at your church / office.
+**Best if:** data sovereignty is a hard constraint (you specifically need participant data on hardware you own), and you have someone who can troubleshoot a Linux machine during an event.
 
-The downside is the computer has to stay on and connected to the internet during registration. If your power flickers or the internet drops, the registration form goes offline until you bring it back up.
+A home or office host is materially less reliable than a VPS. Power, internet, the cloudflared connector, and the host OS itself can fail; the registration form goes offline until someone gets to the machine and fixes it. If data sovereignty isn't a hard requirement, Path A (VPS) or [moimio.app](https://moimio.app) are simpler choices.
 
 Continue at [Path B — Self-host with Cloudflare Tunnel](#path-b--self-host-with-cloudflare-tunnel) below.
 
@@ -170,12 +196,14 @@ For up-to-date instructions: <https://developers.cloudflare.com/cloudflare-one/c
 
 ### When self-hosting goes wrong
 
-The two ways self-hosting commonly fails during a real event:
+Things that go wrong with self-hosted setups during a real event, in roughly order of likelihood:
 
-- **Power outage** at your venue/office takes the server down. Mitigate with a UPS (uninterruptible power supply, ~€80) for the computer and your router.
-- **Internet outage** at your venue/office takes the public URL down. Mitigate by having a mobile-tether backup ready, or accept the downtime risk.
+- **Power outage** at your venue or office takes the server down. Mitigate with a UPS (uninterruptible power supply, ~€80) for the computer and your router.
+- **Internet outage** at your venue or office takes the public URL down. Mitigate with a mobile-tether backup ready to swap onto, or accept the downtime risk.
+- **The cloudflared connector dies.** A system update, a memory spike, or a connector version drift can disconnect the tunnel without warning. Fix is typically `sudo systemctl restart cloudflared` from the host — easy *if* you can reach the host and know the command.
+- **The host OS itself becomes unresponsive.** Less likely on a fresh Ubuntu install, more likely on a Raspberry Pi running other workloads or on a host that hasn't been rebooted for months. Recovery usually requires physical access.
 
-Both are real risks worth thinking about before you commit to self-hosting for a high-stakes event. For most small church events, both risks are low enough to be acceptable in exchange for not paying a monthly hosting bill and keeping all data physically at your premises.
+None of these are exotic — they're the normal failure modes of running a server somewhere that isn't a data centre. The question is whether you have someone who can fix them at event time. If yes, self-hosting is a reasonable trade for keeping data physically on your premises. If no, [moimio.app](https://moimio.app) absorbs all four failure modes.
 
 Now jump to [Step 4 — Install Moimio](#step-4--install-moimio).
 
