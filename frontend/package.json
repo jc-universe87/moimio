@@ -30,5 +30,5 @@
     "vite": "^6.3.5",
     "vite-plugin-pwa": "^1.2.0"
   },
-  "moimioVersion": "v1.0.0"
+  "moimioVersion": "v1.0.0e"
 }

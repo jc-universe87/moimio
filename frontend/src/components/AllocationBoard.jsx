@@ -789,8 +789,24 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
 
   const handleUnassign = async (unitId, participantId) => {
     try {
-      await allocApi.unassign(eventId, unitId, participantId);
-      showToast(t('organise.toast.removed', { name: dragParticipant?.name || '', unit: units.find(u => String(u.id) === String(unitId))?.name || itemLabel }));
+      // v1.0.0e: unassign now returns 200 with `{warning}`. When the
+      // backend computed a soft warning (manual move broke an engine-
+      // honoured constraint), surface it as a gold toast instead of
+      // the standard "removed" success toast. Single visible toast at
+      // a time — useToast collapses to the latest call.
+      const res = await allocApi.unassign(eventId, unitId, participantId);
+      const unitName = units.find(u => String(u.id) === String(unitId))?.name || itemLabel;
+      const w = res?.warning;
+      if (w?.key) {
+        showToast(t(w.key, w.params || {}), 'warning');
+      } else {
+        showToast(
+          t('organise.toast.removed', {
+            name: dragParticipant?.name || '',
+            unit: unitName,
+          })
+        );
+      }
       await loadAll();
       if (onDataChange) onDataChange();
     } catch (err) { showToast(err, 'error'); }
@@ -931,14 +947,25 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
         const pName = findName(dragParticipant.id);
         const fromName = dragSource && dragSource !== 'unassigned' ? units.find(u => String(u.id) === String(dragSource))?.name : null;
         const toName = units.find(u => String(u.id) === String(targetUnitId))?.name;
+        // v1.0.0e: capture the call's warning. Single toast at a time:
+        // when a warning is present (manual move broke an engine-
+        // honoured cluster), it overrides the "Alice: Room A → Room B"
+        // success toast — the warning carries enough context that
+        // separately announcing the move would be redundant noise.
+        let res;
         if (isOverlapping) {
           if (dragSource && dragSource !== 'unassigned') await allocApi.unassign(eventId, dragSource, dragParticipant.id);
-          await allocApi.assign(eventId, dragParticipant.id, targetUnitId);
+          res = await allocApi.assign(eventId, dragParticipant.id, targetUnitId);
         } else {
-          if (dragSource && dragSource !== 'unassigned') await allocApi.move(eventId, dragParticipant.id, targetUnitId);
-          else await allocApi.assign(eventId, dragParticipant.id, targetUnitId);
+          if (dragSource && dragSource !== 'unassigned') res = await allocApi.move(eventId, dragParticipant.id, targetUnitId);
+          else res = await allocApi.assign(eventId, dragParticipant.id, targetUnitId);
         }
-        showToast(fromName ? `${pName}: ${fromName} → ${toName}` : `${pName} → ${toName}`, 'success');
+        const w = res?.warning;
+        if (w?.key) {
+          showToast(t(w.key, w.params || {}), 'warning');
+        } else {
+          showToast(fromName ? `${pName}: ${fromName} → ${toName}` : `${pName} → ${toName}`, 'success');
+        }
       }
       await loadAll();
       if (onDataChange) onDataChange();
@@ -962,8 +989,16 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
       } else {
         const pName = findName(dragParticipant.id);
         const fromName = units.find(u => String(u.id) === String(dragSource))?.name;
-        await allocApi.unassign(eventId, dragSource, dragParticipant.id);
-        showToast(`${pName} removed from ${fromName || itemLabel}`);
+        // v1.0.0e: same single-toast precedence as handleDrop. When the
+        // unassign breaks an engine-honoured cluster, the gold warning
+        // toast supersedes the plain "X removed from Y" success line.
+        const res = await allocApi.unassign(eventId, dragSource, dragParticipant.id);
+        const w = res?.warning;
+        if (w?.key) {
+          showToast(t(w.key, w.params || {}), 'warning');
+        } else {
+          showToast(`${pName} removed from ${fromName || itemLabel}`);
+        }
       }
       await loadAll();
       if (onDataChange) onDataChange();
@@ -1198,6 +1233,26 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                           </span>
                           <p className="text-[10px]" style={{ color: 'var(--text-subtle)' }}>
                             {t('engine.settings.include_pending.hint')}
+                          </p>
+                        </div>
+                      </label>
+                      {/* v1.0.0e: equalise_after_allocation toggle. After
+                          all rule-based passes, the engine moves whole
+                          clusters between units to make occupancies more
+                          even (proportional to capacity). Default ON;
+                          ?? true so categories with no engine settings
+                          block read as if the toggle is on. */}
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox"
+                          checked={engineSettings.equalise_after_allocation ?? true}
+                          onChange={e => handleEngineSettingChange('equalise_after_allocation', e.target.checked)}
+                          className="h-3.5 w-3.5 rounded mt-0.5 accent-steel-blue dark:accent-gold" />
+                        <div>
+                          <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                            {t('engine.settings.equalise')}
+                          </span>
+                          <p className="text-[10px]" style={{ color: 'var(--text-subtle)' }}>
+                            {t('engine.settings.equalise.hint')}
                           </p>
                         </div>
                       </label>
@@ -1718,13 +1773,36 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
               ))}
             </div>
           )}
-          {/* Add new unit */}
+          {/* Add new unit. v1.0.0e: when there are no units yet, the
+              add-area renders as a prominent dashed-border CTA card so
+              the user's eye lands on it after clicking "Manage" on the
+              far-right header (previously the small text-link was
+              easy to miss on a wide viewport). When units exist, keep
+              the subtle inline link — the unit cards above already
+              anchor the eye and an aggressive CTA below them would
+              clutter the surface. */}
           {!showCreate ? (
-            <button onClick={() => setShowCreate(true)}
-              className="text-xs font-semibold hover:underline"
-              style={{ color: 'var(--io-accent)' }}>
-              + {t('organise.new_unit', { item: itemLabel })}
-            </button>
+            units.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => setShowCreate(true)}
+                className="block w-full rounded-card text-center py-6 text-sm font-semibold transition-colors"
+                style={{
+                  border: '2px dashed var(--card-border)',
+                  background: 'transparent',
+                  color: 'var(--io-accent)',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--io-accent)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--card-border)'; }}>
+                {t('organise.empty_units.cta', { item: itemLabel })}
+              </button>
+            ) : (
+              <button onClick={() => setShowCreate(true)}
+                className="text-xs font-semibold hover:underline"
+                style={{ color: 'var(--io-accent)' }}>
+                + {t('organise.new_unit', { item: itemLabel })}
+              </button>
+            )
           ) : (
             <div
               className="card-surface-solid rounded-card p-3"
@@ -1911,7 +1989,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                     onClick={(e) => { e.stopPropagation(); setInsightParticipant(p); }}
                     aria-label={t('insight.open')}
                     title={t('insight.open')}
-                    className="shrink-0 text-[12px] leading-none px-1 opacity-40 hover:opacity-100 transition-opacity"
+                    className="shrink-0 text-[12px] leading-none px-1 opacity-40 dark:opacity-70 hover:opacity-100 transition-opacity"
                     style={{ color: 'var(--text-subtle)' }}>
                     ⓘ
                   </button>
@@ -2086,7 +2164,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                                   onClick={(e) => { e.stopPropagation(); setInsightParticipant(mParticipant); }}
                                   aria-label={t('insight.open')}
                                   title={t('insight.open')}
-                                  className="text-[11px] leading-none px-0.5 opacity-40 hover:opacity-100 transition-opacity"
+                                  className="text-[11px] leading-none px-0.5 opacity-40 dark:opacity-70 hover:opacity-100 transition-opacity"
                                   style={{ color: 'var(--text-subtle)' }}>
                                   ⓘ
                                 </button>
@@ -2262,6 +2340,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
         eventId={eventId}
         marksForPerson={insightParticipant ? getParticipantMarks(insightParticipant.id, 'organise') : []}
         isAdmin={isAdmin}
+        participants={activeParticipants}
         onClose={() => setInsightParticipant(null)}
       />
 

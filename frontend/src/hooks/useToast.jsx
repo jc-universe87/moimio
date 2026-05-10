@@ -21,6 +21,13 @@ import { formatErrorMessage } from '../services/api';
  * missed this because it was in inline-style hex literals, not
  * Tailwind classes.
  *
+ * v1.0.0e: 'warning' variant added — brand Gold (#FFD700) with deep-
+ * navy text. Used for soft, take-note messages that don't carry the
+ * severity of an error: e.g. a manual move that breaks a constraint
+ * the engine had honoured. The variant intentionally sits between
+ * success (positive) and error (blocking); the user does not need to
+ * acknowledge it, but it should catch the eye.
+ *
  * Usage:
  *
  *   const { toast, showToast, ToastHost } = useToast();
@@ -30,6 +37,7 @@ import { formatErrorMessage } from '../services/api';
  *   showToast('Saved', 'success');
  *   showToast(err, 'error');
  *   showToast('Running engine…', 'info');
+ *   showToast('Moved away from cluster', 'warning');
  *
  * The ToastHost is a ready-rendered element; drop it once per hook
  * call inside your component's JSX tree. It self-positions via
@@ -49,8 +57,16 @@ export function useToast() {
   const [toast, setToast] = useState(null); // { msg, type }
   const timerRef = useRef(null);
 
-  const showToast = useCallback((input, type = 'info', durationMs = 3000) => {
+  const showToast = useCallback((input, type = 'info', durationMs = null) => {
     if (timerRef.current) clearTimeout(timerRef.current);
+    // v1.0.0e: warnings carry information the organiser needs to read
+    // (e.g. "moved away from group SMITH-742"). 3 seconds is too fast
+    // to register a name + a constraint context, so warnings get a
+    // longer default (10 s) and the rendered toast adds a manual
+    // close button. Other variants keep the prior 3 s default and
+    // still auto-dismiss without ceremony. Explicit `durationMs`
+    // overrides everything.
+    const effectiveDuration = durationMs ?? (type === 'warning' ? 10000 : 3000);
     // v0.70d-3c-8: accept either a translated string OR an Error
     // object (with i18nKey / friendlyKey / message). When an Error is
     // passed, resolve to the translated primary line via
@@ -63,7 +79,7 @@ export function useToast() {
       msg = input;
     }
     setToast({ msg, type });
-    timerRef.current = setTimeout(() => setToast(null), durationMs);
+    timerRef.current = setTimeout(() => setToast(null), effectiveDuration);
   }, [t]);
 
   const clearToast = useCallback(() => {
@@ -84,9 +100,14 @@ export function useToast() {
     // the text colour too. Everywhere else white-on-saturated is fine.
     const isSuccess = toast.type === 'success';
     const isError = toast.type === 'error';
+    const isWarning = toast.type === 'warning';
+    // v1.0.0e warning: brand Gold (#FFD700) with deep-navy text.
+    // Hardcoded hex matches the canonical alert pair from the brand
+    // tokens (Gold + Deep Navy). The toast renders with the optional
+    // exclamation prefix to read as "take note" rather than blocking.
     return (
       <div
-        className="fixed top-[calc(1rem+env(safe-area-inset-top))] right-[calc(1rem+env(safe-area-inset-right))] z-50 px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium max-w-sm"
+        className="fixed top-[calc(1rem+env(safe-area-inset-top))] right-[calc(1rem+env(safe-area-inset-right))] z-50 px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium max-w-sm flex items-start gap-3"
         role="status"
         aria-live="polite"
         style={{
@@ -94,24 +115,50 @@ export function useToast() {
             ? 'var(--io-accent)'
             : isError
               ? 'var(--alert-burgundy)'
-              : 'var(--card-bg-solid)',
+              : isWarning
+                ? '#FFD700'
+                : 'var(--card-bg-solid)',
           // Dark-mode gold accent needs dark foreground to stay legible.
           // Light-mode steel-blue is fine with white text. Using
           // the var-based approach so the same utility carries both.
+          // Warning is gold-on-navy regardless of theme.
           color: isSuccess
             ? 'var(--on-accent)'
             : isError
               ? '#fff'
-              : 'var(--text-primary)',
-          border: isSuccess || isError
+              : isWarning
+                ? '#0F1E2E'
+                : 'var(--text-primary)',
+          border: isSuccess || isError || isWarning
             ? 'none'
             : '1px solid var(--card-border)',
         }}
       >
-        {toast.msg}
+        <span className="flex-1 min-w-0">
+          {isWarning && (
+            <span aria-hidden="true" style={{ marginRight: '0.5em', fontWeight: 700 }}>!</span>
+          )}
+          {toast.msg}
+        </span>
+        {/* v1.0.0e: warnings get a manual close button so the organiser
+            can dismiss them as soon as they've read the message. The 10s
+            auto-dismiss still applies as a backstop. Other variants
+            don't render a close button — their 3s window is short
+            enough that an X would be noise. */}
+        {isWarning && (
+          <button
+            type="button"
+            onClick={clearToast}
+            aria-label="Close"
+            className="shrink-0 leading-none text-base font-bold opacity-70 hover:opacity-100 transition-opacity"
+            style={{ color: '#0F1E2E' }}
+          >
+            ✕
+          </button>
+        )}
       </div>
     );
-  }, [toast]);
+  }, [toast, clearToast]);
 
   return { toast, showToast, clearToast, ToastHost };
 }

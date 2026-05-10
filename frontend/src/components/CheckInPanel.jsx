@@ -8,6 +8,7 @@ import { useMarks } from '../hooks/useMarks';
 import { useI18n } from '../hooks/useI18n';
 import EmptyState from './EmptyState';
 import InsightPanel from './InsightPanel';
+import GroupCodeTooltip from './GroupCodeTooltip';
 import TranslatedError from './TranslatedError';
 import { useEventStream } from '../hooks/useEventStream';
 
@@ -126,7 +127,7 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
   // search bar uses checkedInCount + activeParticipantList.length
   // directly, no separate fetch needed.
   const { formatDate } = useDateFormat();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const colLabel = (label) => label.includes('.') ? t(label) : label;
   const { confirm, ConfirmOverlay } = useConfirmOverlay();
 
@@ -434,6 +435,28 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
       const ts = getCheckedInAt(p);
       return <span className="text-muted text-xs">{ts ? new Date(ts).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '—'}</span>;
     }
+    // v1.0.0e: group_code badge gets a hover/tap tooltip listing the
+    // other participants sharing the same code in this event. Special-
+    // cased here (rather than baked into the REG_DISPLAY_COLS render
+    // function) because the static config has no access to the
+    // participant list, lang, or t — and threading those through
+    // every column render would touch every other render fn.
+    if (col.id === 'reg_group_code') {
+      if (!p.group_code) return <span className="text-muted text-xs">—</span>;
+      return (
+        <GroupCodeTooltip
+          code={p.group_code}
+          participants={participantList}
+          selfId={p.id}
+          t={t}
+          lang={lang}
+        >
+          <span className="font-mono text-xs bg-gray-100 dark:bg-white/10 dark:text-off-white px-1 py-0.5 rounded cursor-help">
+            {p.group_code}
+          </span>
+        </GroupCodeTooltip>
+      );
+    }
     if (!col.render) return <span className="text-muted text-xs">—</span>;
     return <span className="text-muted text-xs">{col.render(p)}</span>;
   };
@@ -679,7 +702,7 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
                             onClick={() => setInsightParticipant(p)}
                             aria-label={t('insight.open')}
                             title={t('insight.open')}
-                            className="shrink-0 text-[12px] leading-none px-1 opacity-40 hover:opacity-100 transition-opacity"
+                            className="shrink-0 text-[12px] leading-none px-1 opacity-40 dark:opacity-70 hover:opacity-100 transition-opacity"
                             style={{ color: 'var(--text-subtle)' }}>
                             ⓘ
                           </button>
@@ -819,7 +842,7 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
                   onClick={() => setInsightParticipant(p)}
                   aria-label={t('insight.open')}
                   title={t('insight.open')}
-                  className="shrink-0 text-[12px] leading-none px-1 opacity-40 hover:opacity-100 transition-opacity"
+                  className="shrink-0 text-[12px] leading-none px-1 opacity-40 dark:opacity-70 hover:opacity-100 transition-opacity"
                   style={{ color: 'var(--text-subtle)' }}>
                   ⓘ
                 </button>
@@ -837,7 +860,16 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
                         className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full transition-colors"
                         style={{
                           background: checked ? 'var(--io-accent)' : 'var(--app-bg)',
-                          color: checked ? 'white' : 'var(--text-muted)',
+                          // v1.0.0e: was `'white'` regardless of mode. In
+                          // dark mode the io-accent token resolves to
+                          // brand Gold (#FFD700) and white-on-gold
+                          // becomes ~1.3:1 contrast — practically
+                          // invisible (the user reported it). The
+                          // on-accent token gives us white-on-steel-blue
+                          // in light mode (good contrast) and
+                          // deep-navy-on-gold in dark mode (canonical
+                          // brand alert pair, ~14:1 contrast).
+                          color: checked ? 'var(--on-accent)' : 'var(--text-muted)',
                           border: `1px solid ${checked ? 'var(--io-accent)' : 'var(--card-border)'}`,
                         }}>
                         <span className="text-[10px]">{checked ? '✓' : '○'}</span>
@@ -990,6 +1022,7 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
         eventId={eventId}
         marksForPerson={insightParticipant ? getParticipantMarks(insightParticipant.id, 'checkin') : []}
         isAdmin={isAdmin}
+        participants={participantList}
         onClose={() => setInsightParticipant(null)}
       />
     </div>

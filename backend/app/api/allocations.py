@@ -426,8 +426,20 @@ async def api_assign(
         db, event_id, data.unit_id, data.participant_id,
         actor_user_id=current_user.id,
     )
+    # v1.0.0e: compute soft warning if this manual write overrides an
+    # engine-honoured constraint. The write itself has already
+    # succeeded — the warning is informational, not blocking. See
+    # `compute_manual_move_warning` for the trigger conditions.
+    from app.services.allocation_service import compute_manual_move_warning
+    warning = await compute_manual_move_warning(
+        db,
+        event_id=event_id,
+        category_id=unit.category_id,
+        participant_id=data.participant_id,
+        new_unit_id=data.unit_id,
+    )
     await _publish_organise_change(event_id, "allocation_assigned")
-    return result
+    return {"allocation_id": str(result.id), "warning": warning}
 
 
 @router.post("/allocations/move")
@@ -446,11 +458,19 @@ async def api_move(
         db, event_id, data.to_unit_id, data.participant_id,
         actor_user_id=current_user.id,
     )
+    from app.services.allocation_service import compute_manual_move_warning
+    warning = await compute_manual_move_warning(
+        db,
+        event_id=event_id,
+        category_id=unit.category_id,
+        participant_id=data.participant_id,
+        new_unit_id=data.to_unit_id,
+    )
     await _publish_organise_change(event_id, "allocation_moved")
-    return result
+    return {"allocation_id": str(result.id), "warning": warning}
 
 
-@router.delete("/allocations/unassign/{unit_id}/{participant_id}", status_code=204)
+@router.delete("/allocations/unassign/{unit_id}/{participant_id}")
 async def api_unassign(
     event_id: uuid.UUID,
     unit_id: uuid.UUID,
@@ -458,6 +478,11 @@ async def api_unassign(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """v1.0.0e: dropped 204 in favour of 200 with `{warning}` body so a
+    soft warning can ride back when the unassign overrides an engine-
+    honoured constraint. Frontend callers that previously ignored the
+    body keep working unchanged.
+    """
     await ensure_event_writable(db, event_id, current_user)
     unit = await get_unit(db, unit_id)
     if not unit:
@@ -467,7 +492,16 @@ async def api_unassign(
         db, unit_id, participant_id,
         actor_user_id=current_user.id,
     )
+    from app.services.allocation_service import compute_manual_move_warning
+    warning = await compute_manual_move_warning(
+        db,
+        event_id=event_id,
+        category_id=unit.category_id,
+        participant_id=participant_id,
+        new_unit_id=None,
+    )
     await _publish_organise_change(event_id, "allocation_unassigned")
+    return {"warning": warning}
 
 
 @router.get("/allocations/by-category/{category_id}")

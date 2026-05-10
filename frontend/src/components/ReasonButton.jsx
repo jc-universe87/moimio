@@ -184,7 +184,7 @@ export default function ReasonButton({
              style={{ color: 'var(--text-primary)' }}>
             {label}
           </p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-xs whitespace-pre-line" style={{ color: 'var(--text-muted)' }}>
             {reasoning}
           </p>
         </div>
@@ -225,7 +225,7 @@ export default function ReasonButton({
                 ✕
               </button>
             </div>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-sm whitespace-pre-line" style={{ color: 'var(--text-muted)' }}>
               {reasoning}
             </p>
           </div>

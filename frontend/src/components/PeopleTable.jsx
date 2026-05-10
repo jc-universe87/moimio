@@ -13,6 +13,7 @@ import EmptyState from './EmptyState';
 import { useMarks } from '../hooks/useMarks';
 import BatchRegisterModal from './BatchRegisterModal';
 import ConfirmEditModal from './ConfirmEditModal';
+import GroupCodeTooltip from './GroupCodeTooltip';
 
 // Built-in columns with optional field name for data-detection
 const BUILTIN_COLUMNS = [
@@ -200,7 +201,7 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
   const [statusEditing, setStatusEditing] = useState(null);
 
   const { formatDate } = useDateFormat();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { showToast, ToastHost } = useToast();
   const colLabel = (col) => (col.label.includes('.') ? t(col.label) : col.label);
   const { confirm, ConfirmOverlay } = useConfirmOverlay();
@@ -889,11 +890,19 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
           );
         }
         return p.group_code ? (
-          <span onClick={() => { if (isAdmin) { setEditingId(p.id); setEditField('group_code'); setEditValues(v => ({ ...v, group_code: p.group_code })); } }}
-            className={`font-mono text-xs px-1.5 py-0.5 rounded ${isAdmin ? 'cursor-pointer' : ''}`}
-            style={{ background: 'rgba(128,128,128,0.12)', color: 'var(--text-primary)' }}>
-            {p.group_code}
-          </span>
+          <GroupCodeTooltip
+            code={p.group_code}
+            participants={participantList}
+            selfId={p.id}
+            t={t}
+            lang={lang}
+          >
+            <span onClick={() => { if (isAdmin) { setEditingId(p.id); setEditField('group_code'); setEditValues(v => ({ ...v, group_code: p.group_code })); } }}
+              className={`font-mono text-xs px-1.5 py-0.5 rounded ${isAdmin ? 'cursor-pointer' : ''}`}
+              style={{ background: 'rgba(128,128,128,0.12)', color: 'var(--text-primary)' }}>
+              {p.group_code}
+            </span>
+          </GroupCodeTooltip>
         ) : (
           <span onClick={() => { if (isAdmin) { setEditingId(p.id); setEditField('group_code'); setEditValues(v => ({ ...v, group_code: '' })); } }}
             className={`text-xs ${isAdmin ? 'cursor-pointer hover:underline' : ''}`}

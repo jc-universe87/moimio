@@ -645,3 +645,298 @@ async def get_all_allocations(db: AsyncSession, event_id: uuid.UUID) -> dict:
             "participant_name": f"{p.first_name} {p.last_name}",
         })
     return out
+
+
+# ── v1.0.0e: soft-warning computation for manual moves ─────────────────
+
+
+# Reasons that bind a participant's placement to an engine-honoured
+# rule. When the latest engine commit for this participant carries
+# one of these reasons (peeled past any `equalise` wrapper), a
+# manual move that would override the rule produces a soft warning.
+# Other reasons (`fill`, `mark_split`) do not produce warnings —
+# `fill` carries no constraint, and `mark_split` participants were
+# placed AWAY from peers on purpose, so a manual move further away
+# isn't an override.
+_BINDING_REASONS = frozenset({
+    "group_code",
+    "group_code_split",
+    "mark_together",
+    "mark_together_split",
+    "gender_drain",
+})
+
+
+def _peel_equalise(placement: dict | None) -> dict | None:
+    """Return the binding placement, peeling off any equalise wrapper.
+
+    The equalise pass wraps the original cluster reason under
+    `previous`. The cluster constraint that the engine actually
+    honoured lives there; equalise itself imposes no participant-
+    level rule. For warning purposes we look at the binding payload.
+    """
+    if not placement:
+        return None
+    if placement.get("reason") == "equalise":
+        return placement.get("previous") or None
+    return placement
+
+
+async def _latest_engine_placement(
+    db: AsyncSession,
+    *,
+    event_id: uuid.UUID,
+    category_id: uuid.UUID,
+    participant_id: uuid.UUID,
+) -> dict | None:
+    """Return meta.placement from the most recent engine_commit assign
+    event for the given participant in the given category, or None.
+
+    The lookup is bounded by category_id so cross-category history
+    doesn't leak. Newest-first by occurred_at — the same ordering the
+    audit log uses.
+    """
+    from app.models.allocation_event import AllocationEvent
+    q = await db.execute(
+        select(AllocationEvent)
+        .where(
+            AllocationEvent.event_id == event_id,
+            AllocationEvent.category_id == category_id,
+            AllocationEvent.participant_id == participant_id,
+            AllocationEvent.event_type == AllocationEventType.ASSIGN,
+            AllocationEvent.source == AllocationEventSource.ENGINE_COMMIT,
+        )
+        .order_by(AllocationEvent.occurred_at.desc())
+        .limit(1)
+    )
+    row = q.scalar_one_or_none()
+    if not row or not row.meta:
+        return None
+    return row.meta.get("placement") or None
+
+
+async def _mark_behaviour_for(
+    db: AsyncSession,
+    *,
+    event_id: uuid.UUID,
+    category_id: uuid.UUID,
+    mark_id: str | None,
+) -> str:
+    """Return the effective cluster_behaviour for a mark in this
+    category — honouring per-category overrides. Returns "none" if
+    the mark or its definition has been removed.
+    """
+    if not mark_id:
+        return "none"
+    cat = await get_category(db, category_id)
+    if not cat:
+        return "none"
+    cat_settings = (cat.settings or {}).get("engine", {})
+    overrides = {}
+    for entry in cat_settings.get("mark_priorities", []) or []:
+        if isinstance(entry, dict) and entry.get("id") and entry.get("behaviour"):
+            overrides[str(entry["id"])] = entry["behaviour"]
+    if mark_id in overrides:
+        return overrides[mark_id]
+    # Fall back to the global definition.
+    from app.models.mark import MarkDefinition
+    md_q = await db.execute(
+        select(MarkDefinition).where(MarkDefinition.id == uuid.UUID(mark_id))
+    )
+    md = md_q.scalar_one_or_none()
+    if not md:
+        return "none"
+    return getattr(md, "cluster_behaviour", None) or "none"
+
+
+async def compute_manual_move_warning(
+    db: AsyncSession,
+    *,
+    event_id: uuid.UUID,
+    category_id: uuid.UUID,
+    participant_id: uuid.UUID,
+    new_unit_id: uuid.UUID | None,
+) -> dict | None:
+    """v1.0.0e: compute a soft warning for a manual move that overrides
+    an engine-honoured rule. Returns a dict shaped as
+
+        {"key": "organise.warning.<...>",
+         "params": {"name": "...", "code": "...", ...}}
+
+    or None when no warning should fire.
+
+    Trigger conditions, in order:
+
+      1. The participant has a most-recent engine_commit assign event
+         in this category. (No engine commit → nothing for the manual
+         move to override → no warning.)
+      2. The binding reason (peeled past any equalise wrapper) is in
+         _BINDING_REASONS. (Reasons like `fill`/`mark_split` impose no
+         participant-level rule — see _BINDING_REASONS docstring.)
+      3. The rule is still active in the category. group_code rules
+         require `settings.engine.use_group_codes` to be true; mark
+         rules require the mark's effective behaviour to be `together`.
+         If the rule has since been disabled, the engine no longer
+         claims to honour it, so a manual move can't "override" it.
+      4. The new placement actually breaks the rule. For
+         group_code*/mark_together* this means the participant has no
+         clustermate at the destination (or is unassigned). For
+         gender_drain it means the destination has a different gender
+         restriction profile than the original drained unit.
+
+    The function is read-only — it never modifies allocations or events.
+    Callers (typically the API layer right after a successful write)
+    forward the returned dict to the response payload as the "warning"
+    field; the frontend renders it as a gold soft-warning toast.
+    """
+    placement = await _latest_engine_placement(
+        db,
+        event_id=event_id,
+        category_id=category_id,
+        participant_id=participant_id,
+    )
+    binding = _peel_equalise(placement)
+    if not binding:
+        return None
+    reason = binding.get("reason")
+    if reason not in _BINDING_REASONS:
+        return None
+
+    cat = await get_category(db, category_id)
+    if not cat:
+        return None
+    cat_settings = (cat.settings or {}).get("engine", {})
+
+    participant_q = await db.execute(
+        select(Participant).where(Participant.id == participant_id)
+    )
+    participant = participant_q.scalar_one_or_none()
+    if not participant:
+        return None
+    name = f"{participant.first_name} {participant.last_name}".strip()
+
+    # ── Group code rules ──
+    if reason in ("group_code", "group_code_split"):
+        if not cat_settings.get("use_group_codes", True):
+            return None
+        code = binding.get("cluster_id") or participant.group_code or ""
+        if not code:
+            return None
+        # Find the participant's clustermates in this event with the
+        # same group_code (excluding the participant themself).
+        clustermates_q = await db.execute(
+            select(Participant.id).where(
+                Participant.event_id == event_id,
+                Participant.group_code == code,
+                Participant.id != participant_id,
+                Participant.deleted_at.is_(None),
+            )
+        )
+        clustermate_ids = {row[0] for row in clustermates_q.all()}
+        if not clustermate_ids:
+            return None  # Lone clustermate — nothing to break.
+
+        if new_unit_id is None:
+            # Move to unassigned — definitively separated from cluster.
+            return {
+                "key": "organise.warning.group_separated",
+                "params": {"name": name, "code": code},
+            }
+
+        # Check whether any clustermate still occupies new_unit_id.
+        co_q = await db.execute(
+            select(func.count())
+            .select_from(Allocation)
+            .where(
+                Allocation.unit_id == new_unit_id,
+                Allocation.participant_id.in_(clustermate_ids),
+            )
+        )
+        co_count = co_q.scalar_one()
+        if co_count == 0:
+            # Distinguish "whole group lost" from "moved to a different
+            # unit but cluster still exists somewhere". Both warrant a
+            # warning; the wording differs slightly. For a whole
+            # cluster (`group_code`) — the cluster was kept together,
+            # now it's split. For a split cluster (`group_code_split`)
+            # — the participant is now alone, separated from the rest.
+            key = (
+                "organise.warning.group_split"
+                if reason == "group_code"
+                else "organise.warning.group_separated"
+            )
+            return {"key": key, "params": {"name": name, "code": code}}
+        return None
+
+    # ── Mark together rules ──
+    if reason in ("mark_together", "mark_together_split"):
+        mark_id = binding.get("cluster_id")
+        behaviour = await _mark_behaviour_for(
+            db, event_id=event_id, category_id=category_id, mark_id=mark_id,
+        )
+        if behaviour != "together":
+            return None  # rule no longer active for this mark
+        if not mark_id:
+            return None
+        # Find clustermates: other participants in this event tagged
+        # with the same mark.
+        from app.models.mark import MarkAssignment
+        mates_q = await db.execute(
+            select(MarkAssignment.participant_id).where(
+                MarkAssignment.event_id == event_id,
+                MarkAssignment.mark_id == uuid.UUID(mark_id),
+                MarkAssignment.participant_id != participant_id,
+            )
+        )
+        mate_ids = {row[0] for row in mates_q.all()}
+        if not mate_ids:
+            return None
+        if new_unit_id is None:
+            return {
+                "key": "organise.warning.mark_separated",
+                "params": {"name": name},
+            }
+        co_q = await db.execute(
+            select(func.count())
+            .select_from(Allocation)
+            .where(
+                Allocation.unit_id == new_unit_id,
+                Allocation.participant_id.in_(mate_ids),
+            )
+        )
+        co_count = co_q.scalar_one()
+        if co_count == 0:
+            return {
+                "key": "organise.warning.mark_separated",
+                "params": {"name": name},
+            }
+        return None
+
+    # ── Gender drain ──
+    if reason == "gender_drain":
+        # The original placement was in a gender-restricted unit. A
+        # manual move out of that unit doesn't violate a hard rule
+        # (the backend would reject hard violations as 409 errors
+        # before reaching this function). The warning is purely a
+        # heads-up: the engine had filled this restricted unit on
+        # purpose, and the move undoes that.
+        if new_unit_id is None:
+            return {
+                "key": "organise.warning.gender_restriction",
+                "params": {"name": name},
+            }
+        # If the destination has a different gender restriction profile
+        # from the original (or none), warn. Same restriction → silent.
+        new_unit = await get_unit(db, new_unit_id)
+        if not new_unit:
+            return None
+        original_restriction = (binding.get("gender_restriction") or "").lower()
+        new_restriction = (new_unit.gender_restriction or "").lower()
+        if original_restriction != new_restriction:
+            return {
+                "key": "organise.warning.gender_restriction",
+                "params": {"name": name},
+            }
+        return None
+
+    return None

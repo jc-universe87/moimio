@@ -13,6 +13,7 @@ import { useToast } from '../hooks/useToast';
 import { downloadParticipantDataExport } from '../utils/downloadParticipantDataExport';
 import MarkDots from './MarkDots';
 import AllocationHistory from './AllocationHistory';
+import GroupCodeTooltip from './GroupCodeTooltip';
 
 /**
  * InsightPanel — slide-out (desktop) / bottom sheet (mobile) showing a
@@ -35,10 +36,14 @@ import AllocationHistory from './AllocationHistory';
  *   eventId          — required when participant is present
  *   marksForPerson   — array of mark defs assigned to this participant (from useMarks)
  *   isAdmin          — v0.60b: gates the allocation history section
+ *   participants     — v1.0.0e: full event participant list (used by
+ *                      GroupCodeTooltip to compute clustermates).
+ *                      Optional; the tooltip silently degrades to a
+ *                      no-op when missing (e.g. legacy callers).
  *   onClose          — () => void
  */
-export default function InsightPanel({ participant, eventId, marksForPerson = [], isAdmin = false, onClose }) {
-  const { t } = useI18n();
+export default function InsightPanel({ participant, eventId, marksForPerson = [], isAdmin = false, participants = null, onClose }) {
+  const { t, lang } = useI18n();
   const { formatDate } = useDateFormat();
   const { showToast, ToastHost } = useToast();
   const [notes, setNotes] = useState([]);
@@ -293,7 +298,15 @@ export default function InsightPanel({ participant, eventId, marksForPerson = []
             )}
             {participant.group_code && (
               <Row label={t('people.col.group_code')}>
-                <span className="font-mono text-xs">{participant.group_code}</span>
+                <GroupCodeTooltip
+                  code={participant.group_code}
+                  participants={participants}
+                  selfId={participant.id}
+                  t={t}
+                  lang={lang}
+                >
+                  <span className="font-mono text-xs cursor-help">{participant.group_code}</span>
+                </GroupCodeTooltip>
               </Row>
             )}
             {participant.gender && (

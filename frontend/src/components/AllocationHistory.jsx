@@ -3,6 +3,7 @@ import { allocationEvents as histApi } from '../services/api';
 import { useI18n } from '../hooks/useI18n';
 import { formatRelativeTime } from '../utils/relativeTime';
 import { reasoningLine } from '../services/placementReason';
+import { formatNamesList } from '../utils/formatNamesList';
 
 /**
  * AllocationHistory — per-participant audit timeline.
@@ -148,7 +149,7 @@ export default function AllocationHistory({ eventId, participantId, isAdmin }) {
       {expanded && (
         <ul className="space-y-2">
           {items.map((item) => (
-            <HistoryItem key={item.key} item={item} t={t} lang={lang} />
+            <HistoryItem key={item.key} item={item} t={t} lang={lang} participantId={participantId} />
           ))}
         </ul>
       )}
@@ -233,7 +234,7 @@ function collapseMoves(rows) {
   return out;
 }
 
-function HistoryItem({ item, t, lang }) {
+function HistoryItem({ item, t, lang, participantId }) {
   const rel = formatRelativeTime(item.occurred_at, lang, t('history.justNow'));
   const absoluteTitle = item.occurred_at
     ? new Date(item.occurred_at).toLocaleString()
@@ -268,6 +269,32 @@ function HistoryItem({ item, t, lang }) {
   // only when non-null.
   const reasoning = reasoningLine(item.meta, t);
 
+  // v1.0.0e: imprinted cluster member list. The engine snapshots
+  // `cluster_members: [{id, name}]` into meta.placement at commit
+  // time for any cluster-based placement (group_code,
+  // group_code_split, mark_together, mark_together_split). Equalise
+  // wraps the original cluster reason under `previous`, so we look
+  // there too. Self is excluded by id; the line never renders for a
+  // lone "cluster" of one (no clustermates to mention).
+  const clusterMembers = (() => {
+    const placement = item.meta?.placement;
+    if (!placement) return null;
+    const direct = placement.cluster_members;
+    if (Array.isArray(direct) && direct.length) return direct;
+    const fromPrev = placement.previous?.cluster_members;
+    if (Array.isArray(fromPrev) && fromPrev.length) return fromPrev;
+    return null;
+  })();
+  const otherMemberNames = clusterMembers
+    ? clusterMembers
+        .filter(m => !participantId || (m && m.id && String(m.id) !== String(participantId)))
+        .map(m => (m && m.name) || '')
+        .filter(Boolean)
+    : [];
+  const clusterLine = otherMemberNames.length > 0
+    ? t('group_code.tooltip.with', { names: formatNamesList(otherMemberNames, lang) })
+    : null;
+
   return (
     <li className="text-xs" style={{ color: 'var(--text-primary)' }}>
       <div>{line}</div>
@@ -280,10 +307,18 @@ function HistoryItem({ item, t, lang }) {
       </div>
       {reasoning && (
         <div
-          className="text-[10px] italic mt-0.5"
+          className="text-[10px] italic mt-0.5 whitespace-pre-line"
           style={{ color: 'var(--text-subtle)' }}
         >
           {reasoning}
+        </div>
+      )}
+      {clusterLine && (
+        <div
+          className="text-[10px] italic mt-0.5"
+          style={{ color: 'var(--text-subtle)' }}
+        >
+          {clusterLine}
         </div>
       )}
     </li>

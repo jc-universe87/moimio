@@ -605,7 +605,7 @@ async def test_placement_reason_fill_for_solitary_participant(db):
 
 async def test_placement_reason_group_code_cluster_whole(db):
     """Two participants sharing a group_code, cluster fits in one unit
-    → both get reason=group_code_cluster with cluster_size == cluster_placed_here == 2."""
+    → both get reason=group_code with cluster_size == cluster_placed_here == 2."""
     ev = await make_event(db)
     cat = await make_category(db, event_id=ev.id)
     await make_unit(db, category_id=cat.id, name="Room A", capacity=4)
@@ -621,9 +621,13 @@ async def test_placement_reason_group_code_cluster_whole(db):
     r1 = result["placement_reasons"][str(p1.id)]
     r2 = result["placement_reasons"][str(p2.id)]
     # Both members of FAMILY1 share the same cluster reason.
+    # v1.0.0b: vocabulary aligned with engine output. The pre-v1.1
+    # tests asserted `group_code_cluster` / `group_code_cluster_split`
+    # — names the engine never emitted; these assertions had been
+    # silently failing.
     for r in (r1, r2):
-        assert r["reason"] == "group_code_cluster"
-        assert r["group_code"] == "FAMILY1"
+        assert r["reason"] == "group_code"
+        assert r["cluster_id"] == "FAMILY1"
         assert r["cluster_size"] == 2
         assert r["cluster_placed_here"] == 2
 
@@ -635,7 +639,7 @@ async def test_placement_reason_group_code_cluster_whole(db):
 
 async def test_placement_reason_group_code_cluster_split(db):
     """A 4-person cluster into a category where no unit can hold 4 →
-    reason=group_code_cluster_split. cluster_placed_here reflects how
+    reason=group_code_split. cluster_placed_here reflects how
     many landed in THIS unit (may differ across the split members)."""
     ev = await make_event(db)
     cat = await make_category(db, event_id=ev.id, has_capacity=True)
@@ -654,8 +658,9 @@ async def test_placement_reason_group_code_cluster_split(db):
 
     for p in members:
         r = result["placement_reasons"][str(p.id)]
-        assert r["reason"] == "group_code_cluster_split"
-        assert r["group_code"] == "BIGFAMILY"
+        # v1.0.0b: vocab aligned. Was `group_code_cluster_split`.
+        assert r["reason"] == "group_code_split"
+        assert r["cluster_id"] == "BIGFAMILY"
         assert r["cluster_size"] == 4
         # All four land — 2 in each unit. cluster_placed_here is the
         # local count per unit, so every member sees 2 in this scenario.

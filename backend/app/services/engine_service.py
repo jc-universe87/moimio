@@ -117,6 +117,16 @@ DEFAULT_ENGINE_SETTINGS = {
     # OFF to revert to confirmed-only allocation if the organiser
     # explicitly wants to wait for confirmations before allocating.
     "include_pending_in_allocation": True,
+    # v1.0.0e: after the rule-based passes, run a final equalising sweep
+    # that moves whole clusters between units to even out occupancies
+    # (proportional to capacity). Hard rules — group codes, marks,
+    # gender restrictions — are never overridden by this pass; only
+    # clusters whose constraints are still satisfied at the
+    # destination move. The pass touches `fill` singletons,
+    # whole-placed group_code clusters, and whole-placed mark_together
+    # clusters; it leaves split clusters, mark_split, and gender_drain
+    # placements alone. Default ON; togglable per category.
+    "equalise_after_allocation": True,
 }
 
 
@@ -203,6 +213,11 @@ async def run_engine(
     include_pending = cat_settings.get(
         "include_pending_in_allocation",
         DEFAULT_ENGINE_SETTINGS["include_pending_in_allocation"],
+    )
+    # v1.0.0e: equalise sweep toggle (default ON).
+    equalise_after_allocation = cat_settings.get(
+        "equalise_after_allocation",
+        DEFAULT_ENGINE_SETTINGS["equalise_after_allocation"],
     )
     # v0.74: per-category toggle. When True, group_code clusters claim
     # the entire unit they land in (no other participants placed there).
@@ -492,6 +507,7 @@ async def run_engine(
             placement_reasons[str(p.id)] = {
                 "reason": "gender_drain",
                 "unit_id": str(u.id),
+                "unit_name": u.name,
                 "gender_restriction": rest,
             }
         # Remove placed from `remaining`
@@ -540,6 +556,62 @@ async def run_engine(
         if not placed_here:
             # No unrestricted unit available; will fall to unplaced.
             pass
+
+    # ── PASS 4c (v1.0.0e): equalising sweep ──
+    # After all rule-based passes, optionally rebalance unit
+    # occupancies by moving whole clusters from over-full units to
+    # under-full ones. The sweep operates on CLUSTERS (groups of
+    # participants the engine treats as one unit of placement) so
+    # that members are never separated by this pass:
+    #
+    #   - cluster-of-one: any participant placed via `fill` in PASS 4b
+    #   - whole group_code cluster: PASS 1 reason `group_code` (not split)
+    #   - whole mark_together cluster: PASS 2 reason `mark_together` (not split)
+    #
+    # NOT moved: split clusters (`*_split`), `mark_split` (PASS 2
+    # spread participants — already intentionally distributed),
+    # `gender_drain` (PASS 4a — moving them would undo the engine's
+    # capacity-fill of restricted units).
+    #
+    # Constraints honoured at every candidate move:
+    #   - destination unit has remaining capacity
+    #   - destination unit's gender restriction (if any) accepts every
+    #     cluster member's gender
+    #   - destination unit is not exclusively claimed by another cluster
+    #
+    # Greedy heuristic: while an improving move exists,
+    #   1. find the most over-target unit O (highest occupancy ratio)
+    #   2. find the most under-target unit U (lowest occupancy ratio)
+    #   3. find the smallest movable cluster in O whose move to U
+    #      shrinks the gap between their two ratios
+    #   4. apply the move; loop until no improvement is found
+    #
+    # The pass terminates either when no improving move exists or when
+    # an iteration cap is hit (defensive — should never engage on
+    # well-formed inputs but prevents pathological loops).
+    #
+    # Audit trail: when a cluster is moved, every member's
+    # placement_reason is rewritten to:
+    #
+    #   {"reason": "equalise",
+    #    "from_unit_id": "<original>",
+    #    "to_unit_id":   "<new>",
+    #    "previous": {<the original placement_reason dict>}}
+    #
+    # The `previous` payload preserves WHY the participant was
+    # originally clustered there, so the (i) panel and review
+    # popover can show both lines: "placed with group SMITH (4
+    # people)" and "moved to even out unit sizes".
+    if equalise_after_allocation:
+        _equalise_sweep(
+            units=units,
+            unit_slots=unit_slots,
+            exclusive_units=exclusive_units,
+            placement_reasons=placement_reasons,
+            participants=participants,
+            gender_eligible=gender_eligible,
+            cluster_gender_eligible=cluster_gender_eligible,
+        )
 
     # ── PASS 5: classify unplaced ──
     all_ids = {str(p.id) for p in participants}
@@ -689,6 +761,23 @@ def _place_cluster(
     """
     cluster_size = len(cluster_members)
     cluster_genders = [p.gender for p in cluster_members]
+    # v1.0.0e: pre-compute the cluster member snapshot ONCE per cluster
+    # call. Carried into every placement_reasons entry below so the
+    # frontend can render "with X, Y, Z" on hover/tap (live surfaces)
+    # and inline in audit-trail history rows. Names are PII but get
+    # the same treatment as unit_name_snapshot in allocation_events:
+    # snapshotted into the JSONB meta where they survive as audit
+    # forensics. Right-to-erasure cascades to NULL the FK on the
+    # outer event row; the snapshot inside JSONB persists, matching
+    # the existing snapshot policy. Including `id` lets future UI
+    # link back to the participant when they still exist.
+    cluster_member_snapshot = [
+        {
+            "id": str(m.id),
+            "name": f"{m.first_name or ''} {m.last_name or ''}".strip(),
+        }
+        for m in cluster_members
+    ]
 
     # Eligible units: not exclusive-claimed by another cluster, gender-fits
     # the cluster as a whole.
@@ -729,6 +818,7 @@ def _place_cluster(
                 "cluster_size": cluster_size,
                 "cluster_placed_here": cluster_size,
                 "unit_id": str(u.id),
+                "cluster_members": cluster_member_snapshot,
             }
         if exclusive_flag:
             exclusive_units.add(str(u.id))
@@ -766,6 +856,7 @@ def _place_cluster(
                         "cluster_size": cluster_size,
                         "cluster_placed_here": share,
                         "unit_id": str(u.id),
+                        "cluster_members": cluster_member_snapshot,
                     }
                     idx += 1
                 if exclusive_flag:
@@ -801,6 +892,7 @@ def _place_cluster(
                 "cluster_size": cluster_size,
                 "cluster_placed_here": free,
                 "unit_id": str(u.id),
+                "cluster_members": cluster_member_snapshot,
             }
             idx += 1
         if exclusive_flag:
@@ -848,6 +940,236 @@ def _even_split(total, parts):
     base = total // parts
     rem = total % parts
     return [base + 1] * rem + [base] * (parts - rem)
+
+
+# ── PASS 4c equalising sweep helpers (v1.0.0e) ─────────────────────────
+
+
+# Iteration cap on the equalise loop. Each iteration moves at most one
+# cluster, so a category with N units bounded by reasonable cluster
+# sizes converges in O(N) iterations. The cap is defensive against
+# pathological loops; production should converge in tens of iterations.
+_EQUALISE_MAX_ITERATIONS = 200
+
+# Reasons that mark a placement as "movable as a single unit" by the
+# equalising sweep. `fill` is treated as a cluster of one.
+_EQUALISE_MOVABLE_REASONS = frozenset({"fill", "group_code", "mark_together"})
+
+
+def _equalise_sweep(
+    *,
+    units,
+    unit_slots: dict[str, list[str]],
+    exclusive_units: set[str],
+    placement_reasons: dict[str, dict],
+    participants,
+    gender_eligible,
+    cluster_gender_eligible,
+):
+    """v1.0.0e PASS 4c — even out unit occupancies by moving whole
+    movable clusters from over-target to under-target units.
+
+    Operates in-place on ``unit_slots`` and ``placement_reasons``.
+    Honours every hard constraint already enforced by earlier passes;
+    the sweep is purely an evenness improvement and never violates
+    capacity, gender restriction, or exclusive-cluster rules.
+
+    Movable cluster = the set of pids that share the same
+    ``placement_reason.cluster_id`` (for whole group_code or
+    mark_together clusters) OR a single pid with reason `fill`.
+    Split clusters, mark_split, and gender_drain are NOT eligible
+    for movement — see module-level discussion in PASS 4c.
+    """
+    if not units:
+        return
+
+    # Build participant lookup once for gender eligibility checks.
+    participant_by_id = {str(p.id): p for p in participants}
+
+    # Helper: is this unit's projected occupancy (after a hypothetical
+    # cluster move of `delta`) within capacity? Capacity may be 0/None
+    # for non-capacitated categories — in which case no upper bound,
+    # but we still skip moves that would worsen evenness purely on
+    # occupant count.
+    def fits_capacity(unit, current_count: int, delta: int) -> bool:
+        if not unit.capacity:
+            return True
+        return (current_count + delta) <= unit.capacity
+
+    # Build cluster index from placement_reasons.
+    # Returns dict: cluster_key → {pids: [...], unit_id, kind, reason_payload}
+    # cluster_key is `(reason, cluster_id)` for clusters or
+    # `("fill", pid)` for solo fills.
+    def build_cluster_index() -> dict:
+        clusters: dict[tuple, dict] = {}
+        # Index unit each pid is in
+        pid_to_unit: dict[str, str] = {}
+        for uid, pids in unit_slots.items():
+            for pid in pids:
+                pid_to_unit[pid] = uid
+
+        for pid, reason_payload in placement_reasons.items():
+            reason = reason_payload.get("reason")
+            if reason not in _EQUALISE_MOVABLE_REASONS:
+                continue
+            uid = pid_to_unit.get(pid)
+            if uid is None:
+                continue  # Defensive: should never happen.
+            if reason == "fill":
+                key = ("fill", pid)
+                clusters[key] = {
+                    "pids": [pid],
+                    "unit_id": uid,
+                    "kind": "fill",
+                    "previous": dict(reason_payload),
+                }
+                continue
+            cluster_id = reason_payload.get("cluster_id")
+            if cluster_id is None:
+                continue  # Whole cluster reasons should always carry cluster_id.
+            key = (reason, cluster_id)
+            entry = clusters.setdefault(
+                key,
+                {
+                    "pids": [],
+                    "unit_id": uid,
+                    "kind": reason,
+                    "previous": dict(reason_payload),
+                },
+            )
+            # All members of a whole cluster share a unit by construction
+            # (a "split" cluster carries `*_split`, which is not movable).
+            # Defensive: if we see a different unit for the same cluster
+            # key, the cluster has already been split — skip it.
+            if entry["unit_id"] != uid:
+                entry["_inconsistent"] = True
+            entry["pids"].append(pid)
+
+        # Drop clusters that were split across units (defensive).
+        return {
+            k: v for k, v in clusters.items()
+            if not v.get("_inconsistent") and v["pids"]
+        }
+
+    # Compute occupancy ratio for a unit. For uncapacitated categories,
+    # treat each unit as having capacity = (sum of all occupants /
+    # number of units) so they normalise to an even-fill target.
+    total_capacity = sum((u.capacity or 0) for u in units)
+    use_proportional = total_capacity > 0
+
+    def ratio(unit) -> float:
+        count = len(unit_slots[str(unit.id)])
+        if use_proportional and unit.capacity:
+            return count / unit.capacity
+        if not use_proportional:
+            return float(count)
+        # Capacity-mixed: capacitated units normalised, uncapacitated
+        # treated as full (don't move into them).
+        return 1.0 if not unit.capacity else (count / unit.capacity)
+
+    # Pre-compute cluster genders for eligibility tests against
+    # destination units.
+    def cluster_genders(pids: list[str]) -> list:
+        out = []
+        for pid in pids:
+            p = participant_by_id.get(pid)
+            out.append(p.gender if p else None)
+        return out
+
+    iterations = 0
+    while iterations < _EQUALISE_MAX_ITERATIONS:
+        iterations += 1
+        clusters = build_cluster_index()
+        if not clusters:
+            return
+
+        # Sort units by current ratio. Source candidates: high → low.
+        # Destination candidates: low → high.
+        units_sorted_high = sorted(units, key=ratio, reverse=True)
+        units_sorted_low = sorted(units, key=ratio)
+
+        moved = False
+        for src_unit in units_sorted_high:
+            src_uid = str(src_unit.id)
+            src_ratio = ratio(src_unit)
+            if src_ratio <= 0:
+                break  # Source pile is empty or below — nothing useful left.
+
+            # Eligible source clusters: those that live in this unit
+            # and have movable kind. Sort by size ascending — smaller
+            # clusters move more cheaply and produce finer-grained
+            # rebalancing.
+            src_clusters = [
+                (key, info) for key, info in clusters.items()
+                if info["unit_id"] == src_uid
+            ]
+            src_clusters.sort(key=lambda kv: len(kv[1]["pids"]))
+
+            for cluster_key, cluster_info in src_clusters:
+                cl_size = len(cluster_info["pids"])
+                cl_genders = cluster_genders(cluster_info["pids"])
+
+                for dst_unit in units_sorted_low:
+                    dst_uid = str(dst_unit.id)
+                    if dst_uid == src_uid:
+                        continue
+                    if dst_uid in exclusive_units:
+                        continue
+                    if not cluster_gender_eligible(dst_unit, cl_genders):
+                        continue
+                    dst_count = len(unit_slots[dst_uid])
+                    if not fits_capacity(dst_unit, dst_count, cl_size):
+                        continue
+                    # Improvement check: does the move bring src_ratio
+                    # and dst_ratio closer together? Compute projected
+                    # ratios after the hypothetical move.
+                    src_count_after = len(unit_slots[src_uid]) - cl_size
+                    dst_count_after = dst_count + cl_size
+                    if use_proportional and src_unit.capacity and dst_unit.capacity:
+                        new_src = src_count_after / src_unit.capacity
+                        new_dst = dst_count_after / dst_unit.capacity
+                    else:
+                        new_src = float(src_count_after)
+                        new_dst = float(dst_count_after)
+                    dst_ratio = ratio(dst_unit)
+                    # Strict improvement: reduce the gap between this
+                    # source–destination pair, AND don't overshoot
+                    # (after the move, the destination shouldn't be
+                    # MORE over-target than the source was before, or
+                    # we just swapped the imbalance).
+                    if abs(new_src - new_dst) >= abs(src_ratio - dst_ratio):
+                        continue
+                    if new_dst > src_ratio:
+                        continue
+                    # Apply the move.
+                    pids = list(cluster_info["pids"])
+                    for pid in pids:
+                        unit_slots[src_uid].remove(pid)
+                        unit_slots[dst_uid].append(pid)
+                        # Rewrite placement_reason: wrap the original
+                        # reason in `previous`. If the placement was
+                        # already an equalise (shouldn't happen this
+                        # round, defensive against future passes), peel
+                        # one layer to keep `previous` pointing at the
+                        # original cluster reason — never nest.
+                        prior = cluster_info["previous"]
+                        if prior.get("reason") == "equalise":
+                            prior = prior.get("previous") or prior
+                        placement_reasons[pid] = {
+                            "reason": "equalise",
+                            "from_unit_id": src_uid,
+                            "to_unit_id": dst_uid,
+                            "previous": prior,
+                        }
+                    moved = True
+                    break  # Break inner dst loop — re-evaluate state.
+                if moved:
+                    break
+            if moved:
+                break
+
+        if not moved:
+            return  # Converged.
 
 
 
