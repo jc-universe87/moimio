@@ -27,7 +27,6 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:6120}
       RATE_LIMIT_REGISTRATION: ${RATE_LIMIT_REGISTRATION:-10}
-      APP_URL: ${APP_URL:-http://localhost:6120}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
@@ -36,6 +35,19 @@ services:
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Moimio}
       SMTP_TLS: ${SMTP_TLS:-true}
       SMTP_SSL: ${SMTP_SSL:-false}
+      # v1.0.0g-3: capability flags + outbound webhook config.
+      # Each var must be listed here for Compose to pass it from .env
+      # into the container — vars in .env but not here are ignored.
+      FEATURE_ALLOCATION: ${FEATURE_ALLOCATION:-true}
+      FEATURE_OUTBOUND_WEBHOOKS: ${FEATURE_OUTBOUND_WEBHOOKS:-true}
+      FEATURE_CREATE_EVENT_CONFIRMATION: ${FEATURE_CREATE_EVENT_CONFIRMATION:-false}
+      EVENT_CHARGE_AMOUNT: ${EVENT_CHARGE_AMOUNT:-}
+      EVENT_CHARGE_CURRENCY: ${EVENT_CHARGE_CURRENCY:-}
+      BILLING_CARD_LAST4: ${BILLING_CARD_LAST4:-}
+      MOIMIO_TENANT_ID: ${MOIMIO_TENANT_ID:-}
+      MOIMIO_WEBHOOK_URL: ${MOIMIO_WEBHOOK_URL:-}
+      MOIMIO_WEBHOOK_SECRET: ${MOIMIO_WEBHOOK_SECRET:-}
+      WEBHOOK_DELIVERY_RETENTION_DAYS: ${WEBHOOK_DELIVERY_RETENTION_DAYS:-30}
     ports:
       - "${BACKEND_PORT:-6121}:8000"
     volumes:

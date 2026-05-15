@@ -592,7 +592,13 @@ async def test_run_engine_empty_event_returns_empty_reasons(db):
 
 async def test_placement_reason_fill_for_solitary_participant(db):
     """A participant with no group_code and no mark priorities lands
-    via the individual fill pass — reason: 'fill'."""
+    via the individual fill pass — reason: 'fill'.
+
+    v1.0.0i: assertion updated to accept the engine's current
+    placement_reason payload shape, which carries `unit_id` alongside
+    `reason`. The contract being tested is "this participant got
+    reason: fill", not the literal dict shape.
+    """
     ev = await make_event(db)
     cat = await make_category(db, event_id=ev.id)
     await make_unit(db, category_id=cat.id, name="Room A", capacity=4)
@@ -600,12 +606,23 @@ async def test_placement_reason_fill_for_solitary_participant(db):
 
     result = await run_engine(db, ev.id, cat.id)
     reason = result["placement_reasons"][str(p.id)]
-    assert reason == {"reason": "fill"}
+    assert reason["reason"] == "fill"
+    # Engine v0.74+ stamps the unit on the reason for the (i) panel.
+    assert "unit_id" in reason
 
 
 async def test_placement_reason_group_code_cluster_whole(db):
     """Two participants sharing a group_code, cluster fits in one unit
-    → both get reason=group_code with cluster_size == cluster_placed_here == 2."""
+    → both get reason=group_code with cluster_size == cluster_placed_here == 2.
+
+    v1.0.0i: third participant assertion relaxed. Carol is alone with
+    her code → treated as uncoded → enters the fill path. Depending on
+    where PASS 4 places her and whether the equalise sweep then rebalances,
+    her final reason may be `fill` (placed directly into a different unit)
+    OR `equalise` wrapping `fill` (placed in the same unit as the cluster,
+    then moved by the equalise sweep). Both outcomes satisfy the contract
+    being tested: Carol is a singleton fill, not a member of FAMILY1.
+    """
     ev = await make_event(db)
     cat = await make_category(db, event_id=ev.id)
     await make_unit(db, category_id=cat.id, name="Room A", capacity=4)
@@ -631,10 +648,20 @@ async def test_placement_reason_group_code_cluster_whole(db):
         assert r["cluster_size"] == 2
         assert r["cluster_placed_here"] == 2
 
-    # Carol is alone with her code → treated as uncoded → reason=fill.
-    # (code_to_members drops singletons into `uncoded` at cluster-build time.)
+    # Carol traces back to fill — either directly or via equalise.
     r3 = result["placement_reasons"][str(p3.id)]
-    assert r3["reason"] == "fill"
+    if r3["reason"] == "fill":
+        pass  # placed directly in fill pass
+    elif r3["reason"] == "equalise":
+        # Equalise sweep relocated her; the original reason is
+        # preserved under `previous` for the audit trail.
+        assert r3.get("previous", {}).get("reason") == "fill", (
+            f"Carol's equalise placement should wrap an original 'fill', got {r3}"
+        )
+    else:
+        raise AssertionError(
+            f"Carol should trace to 'fill' (directly or via equalise); got {r3['reason']}"
+        )
 
 
 async def test_placement_reason_group_code_cluster_split(db):
@@ -669,7 +696,11 @@ async def test_placement_reason_group_code_cluster_split(db):
 
 async def test_commit_proposal_writes_meta_when_reasons_provided(db):
     """End-to-end: run_engine → commit_proposal with reasons →
-    AllocationEvent rows carry meta with run_id + placement."""
+    AllocationEvent rows carry meta with run_id + placement.
+
+    v1.0.0i: placement assertion relaxed to check fields rather than
+    literal dict shape (engine now stamps unit_id alongside reason).
+    """
     user = await make_user(db)
     ev = await make_event(db)
     cat = await make_category(db, event_id=ev.id)
@@ -692,7 +723,10 @@ async def test_commit_proposal_writes_meta_when_reasons_provided(db):
     meta = rows[0]["meta"]
     assert meta is not None
     assert meta["run_id"] == result["run_id"]
-    assert meta["placement"] == {"reason": "fill"}
+    assert meta["placement"]["reason"] == "fill"
+    # Engine v0.74+ also stamps unit_id; assert it survives the
+    # commit_proposal serialisation round-trip.
+    assert "unit_id" in meta["placement"]
 
 
 async def test_commit_proposal_writes_null_meta_when_reasons_absent(db):

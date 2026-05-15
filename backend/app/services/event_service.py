@@ -11,6 +11,7 @@ from app.models.user import UserRole
 from app.models.user_preferences import UserPreferences
 from app.schemas.event import EventCreate, EventUpdate, FieldConfigItem
 from app.services.allocation_service import create_default_categories
+from app.services.webhook_service import queue_event
 
 # Default optional fields that can be toggled per event
 DEFAULT_FIELD_CONFIGS = [
@@ -104,6 +105,26 @@ async def create_event(db: AsyncSession, data: EventCreate, created_by: uuid.UUI
 
     await db.flush()
     await db.refresh(event)
+
+    # v1.0.0h: emit event.created webhook. Same transaction as the
+    # event creation — both succeed together or roll back together,
+    # so receivers never see an event that didn't actually exist and
+    # admins never see an event that wasn't reported. The actual
+    # delivery is asynchronous; queue_event only inserts PENDING rows
+    # which the scheduler picks up on its next tick. Payload is GDPR-
+    # minimal: just the event ID and its creation timestamp. Tenant
+    # identity is stamped at the envelope level (see _envelope in
+    # webhook_service.py). If no endpoints are configured (typical
+    # self-hoster) this is a no-op.
+    await queue_event(
+        db,
+        event_type="event.created",
+        data={
+            "event_id": str(event.id),
+            "created_at": event.created_at.isoformat(),
+        },
+    )
+
     return event
 
 
@@ -231,6 +252,24 @@ async def delete_event(db: AsyncSession, event_id: uuid.UUID) -> bool:
     event = await get_event_by_id(db, event_id)
     if not event:
         return False
+
+    # v1.0.0h-1: emit event.deleted webhook in the same transaction as
+    # the cascade. Same atomicity contract as event.created: webhook
+    # delivery row and the cascade commit together or roll back
+    # together. Tenant identity is stamped at the envelope level (see
+    # _envelope in webhook_service.py). Payload is GDPR-minimal: just
+    # the event ID and a deletion timestamp. SaaS owns the decision
+    # of whether the deletion warrants a refund (e.g. the 24-hour
+    # paid-plan policy is a SaaS billing rule, not a CE rule).
+    from datetime import datetime, timezone
+    await queue_event(
+        db,
+        event_type="event.deleted",
+        data={
+            "event_id": str(event_id),
+            "deleted_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
 
     # Resolve participant ids up front — we need them for child-of-participant
     # deletes and the participants table itself.

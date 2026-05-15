@@ -38,8 +38,10 @@ import CheckinOverlayPage from './pages/CheckinOverlayPage';
 import SetupPage from './pages/SetupPage';
 import BackupPage from './pages/BackupPage';
 import UserManagementPage from './pages/UserManagementPage';
+import WebhooksPage from './pages/WebhooksPage';
 import { setup as setupApi } from './services/api';
 import { I18nProvider } from './hooks/useI18n';
+import { CapabilitiesProvider } from './hooks/useCapabilities';
 
 function App() {
   const [needsSetup, setNeedsSetup] = useState(null); // null=loading, true, false
@@ -108,6 +110,7 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <I18nProvider>
+          <CapabilitiesProvider>
           <DateFormatProvider>
             {/*
               v0.70: Suspense boundary for lazy-loaded public + auth
@@ -133,6 +136,13 @@ function App() {
                   <Route path="events/:eventId" element={<EventDetailPage />} />
                   <Route path="users" element={<UserManagementPage />} />
                   <Route path="backup" element={<BackupPage />} />
+                  {/* v1.0.0g: outbound webhooks admin. The sidebar entry
+                      is gated by useCapabilities().outbound_webhooks; the
+                      route itself stays mounted because the backend
+                      returns 404 when the capability is off, which is
+                      a reasonable failure mode if someone hand-types the
+                      URL while the flag is disabled. */}
+                  <Route path="webhooks" element={<WebhooksPage />} />
                 </Route>
 
                 {/* Full-screen overview (light + dark, §9.9) */}
@@ -150,6 +160,7 @@ function App() {
               </Routes>
             </Suspense>
           </DateFormatProvider>
+          </CapabilitiesProvider>
           </I18nProvider>
         </AuthProvider>
       </BrowserRouter>

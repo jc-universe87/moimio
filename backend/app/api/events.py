@@ -225,6 +225,12 @@ async def delete_event_route(
     v0.50g-2: Super Admin only. Destructive, irreversible. The frontend
     UI layers a type-to-confirm dialog and recommends a backup download
     before triggering this.
+
+    v1.0.0h-1: also emits an `event.deleted` webhook (handled inside
+    the `delete_event` service in the same DB transaction). The
+    decision of whether a deletion warrants a refund is a SaaS-side
+    billing rule, not a CE rule — CE simply tells SaaS the event
+    was deleted and lets SaaS apply its own timing policy.
     """
     from app.services.event_service import delete_event
     ok = await delete_event(db, event_id)

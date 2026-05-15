@@ -7,10 +7,10 @@ variable. Reasons:
   - Self-hosters deploy onto whatever domain they own. The scaffold
     shouldn't require them to hand-configure a URL env var for basic
     functionality to work.
-  - Multi-domain SaaS (moimio.app, moimio.com, tenant-specific
-    subdomains) can share a single backend. The right URL for an email
-    link is the one matching the request that triggered it — a user
-    who registered via moimio.com should not receive a moimio.app link.
+  - Container-per-tenant SaaS deployments (each tenant on their own
+    backend at <tenant>.moimio.app) still benefit from this: a single
+    image build serves any subdomain the operator points at it without
+    a per-tenant URL config step.
   - Operator ergonomics: one fewer piece of configuration to get right.
 
 Derivation order:

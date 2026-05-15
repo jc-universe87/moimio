@@ -26,6 +26,8 @@ Moimio replaces that workflow:
 
 Designed for small and mid-sized events. Not enterprise tooling. Free to run forever.
 
+**Integrations.** Moimio can fire signed HTTP webhooks to external services when system events occur — connect Slack, Zapier, n8n, your own scripts, or any other system that accepts inbound webhooks. The subsystem is optional and disabled by default unless you configure an endpoint. See [the webhooks guide](docs/webhooks.md).
+
 ![Allocation board with engine settings open](docs/assets/allocation-board.png)
 
 ---
@@ -61,6 +63,7 @@ First-run setup (creating the initial admin account, configuring email, creating
 | **[GDPR Compliance](docs/gdpr-compliance.md)** | Privacy posture, data flow, Article 20 / Article 17 fulfilment. |
 | **[Architecture](ARCHITECTURE.md)** | The *why* behind the product and code: invariants, the allocation engine, the three-phase lifecycle, design principles. |
 | **[Data Model](docs/data-model.md)** | Schema overview for developers and integrators. |
+| **[Webhooks](docs/webhooks.md)** | Wiring Moimio into Slack, Zapier, n8n, or your own systems via outbound HTTP webhooks. |
 | **[Translation Rule](TRANSLATION_RULE.md)** | How the i18n system works; how to add a language. |
 
 ---

@@ -147,23 +147,41 @@ async def test_equalise_respects_gender_restriction(db):
 async def test_equalise_preserves_previous_reason_for_audit(db):
     """When the sweep moves a fill singleton, the new reason must wrap
     the original `fill` payload under `previous` so the (i) panel can
-    show both 'placed to fill' and 'moved to even out unit sizes'."""
+    show both 'placed to fill' and 'moved to even out unit sizes'.
+
+    v1.0.0i: re-aimed at a scenario where equalise still fires. The
+    original scenario (3 plain fills into 2 cap-4 rooms) no longer
+    triggers equalise because PASS 4 round-robins fills directly into
+    a balanced 2:1, leaving nothing for the sweep to correct.
+
+    The new scenario uses a 2-person cluster + 1 solo into 2 cap-4
+    rooms:
+      - PASS 1 places the cluster (Alice, Bob) into Room A (sort-first).
+      - PASS 4 fills the solo (Carol) into Room A (cursor=0). Result: A=3, B=0.
+      - PASS 4c equalise moves Carol to Room B to balance to A=2, B=1.
+      - Carol's reason becomes 'equalise', wrapping the original 'fill'
+        under `previous`.
+    Same contract being tested: equalise preserves audit trail.
+    """
     ev = await make_event(db)
     cat = await make_category(db, event_id=ev.id, has_capacity=True)
     await make_unit(db, category_id=cat.id, name="Room A", capacity=4)
     await make_unit(db, category_id=cat.id, name="Room B", capacity=4)
-    for i in range(3):
-        await make_participant(db, event_id=ev.id, first_name=f"P{i}")
+    # Cluster of 2 — pre-fills Room A in PASS 1.
+    await make_participant(db, event_id=ev.id, first_name="Alice", group_code="FAMILY1")
+    await make_participant(db, event_id=ev.id, first_name="Bob",   group_code="FAMILY1")
+    # Solo — gets placed by PASS 4 fill, then relocated by PASS 4c equalise.
+    await make_participant(db, event_id=ev.id, first_name="Carol")
 
     result = await run_engine(db, ev.id, cat.id)
-    # At least one participant must have been equalised given 3-into-2
-    # rooms. Whichever pid carries `equalise`, its `previous` must be
-    # a complete placement payload (have a `reason` field).
+    # At least one participant must have been equalised. Whichever pid
+    # carries `equalise`, its `previous` must be a complete placement
+    # payload (have a `reason` field).
     equalised = [
         (pid, r) for pid, r in result["placement_reasons"].items()
         if r["reason"] == "equalise"
     ]
-    assert equalised, "equalise sweep should have moved at least one fill"
+    assert equalised, "equalise sweep should have moved the solo fill to balance against the cluster"
     for pid, r in equalised:
         assert "previous" in r
         assert r["previous"]["reason"] == "fill"

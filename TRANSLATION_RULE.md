@@ -32,6 +32,47 @@ frontend/src/i18n/locales/fr.json
 Lowercase `pt-BR` (exact case) is the canonical code — it must match
 `SUPPORTED_LANGS` in `useI18n.jsx`.
 
+## Per-locale conventions (address forms and terminology)
+
+These are language-specific defaults that must be kept consistent across
+every string. Drift here makes the UI feel translated rather than
+written — same problem as inconsistent terminology in EN.
+
+### Address form (who is the user being addressed as)
+
+| Locale  | Form     | Notes                                                |
+|---------|----------|------------------------------------------------------|
+| `en`    | you      | Neutral; no T/V distinction.                          |
+| `de`    | **du**   | Always informal. Never `Sie` for direct address.     |
+| `ko`    | 합니다체 / -세요 (formal-polite) | Standard polite-formal endings for instructions. |
+| `es`    | **tú**   | Always informal. Never `usted` for direct address.   |
+| `pt-BR` | você     | Standard pt-BR neutral form.                         |
+| `fr`    | **vous** | Always formal. Never `tu` for direct address.        |
+
+**DE, ES, and FR are the three with hard rules: DE is always du, ES is
+always tú, FR is always vous.** These were product decisions, not
+translator choices, and they must not drift.
+
+In DE, `Sie` may legitimately appear as the 3rd-person pronoun referring
+to a noun (`die Spalten ... sie werden`, `diese Person ... sie wird`) —
+that is not address-form drift. The same is true in ES for the verb
+`puede` referring to a 3rd-party noun (`el personal puede ver...`) or
+in impersonal constructions (`no se puede deshacer`). Only the
+**direct-address** use of `Sie` / `usted` is drift.
+
+### Terminology notes
+
+- **DE**: "Event" (loan-word) is the canonical term for a Moimio event,
+  not "Veranstaltung". For the 24h grace cancel action the verb is
+  **"absagen"** (call off) — chosen over "stornieren" (commercial
+  reversal) because the admin's mental model is calendar-cancellation
+  rather than transaction-reversal.
+- **Brand and protocol names** (Moimio, Slack, Zapier, Paddle,
+  HMAC-SHA256, Moimio-Signature, URL, POST) are kept as-is in every
+  locale.
+- **Quotation marks** should be locale-native where the locale has a
+  preference: DE „…", FR «\u00a0…\u00a0», KO/ES/pt-BR "…".
+
 ## How to Add a New String
 
 1. Choose a key following the naming convention: `namespace.sub.descriptor`

@@ -10,6 +10,16 @@ asyncpg==0.30.0
 alembic==1.15.2
 greenlet==3.2.2
 
+# ─── Background tasks (v1.0.0g — outbound webhook delivery retries + log prune) ───
+# AsyncIOScheduler runs jobs in the same event loop as FastAPI, so they share
+# the async SQLAlchemy session machinery without thread-safety concerns.
+apscheduler==3.10.4
+
+# ─── HTTP client (v1.0.0g — outbound webhook delivery) ───
+# httpx is already pulled in transitively by FastAPI's TestClient, but we
+# pin it explicitly because the webhook service is a production consumer.
+httpx==0.28.1
+
 # ─── Auth ───
 python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
@@ -22,7 +32,6 @@ structlog==25.4.0
 # ─── Testing ───
 pytest==8.3.5
 pytest-asyncio==0.26.0
-httpx==0.28.1
 
 # ─── Utilities ───
 python-dotenv==1.1.0

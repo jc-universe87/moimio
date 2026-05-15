@@ -212,7 +212,29 @@ Full detail in [TRANSLATION_RULE.md](TRANSLATION_RULE.md).
 
 ---
 
-## 10. Where to read more
+## 10. Outbound webhooks for integrations
+
+From v1.0.0g, Moimio CE can POST signed HTTP notifications to URLs you configure, the moment a system event happens. This is the integration seam — wire Slack notifications, Zapier flows, custom scripts, accounting systems, anything that accepts inbound webhooks.
+
+The subsystem is a deliberate architectural commitment, not a feature add. It has three load-bearing properties:
+
+**Generic, not SaaS-specific.** Moimio CE doesn't know who's listening on the other end of a webhook. The receiver might be a self-hoster's Zapier flow, a hosted-Moimio billing layer, or a researcher's data-collection script — CE treats them identically. There is no SaaS-specific code path inside CE. This is what "CE stays clean" means in concrete terms: the hosted edition's billing pipeline is built on the same public capability that any self-hoster has.
+
+**Signed at the wire.** Every outbound POST carries a `Moimio-Signature` header containing an HMAC-SHA256 over the raw body. Receivers verify with a per-endpoint secret that was shown once at endpoint creation. The signing scheme is symmetric with Paddle's inbound convention so receivers can reuse code if they're already handling Paddle webhooks.
+
+**At-least-once delivery.** Failed deliveries retry on a 30s / 2min / 10min / 1h / 6h schedule (~7.5 hours total). Receivers are expected to be idempotent on the `event_id` field. After 5 consecutive failures the endpoint is marked `degraded`; after 20 it is `disabled` and requires manual re-enabling. Delivery rows are retained for 30 days (configurable) for debugging.
+
+The admin UI is a Super-Admin-only section at `/admin/webhooks`. It is hidden when `FEATURE_OUTBOUND_WEBHOOKS=false` and when the user isn't a super admin. The capability gate exists so an operator who doesn't want integration surfaces can hide them entirely.
+
+Signing secrets are stored in plaintext in the `outbound_webhook_endpoints` table. CE is the *sender* of webhooks and must produce a fresh HMAC on every delivery — hash-only storage would make signing impossible after a restart. The "shown once via UI" UX is enforced at the API layer (GET responses never include the secret), which prevents accidental disclosure to humans but does not protect against full-DB leaks. Standard hosting trust and backup encryption are the protection at rest; an encrypted-column hardening with a master-key env var is candidate future work.
+
+Background work — retrying failed deliveries every 30 seconds, pruning the delivery log nightly — runs in an `AsyncIOScheduler` (APScheduler) instance attached to the FastAPI lifespan. No external worker service is required; jobs share the same async SQLAlchemy session machinery as request handlers.
+
+Full integration guide for receivers: [`docs/webhooks.md`](docs/webhooks.md). Schema for the two backing tables: [`docs/data-model.md`](docs/data-model.md).
+
+---
+
+## 11. Where to read more
 
 | Topic | Where to look |
 |---|---|
@@ -220,6 +242,7 @@ Full detail in [TRANSLATION_RULE.md](TRANSLATION_RULE.md).
 | Allocation algorithm | `backend/app/services/engine_service.py` (top-of-file docstring) |
 | GDPR architecture | [`docs/gdpr-compliance.md`](docs/gdpr-compliance.md) |
 | User-facing feature reference | [`docs/manual/README.md`](docs/manual/README.md) |
+| Webhook integration recipe | [`docs/webhooks.md`](docs/webhooks.md) |
 | API surface | `http://localhost:6121/docs` (auto-generated OpenAPI) |
 | Translation system | [`TRANSLATION_RULE.md`](TRANSLATION_RULE.md) |
 | Contribution mechanics | [`CONTRIBUTING.md`](CONTRIBUTING.md) |

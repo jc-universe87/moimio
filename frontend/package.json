@@ -8,7 +8,10 @@
     "build": "python3 scripts/validate-i18n-keys.py --quiet && vite build",
     "preview": "vite preview",
     "lint": "eslint src/",
-    "validate-i18n": "python3 scripts/validate-i18n-keys.py"
+    "validate-i18n": "python3 scripts/validate-i18n-keys.py",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "drag-drop-touch": "^1.3.1",
@@ -19,16 +22,22 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
     "@vitejs/plugin-react": "^4.5.2",
+    "@vitest/coverage-v8": "^2.1.4",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.0.0",
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^5.0.0",
     "globals": "^15.0.0",
+    "jsdom": "^25.0.1",
     "postcss": "^8.5.4",
     "tailwindcss": "^3.4.17",
     "vite": "^6.3.5",
-    "vite-plugin-pwa": "^1.2.0"
+    "vite-plugin-pwa": "^1.2.0",
+    "vitest": "^2.1.4"
   },
-  "moimioVersion": "v1.0.0e"
+  "moimioVersion": "v1.0.0j"
 }

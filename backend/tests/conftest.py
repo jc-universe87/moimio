@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.database import Base
-from app.main import app
+from app.main import app as fastapi_app
 
 # Import all models so Base.metadata is fully populated before create_all.
 import app.models  # noqa: F401
@@ -47,10 +47,10 @@ def anyio_backend():
     return "asyncio"
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client():
     """Async test client for API integration tests."""
-    transport = ASGITransport(app=app)
+    transport = ASGITransport(app=fastapi_app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 

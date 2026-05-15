@@ -204,6 +204,10 @@ export const events = {
   // v0.50g-2: aggregate stats for the Reports page.
   stats: (eventId) => request(`/events/${eventId}/stats`),
   // v0.50g-2: hard-delete an event (Super Admin only). Returns void on 204.
+  // v1.0.0h-1: now also emits an event.deleted webhook server-side
+  // (handled in the delete_event service, same DB transaction). On a
+  // paid SaaS plan the receiver applies its own 24-hour refund policy;
+  // CE simply tells SaaS the deletion happened.
   delete: (eventId) => request(`/events/${eventId}`, { method: 'DELETE' }),
   // v0.50i: archive/unarchive (Super Admin only). Archived events are
   // read-only to everyone except Super Admin and hidden from the
@@ -376,4 +380,39 @@ export const eventAssignments = {
   delete: (eventId, assignmentId) => request(`/events/${eventId}/assignments/${assignmentId}`, { method: 'DELETE' }),
   myEvents: () => request('/my-events'),
   myEvent: () => request('/my-event'),  // back-compat, deprecated
+};
+
+// ─── Capabilities (v1.0.0g) ───
+// Frontend reads this once on boot (in App.jsx / I18nProvider boot path)
+// to know which features the instance has enabled. Used to gate sidebar
+// nav entries and feature surfaces. Public endpoint — no auth required.
+export const capabilities = {
+  get: () => request('/capabilities'),
+};
+
+// ─── Billing info (v1.0.0h) ───
+// Returns the per-tenant amount/currency/card-last-4 used by the
+// create-event confirmation dialog. Only call this when
+// capabilities.create_event_confirmation is true — for self-hosters
+// and tenants where the flag is off, this data is not relevant.
+// Auth required; the card last-4 is customer data.
+export const billingInfo = {
+  get: () => request('/billing-info'),
+};
+
+// ─── Outbound webhooks (v1.0.0g) ───
+// Admin-only CRUD for outbound webhook endpoints + delivery log.
+// The CREATE and ROTATE responses include a plaintext `secret` field
+// exactly once; consumers must capture and display it via the sticky
+// "show once" modal pattern. GET responses never include the secret.
+export const outboundWebhooks = {
+  list: () => request('/webhooks/endpoints'),
+  get: (id) => request(`/webhooks/endpoints/${id}`),
+  create: (data) => request('/webhooks/endpoints', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, data) => request(`/webhooks/endpoints/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id) => request(`/webhooks/endpoints/${id}`, { method: 'DELETE' }),
+  rotateSecret: (id) => request(`/webhooks/endpoints/${id}/rotate-secret`, { method: 'POST' }),
+  reenable: (id) => request(`/webhooks/endpoints/${id}/reenable`, { method: 'POST' }),
+  sendTest: (id) => request(`/webhooks/endpoints/${id}/test`, { method: 'POST' }),
+  listDeliveries: (id, limit = 50) => request(`/webhooks/endpoints/${id}/deliveries?limit=${limit}`),
 };

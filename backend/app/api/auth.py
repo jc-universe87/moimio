@@ -199,8 +199,8 @@ async def request_password_reset(
         await db.flush()
         # v0.61b-2: derive the base URL from the incoming request's
         # forwarded headers. Works on any domain the operator deploys
-        # to, and on multi-domain SaaS where a single backend serves
-        # moimio.app / moimio.com / tenant subdomains.
+        # to — self-host on arbitrary domains, container-per-tenant
+        # SaaS on tenant subdomains. No per-deployment URL config.
         base = get_app_base_url(request)
         reset_url = f"{base}/reset-password?token={token}"
         send_password_reset_email(user.email, user.full_name, reset_url)

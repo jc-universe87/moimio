@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, getPermsForEvent, getRoleForEvent } from '../hooks/useAuth';
+import { useCapabilities } from '../hooks/useCapabilities';
 import UserPreferencesPanel from './UserPreferencesPanel';
 import WelcomePanel from './WelcomePanel';
 import ThemeToggle from './ThemeToggle';
@@ -21,6 +22,7 @@ const MOIMIO_VERSION = typeof __MOIMIO_VERSION__ !== 'undefined' ? __MOIMIO_VERS
 
 export default function AdminLayout() {
   const { user, staffContext, logout } = useAuth();
+  const { capabilities } = useCapabilities();
   const { t } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
@@ -479,6 +481,17 @@ export default function AdminLayout() {
                     className="block w-full text-left px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">
                     {t('nav.backup')}
                   </button>
+                  {/* v1.0.0g: Webhooks. Super-admin only AND the outbound
+                      webhook capability has to be on. Hidden for staff
+                      and event-admins; hidden when FEATURE_OUTBOUND_WEBHOOKS
+                      is off (in which case the backend router isn't
+                      registered either, so clicking would 404). */}
+                  {user?.role === 'super_admin' && capabilities.outbound_webhooks && (
+                    <button onClick={() => { navigate('/admin/webhooks'); closeSidebar(); }}
+                      className="block w-full text-left px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">
+                      {t('nav.webhooks')}
+                    </button>
+                  )}
                 </div>
               </div>
             )}

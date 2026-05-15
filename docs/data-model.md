@@ -60,7 +60,7 @@ User
  └── UserPreferences            (language, date format, timezone)
 ```
 
-## The 17 Tables
+## The 19 Tables
 
 | Table | Purpose |
 |-------|---------|
@@ -81,6 +81,8 @@ User
 | `checkin_fields` | Custom tick columns for check-in mode ("Arrived", "Picked up pack", "Paid cash"). |
 | `checkin_values` | Per-field tick state for each participant. |
 | `notes` | Polymorphic. Attaches to any of: participant, event, allocation_category, allocation_unit, allocation, mark_assignment. |
+| `outbound_webhook_endpoints` | (v1.0.0g) Registered HTTP receivers for outbound webhook notifications. Name, URL, signing secret (plaintext at-rest — see [ARCHITECTURE.md § 10](../ARCHITECTURE.md#10-outbound-webhooks-for-integrations)), subscribed event types, health state. `managed_by` distinguishes admin-created (`user`) from auto-registered (`saas`) endpoints — the latter are hidden from the admin UI. |
+| `outbound_webhook_deliveries` | (v1.0.0g) Append-only log of every delivery attempt. One row per attempt (so a retried event produces multiple rows sharing the same `event_id`). Pruned daily by a scheduled job; retention configurable via `WEBHOOK_DELIVERY_RETENTION_DAYS` (default 30 days). |
 
 ## Conventions
 
@@ -108,6 +110,27 @@ super_admin | staff
 ```
 
 `event_admin` is *not* a global role. It only exists at the per-event assignment level (`event_user_assignments.role`).
+
+### `WebhookEndpointState` (table: `outbound_webhook_endpoints`)
+```
+active | degraded | disabled
+```
+
+Transitions are driven by delivery outcomes: `active` → `degraded` after 5 consecutive failed deliveries; `degraded` → `disabled` after 20. Recovers to `active` on first successful delivery (from `degraded`) or manual re-enable (from `disabled`). A separate `is_active` boolean handles admin-paused endpoints — orthogonal to this state machine.
+
+### `WebhookEndpointManagedBy` (table: `outbound_webhook_endpoints`)
+```
+user | saas
+```
+
+`user` = created by an admin through the Webhooks admin UI; fully editable. `saas` = auto-registered at boot via env vars; hidden from UI and not user-editable. Pattern borrowed from managed Kubernetes — platform-created infrastructure objects that users can't break.
+
+### `WebhookDeliveryStatus` (table: `outbound_webhook_deliveries`)
+```
+pending | success | failed | exhausted
+```
+
+`pending` = waiting for first attempt or scheduled retry. `success` = 2xx response received. `failed` = transient failure, retry scheduled. `exhausted` = all retries used up.
 
 ## Participant — Key Fields (post-v20)
 

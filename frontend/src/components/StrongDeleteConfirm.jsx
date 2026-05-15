@@ -11,16 +11,22 @@ import ErrorBanner from './ErrorBanner';
  * destructive actions where "are you sure?" isn't strong enough.
  *
  * Props:
- *   open          — boolean, whether to show
- *   title         — dialog title
- *   itemLabel     — what kind of thing is being deleted (e.g. "mark")
- *   itemName      — the specific name (required typed confirmation)
- *   itemColour    — optional hex colour for a visual dot preview
- *   assigneeCount — total number of affected items
- *   assigneeNames — array of names (shown as pills; max 10 rendered)
- *   warning       — optional additional warning line
- *   onConfirm     — called when user clicks Delete with matching name
- *   onCancel      — called when user dismisses
+ *   open             — boolean, whether to show
+ *   title            — dialog title
+ *   itemLabel        — what kind of thing is being deleted (e.g. "mark")
+ *   itemName         — the specific name (required typed confirmation)
+ *   itemColour       — optional hex colour for a visual dot preview
+ *   assigneeCount    — total number of affected items
+ *   assigneeNames    — array of names (shown as pills; max 10 rendered)
+ *   warning          — optional additional warning line
+ *   confirmLabel     — optional override for the action button text.
+ *                      Defaults to t('common.delete'). Pass when reusing
+ *                      this modal for a non-delete destructive action
+ *                      (e.g. "Cancel event").
+ *   confirmingLabel  — optional override for the action button while
+ *                      loading. Defaults to t('common.deleting').
+ *   onConfirm        — called when user clicks the action button with matching name
+ *   onCancel         — called when user dismisses
  */
 export default function StrongDeleteConfirm({
   open,
@@ -31,6 +37,8 @@ export default function StrongDeleteConfirm({
   assigneeCount = 0,
   assigneeNames = [],
   warning,
+  confirmLabel = null,
+  confirmingLabel = null,
   onConfirm,
   onCancel,
   loading = false,
@@ -155,7 +163,9 @@ export default function StrongDeleteConfirm({
             className="flex-1 text-sm font-semibold px-4 py-2 rounded-card transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ background: matches ? 'var(--alert-burgundy)' : 'var(--alert-burgundy)', color: '#fff' }}
           >
-            {loading ? (t('common.deleting')) : t('common.delete')}
+            {loading
+              ? (confirmingLabel || t('common.deleting'))
+              : (confirmLabel || t('common.delete'))}
           </button>
           <button
             type="button"

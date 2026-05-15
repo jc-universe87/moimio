@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { events as eventsApi, marks as marksApi } from '../services/api';
+import { events as eventsApi, marks as marksApi, billingInfo as billingInfoApi } from '../services/api';
 import { useAuth, getRoleForEvent } from '../hooks/useAuth';
+import { useCapabilities } from '../hooks/useCapabilities';
 import { useDateFormat } from '../hooks/useDateFormat';
 import { useI18n } from '../hooks/useI18n';
 import { getEventPhase, PHASE } from '../services/phase';
@@ -54,6 +55,14 @@ export default function EventsPage() {
   const [archiving, setArchiving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);   // event | null
   const [deleting, setDeleting] = useState(false);
+
+  // v1.0.0h: create-event confirmation modal. Only shown when
+  // capabilities.create_event_confirmation is true (typical for SaaS
+  // tenants on a per-event plan). Billing info is fetched lazily on
+  // first show and cached for the session.
+  const { capabilities } = useCapabilities();
+  const [showConfirmCreate, setShowConfirmCreate] = useState(false);
+  const [billingInfoData, setBillingInfoData] = useState(null);
 
   // v0.51: ephemeral banner (no global toast system in the codebase;
   // same inline pattern AllocationBoard uses).
@@ -108,6 +117,37 @@ export default function EventsPage() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
+    setError(null);
+    // v1.0.0h: if create-event confirmation is required (typical for
+    // SaaS tenants on a per-event plan), open the confirm modal first.
+    // The actual create call is deferred to executeCreate, fired when
+    // the admin clicks Confirm.
+    if (capabilities?.create_event_confirmation) {
+      setShowConfirmCreate(true);
+      // Lazy-load billing info on first show. If the fetch fails, we
+      // fall back to a generic dialog with no charge text rather than
+      // blocking the admin entirely — failing closed here would
+      // prevent event creation just because one auxiliary endpoint
+      // is unreachable, which is worse UX than a slightly less
+      // informative dialog.
+      if (!billingInfoData) {
+        try {
+          const data = await billingInfoApi.get();
+          setBillingInfoData(data);
+        } catch (err) {
+          console.warn('billing-info fetch failed; using fallback dialog', err);
+          setBillingInfoData({ amount: '', currency: '', card_last4: '' });
+        }
+      }
+      return;
+    }
+    await executeCreate();
+  };
+
+  // v1.0.0h: extracted from handleCreate. Called directly when no
+  // confirmation is required, or by the create-confirm modal's
+  // Confirm button after the admin has approved the charge.
+  const executeCreate = async () => {
     setCreating(true);
     setError(null);
     try {
@@ -124,6 +164,7 @@ export default function EventsPage() {
         }
       }
       setShowCreate(false);
+      setShowConfirmCreate(false);
       setForm({ name: '' });
       setCopyMarks(false);
       setCopyMarksSourceId('');
@@ -138,6 +179,7 @@ export default function EventsPage() {
       navigate(`/admin/events/${newEvent.id}`);
     } catch (err) {
       setError(err);
+      setShowConfirmCreate(false);
     } finally {
       setCreating(false);
     }
@@ -652,6 +694,84 @@ export default function EventsPage() {
           onConfirm={handleRowDeleteConfirm}
           onCancel={() => { if (!deleting) setDeleteTarget(null); }}
         />
+      )}
+      {/* v1.0.0h: create-event confirmation modal. Only shown when
+          capabilities.create_event_confirmation is on. Body picks
+          between three keys based on which data is available, so a
+          partially-configured tenant still gets a sensible dialog
+          rather than empty placeholders.
+          - Both amount and last4: full charge message
+          - Amount only:           "card on file" wording
+          - Neither:               generic "will be charged" wording
+          Cancel just closes the modal; admin can edit the name and
+          re-submit. Confirm proceeds to executeCreate. */}
+      {showConfirmCreate && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => { if (!creating) setShowConfirmCreate(false); }}
+        >
+          <div
+            className="card-surface-solid rounded-2xl p-6 max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-heading font-bold text-lg mb-3" style={{ color: 'var(--text-primary)' }}>
+              {t('event.create.confirm.title')}
+            </h3>
+            <p className="text-sm mb-5" style={{ color: 'var(--text-primary)' }}>
+              {(() => {
+                // Locale-aware amount formatting via Intl. Falls back
+                // to the raw string if Intl can't parse (e.g. missing
+                // currency code), so the dialog never crashes on a
+                // malformed env var.
+                const amount = billingInfoData?.amount || '';
+                const currency = billingInfoData?.currency || '';
+                const last4 = billingInfoData?.card_last4 || '';
+                let formattedAmount = amount;
+                if (amount && currency) {
+                  try {
+                    const n = Number(amount);
+                    if (!Number.isNaN(n)) {
+                      formattedAmount = new Intl.NumberFormat(
+                        (typeof navigator !== 'undefined' && navigator.language) || 'en',
+                        { style: 'currency', currency }
+                      ).format(n);
+                    }
+                  } catch (_err) {
+                    // keep formattedAmount as the raw string
+                  }
+                }
+                if (amount && last4) {
+                  return t('event.create.confirm.body', { amount: formattedAmount, last4 });
+                }
+                if (amount) {
+                  return t('event.create.confirm.body_no_card', { amount: formattedAmount });
+                }
+                return t('event.create.confirm.body_no_info');
+              })()}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => { if (!creating) setShowConfirmCreate(false); }}
+                disabled={creating}
+                className="text-sm font-semibold px-4 py-2 rounded-card hover:opacity-80 transition-opacity"
+                style={{ color: 'var(--text-subtle)' }}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={executeCreate}
+                disabled={creating}
+                className="text-sm font-semibold px-4 py-2 rounded-card text-white bg-steel-blue hover:bg-steel-blue-700 dark:bg-gold dark:text-deep-navy dark:hover:bg-gold/80 disabled:opacity-50 transition-colors"
+              >
+                {creating
+                  ? t('event.create.confirm.confirming')
+                  : t('event.create.confirm.confirm_button')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

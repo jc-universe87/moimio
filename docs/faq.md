@@ -142,6 +142,21 @@ A coloured badge that staff can attach to participants — "leader", "first-time
 
 Marks are staff-internal — participants never see them.
 
+### Can I integrate Moimio with Slack, Zapier, or my own systems?
+
+Yes. From v1.0.0g, Moimio CE can fire signed HTTP webhooks to URLs you configure, the moment a system event happens. Configure endpoints in the admin UI under **Webhooks** (Super Admin only). Each webhook is signed with HMAC-SHA256 using a per-endpoint secret you receive on creation, so your receiver can verify the request really came from Moimio.
+
+Common use cases:
+
+- A Slack channel that fires every time a new event is created
+- A Zapier or n8n flow that syncs registrations to a spreadsheet
+- A custom script on your network that updates your accounting system
+- Anything else that accepts inbound HTTP webhooks
+
+Full integration guide with code samples: [docs/webhooks.md](webhooks.md).
+
+The subsystem is optional. If you never configure an endpoint, Moimio behaves identically to v1.0.0f. To hide the feature entirely (admin UI included), set `FEATURE_OUTBOUND_WEBHOOKS=false` in `.env`.
+
 ---
 
 ## Languages and localisation

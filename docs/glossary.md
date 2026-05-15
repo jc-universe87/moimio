@@ -195,6 +195,36 @@ A small per-event integer assigned to each participant on registration. Used in 
 
 ---
 
+## Integrations
+
+### Outbound webhook
+
+An HTTP POST that Moimio sends to a URL you control, fired the moment a system event happens. Used to connect Moimio to Slack, Zapier, n8n, custom scripts, or any other system that accepts inbound webhooks. Each request is signed with HMAC-SHA256 so receivers can verify it came from Moimio.
+
+The subsystem ships with v1.0.0g; full integration guide at [`docs/webhooks.md`](webhooks.md).
+
+### Endpoint (webhook)
+
+A configured URL that Moimio sends webhook deliveries to. Each endpoint has a name, a URL, a list of subscribed event types, and a signing secret. Configured in the admin UI under **Webhooks** (Super Admin only). Distinct from an *event* in the Moimio sense — an endpoint receives notifications about events.
+
+### Signing secret
+
+A random string generated server-side when a webhook endpoint is created. Used to compute the HMAC-SHA256 in the `Moimio-Signature` header of every outbound delivery. Shown to the admin exactly once at creation in a sticky modal; never recoverable through the UI afterwards. If lost, generate a new one via the **Rotate secret** action.
+
+### Delivery
+
+A single attempt to send a webhook event to an endpoint. Recorded in the `outbound_webhook_deliveries` table with status, response code, duration, and any error. The last 50 deliveries per endpoint are visible in the admin UI; the full log is kept for the retention window (default 30 days) before the daily prune job removes old rows.
+
+### Endpoint state
+
+A health indicator on each webhook endpoint: `active` (healthy), `degraded` (5 consecutive failures), `disabled` (20 consecutive failures, requires manual re-enable), or `paused` (manually paused by admin). Transitions are driven by delivery outcomes.
+
+### SaaS-managed endpoint
+
+A webhook endpoint that was auto-registered at container startup via the `MOIMIO_WEBHOOK_URL` and `MOIMIO_WEBHOOK_SECRET` environment variables. Flagged `managed_by="saas"` in the database and hidden from the admin UI. Used by deployment automation (notably the hosted Moimio platform) to wire each tenant's CE container to a central event receiver without admin involvement. Self-hosters who manage endpoints themselves leave these env vars empty.
+
+---
+
 ## Documentation conventions
 
 ### "v1.0", "v0.x"
