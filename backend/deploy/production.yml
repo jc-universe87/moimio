@@ -1,0 +1,117 @@
+# Moimio CE — production compose template for the hosted SaaS.
+#
+# This file is read by the Moimio SaaS provisioning driver. For each
+# new tenant, the SaaS writes a per-tenant .env file alongside this
+# compose and runs `docker compose up` against both.
+#
+# Self-hosters do NOT use this file — they use docker-compose.yml at
+# the project root (the dev compose, with build contexts and source
+# mounts suited to local development).
+#
+# Why this lives under backend/deploy/ specifically:
+#   The CI workflow builds the backend image with `context: ./backend`
+#   (.github/workflows/build.yml). For this file to ship inside the
+#   built backend image, it has to be reachable from that build
+#   context. The existing `COPY . .` step in backend/Dockerfile then
+#   copies it to /app/deploy/production.yml inside the image, which
+#   is where the SaaS provisioner reads it from.
+#
+# Required vars use ${VAR:?...} syntax — the stack refuses to start
+# if any are missing. Optional vars use ${VAR:-default} fallbacks.
+#
+# Image versions are pinned to a specific GHCR tag matching the CE
+# release this template was bundled with. Upgrades happen by rendering
+# a fresh template from a newer release. Never :latest.
+#
+# Network topology:
+#   moimio-${SUBDOMAIN}-internal  — per-tenant: db + backend + frontend
+#   moimio-public                  — shared:     frontend + outer Caddy
+# The backend is unreachable from outside the tenant's internal net.
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:?POSTGRES_USER must be set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB:       ${POSTGRES_DB:?POSTGRES_DB must be set}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    image: ghcr.io/jc-universe87/moimio-backend:v1.0.0l
+    restart: unless-stopped
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SECRET_KEY:   ${SECRET_KEY:?SECRET_KEY must be set}
+      LOG_LEVEL:    ${LOG_LEVEL:-INFO}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
+      RATE_LIMIT_REGISTRATION: ${RATE_LIMIT_REGISTRATION:-10}
+      # SMTP — the SaaS provisioner injects Mailjet credentials by
+      # default. Self-hoster overrides via tenant-specific .env are
+      # supported once admin-UI per-tenant overrides ship (SAAS-3).
+      SMTP_HOST:       ${SMTP_HOST:?SMTP_HOST must be set}
+      SMTP_PORT:       ${SMTP_PORT:-587}
+      SMTP_USER:       ${SMTP_USER:?SMTP_USER must be set}
+      SMTP_PASSWORD:   ${SMTP_PASSWORD:?SMTP_PASSWORD must be set}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:?SMTP_FROM_EMAIL must be set}
+      SMTP_FROM_NAME:  ${SMTP_FROM_NAME:-Moimio}
+      SMTP_TLS:        ${SMTP_TLS:-true}
+      SMTP_SSL:        ${SMTP_SSL:-false}
+      # Capability flags + outbound webhook config (v1.0.0g-3 lineage).
+      FEATURE_ALLOCATION:                ${FEATURE_ALLOCATION:?FEATURE_ALLOCATION must be set}
+      FEATURE_OUTBOUND_WEBHOOKS:         ${FEATURE_OUTBOUND_WEBHOOKS:-true}
+      FEATURE_CREATE_EVENT_CONFIRMATION: ${FEATURE_CREATE_EVENT_CONFIRMATION:-false}
+      EVENT_CHARGE_AMOUNT:   ${EVENT_CHARGE_AMOUNT:-}
+      EVENT_CHARGE_CURRENCY: ${EVENT_CHARGE_CURRENCY:-}
+      BILLING_CARD_LAST4:    ${BILLING_CARD_LAST4:-}
+      MOIMIO_TENANT_ID:      ${MOIMIO_TENANT_ID:?MOIMIO_TENANT_ID must be set}
+      MOIMIO_WEBHOOK_URL:    ${MOIMIO_WEBHOOK_URL:?MOIMIO_WEBHOOK_URL must be set}
+      MOIMIO_WEBHOOK_SECRET: ${MOIMIO_WEBHOOK_SECRET:?MOIMIO_WEBHOOK_SECRET must be set}
+      WEBHOOK_DELIVERY_RETENTION_DAYS: ${WEBHOOK_DELIVERY_RETENTION_DAYS:-30}
+    networks:
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    image: ghcr.io/jc-universe87/moimio-frontend:v1.0.0l
+    restart: unless-stopped
+    networks:
+      - internal
+      - public
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5173/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  pgdata:
+
+networks:
+  internal:
+    name: moimio-${SUBDOMAIN:?SUBDOMAIN must be set}-internal
+  public:
+    name: moimio-public
+    external: true

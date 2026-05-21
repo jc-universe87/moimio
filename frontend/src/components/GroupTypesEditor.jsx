@@ -368,13 +368,15 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange }) {
                   className="h-3.5 w-3.5 rounded accent-steel-blue dark:accent-gold" />
                 {t('organise.capacity_limits')}
               </label>
-              <label className="flex items-center gap-1.5 text-xs cursor-pointer"
-                style={{ color: 'var(--text-muted)' }}>
-                <input type="checkbox" checked={newCat.has_gender_restriction}
-                  onChange={e => setNewCat(p => ({ ...p, has_gender_restriction: e.target.checked }))}
-                  className="h-3.5 w-3.5 rounded accent-steel-blue dark:accent-gold" />
-                {t('organise.gender_restrictions')}
-              </label>
+              {/* v1.0.0k: leftover has_gender_restriction toggle removed
+                  from Create form to match Edit form. The v0.74
+                  deprecation only ever removed it from Edit; this
+                  finishes the job. Gender separation lives at the unit
+                  level (per-room gender_restriction column) and is the
+                  field the engine actually reads. The category-level
+                  column stays in the DB for backward compat, defaults
+                  to false on new categories, and is scheduled to be
+                  dropped in a future migration. */}
               <button type="submit"
                 className="text-xs font-semibold px-4 py-1.5 rounded-card bg-steel-blue text-white hover:bg-steel-blue-700 dark:bg-gold dark:text-deep-navy dark:hover:bg-gold/80">
                 {t('common.create')}

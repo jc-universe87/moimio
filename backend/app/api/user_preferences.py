@@ -27,7 +27,14 @@ class PreferencesUpdate(BaseModel):
     timezone: str | None = None
 
 
-VALID_DATE_FORMATS = ["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]
+VALID_DATE_FORMATS = [
+    "DD/MM/YYYY",
+    "MM/DD/YYYY",
+    "YYYY-MM-DD",
+    "DD.MM.YYYY",      # v1.0.0k: German convention
+    "YYYY.MM.DD",      # v1.0.0k: Korean dotted
+    "YYYY년 MM월 DD일",  # v1.0.0k: Korean traditional (Hangul markers)
+]
 VALID_LANGUAGES = ["en", "de", "ko", "es", "pt-BR", "fr"]
 
 

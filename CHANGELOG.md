@@ -14,6 +14,231 @@ Nothing yet. Open issues at <https://github.com/jc-universe87/moimio/issues> for
 
 ---
 
+## [1.0.0l] — 2026-05-21
+
+Production compose template for the hosted SaaS. No runtime behaviour
+change for self-hosters — the dev compose at the project root is
+untouched. Unblocks Moimio SaaS v0.4.0 (the real provisioning driver),
+which reads this template out of the backend GHCR image to spin up
+per-tenant stacks.
+
+### Added
+
+- **`backend/deploy/production.yml`** — production compose template
+  used by the Moimio SaaS provisioning driver. References pinned GHCR
+  image tags (no `:latest`), declares the two-network topology
+  (per-tenant `moimio-${SUBDOMAIN}-internal` for db+backend+frontend,
+  shared `moimio-public` for frontend+outer Caddy), publishes no host
+  ports, uses no source mounts, runs healthchecks on all three
+  services, and treats secrets as required (`${VAR:?...}` fail-loud
+  syntax) rather than defaulted.
+- **`backend/deploy/README.md`** — documentation of the env vars the
+  template expects (split into required vs. optional), the SaaS
+  provisioner / CE responsibility boundary, the network topology, and
+  a one-line distinction between the new `backend/deploy/` (artefact
+  for the hosted SaaS) and the existing root-level `deploy.sh`
+  (bootstrap script for self-hosters).
+- **`BACKLOG.md`** — three new items: `CE-1` (image-update awareness),
+  `CE-2` (backend `--reload` in production), `SAAS-3` (admin dashboard
+  global product config section, first user Mailjet credentials).
+
+### Why this lives under `backend/deploy/`, not at the project root
+
+The CI workflow (`.github/workflows/build.yml`) builds the backend
+image with `context: ./backend`. For the production template to ship
+inside the built backend image — so the SaaS provisioner can read it
+out of the image at `/app/deploy/production.yml` without a Git clone —
+the template must be reachable from the backend build context.
+Placing the folder inside `backend/` is the smallest possible change
+to make this work. The existing `COPY . .` step in the Dockerfile
+then copies the deploy folder along with everything else; no
+Dockerfile change required.
+
+The naming overlap with the root-level `deploy.sh` is unfortunate but
+intentionally explicit — `deploy.sh` (script) and `backend/deploy/`
+(directory) live at different paths and serve different audiences.
+The README disambiguates.
+
+### Discoveries flagged while drafting
+
+- **`VITE_API_URL` is vestigial.** The frontend code uses a hardcoded
+  `const API_BASE = '/api'` (in `frontend/src/services/api.js`), a
+  relative path that the frontend's own Caddy reverse-proxies to the
+  backend. The `VITE_API_URL` variable in the dev compose is
+  unreferenced. The production template omits it. Cleaning up the
+  dev compose to also omit it is out of scope for v1.0.0l; flagged
+  here for a future ship.
+- **Backend image runs `uvicorn --reload`** (see `backend/Dockerfile`
+  line 36). Appropriate in dev, wrong in production — wastes CPU on
+  a file-watcher with nothing to watch, and theoretically vulnerable
+  to spurious restarts. The right fix is its own discussion (per-env
+  CMD? parameterise via env var? compose-level `command:` override?).
+  Captured as `CE-2` in `BACKLOG.md`.
+
+### Unchanged from v1.0.0k-3
+
+- All application code (backend, frontend, migrations, tests).
+- All translations (1089 keys per locale).
+- The dev compose at the project root (`docker-compose.yml`).
+- The root-level `deploy.sh` bootstrap script.
+- `backend/Dockerfile` — the existing `COPY . .` already copies the
+  new `deploy/` folder into the image.
+
+### Process
+
+- `frontend/package.json` `moimioVersion` bumped to `v1.0.0l` per
+  the ship checklist locked in v1.0.0k-3.
+
+---
+
+## [1.0.0k-3] — 2026-05-21
+
+Re-issue of v1.0.0k-2 with one cosmetic fix. No application code
+changes; behaviour is identical to v1.0.0k.
+
+### Fixed
+
+- **Sidebar version label was stuck at `v1.0.0j`.** The
+  `moimioVersion` field in `frontend/package.json` — the canonical
+  source of truth for the version shown in the admin sidebar — was
+  not bumped when v1.0.0k shipped. The deployed code was v1.0.0k but
+  the label said v1.0.0j. No functional impact; the application
+  ran the new code as expected. Fix: bump `moimioVersion` to
+  `v1.0.0k-3` so the label matches the ship.
+
+### Process improvement
+
+- The vite.config.js comment ("Release workflow: bump
+  `moimioVersion` in package.json once per ship") is now mirrored
+  as a mandatory step in the ship checklist. Future ships will fail
+  the self-review if the package.json `moimioVersion` does not
+  match the CHANGELOG header.
+
+### Unchanged from v1.0.0k-2
+
+- All application code (backend, frontend, migrations, tests).
+- The `PYTHONDONTWRITEBYTECODE=1` fix on the backend service.
+- All six v1.0.0k items remain in place.
+
+---
+
+## [1.0.0k-2] — 2026-05-21
+
+Re-issue of v1.0.0k with one operational fix. No application code
+changes; v1.0.0k application behaviour is preserved exactly.
+
+### Fixed
+
+- **Root-owned `.pyc` files on the host bind mount.** The backend
+  container runs as root (default for the `python:3.12-slim` image),
+  and Python writes `.pyc` files into `__pycache__/` directories
+  alongside source. Because `docker-compose.yml` bind-mounts
+  `./backend/app:/app/app`, those `.pyc` files appeared on the host
+  owned by root — making a routine `rm -rf moimio-ce/` during
+  redeploy fail with "Permission denied" for the unprivileged host
+  user. Fix: set `PYTHONDONTWRITEBYTECODE=1` on the backend service
+  so Python writes no bytecode files at all. Slight cold-start cost
+  on first request after rebuild; negligible in practice.
+
+### Operational notes
+
+- If you already deployed v1.0.0k and have a half-deleted
+  `moimio-ce/` directory containing root-owned `.pyc` orphans, clear
+  it with a brief root container before re-extracting:
+  ```bash
+  docker run --rm -v ~/docker-compose:/work alpine sh -c "rm -rf /work/moimio-ce"
+  ```
+  No database changes; the host `pgdata` volume is untouched.
+
+### Unchanged from v1.0.0k
+
+- All application code (backend, frontend, migrations, tests).
+- All translations (1089 keys per locale).
+- All six v1.0.0k items remain in place.
+
+---
+
+## [1.0.0k] — 2026-05-21
+
+Registration form polish + locale presets. Six items, no breaking
+changes, no migrations.
+
+### Fixed
+
+- **Custom fields on additional participants** — multi-person
+  registrations now render and submit per-person custom field
+  answers. Previously the extra-person card showed only the built-in
+  optional fields (gender, DOB, phone, address, country, church),
+  silently dropping any custom EAV question (allergies, role, room
+  preference, etc.) for participants 2–10. Required custom fields are
+  now validated and highlighted on submit alongside the other
+  required fields.
+- **Submit-validation highlight extends to all required fields on
+  extras** — gender, date of birth, phone, address, country, church
+  organisation, and required custom fields now show the burgundy
+  border when missing on submit, matching the behaviour already in
+  place for name/email/GDPR. Previously the validator flagged some of
+  these but the inputs used the unstyled class so no red border
+  appeared.
+
+### Changed
+
+- **Group code radio for additional participants is now three-way**:
+  "Same code as [primary]" (default), "No group code for this person"
+  (explicit opt-out), "Use a different group code" (text field
+  appears). The previous two-way radio left empty-and-own
+  ambiguous — leaving the text field blank meant "no code" but that
+  was not visually obvious. The explicit "none" option makes opting
+  out a conscious choice.
+- **Date format presets**: settings dropdown now offers six numeric
+  formats covering the main conventions across the six supported
+  locales — `DD/MM/YYYY` (UK, EU), `MM/DD/YYYY` (US), `DD.MM.YYYY`
+  (DE), `YYYY-MM-DD` (ISO), `YYYY.MM.DD` (KR), and the Korean
+  traditional `YYYY년 MM월 DD일`. Long-form (month name) presets are
+  intentionally deferred — they require `Intl.DateTimeFormat`
+  integration that touches every date display in the app.
+- **Danger zone hint copy** — refreshed across all six locales to be
+  honest that some actions in the section (archive) can in fact be
+  undone, while others (delete event, delete custom field, clear
+  allocations) cannot. The previous copy claimed everything was
+  irreversible.
+  - EN: "Critical actions. Some actions cannot be undone."
+  - DE: „Kritische Aktionen. Manche Änderungen lassen sich nicht
+    rückgängig machen."
+  - KO: "중요한 작업입니다. 일부 작업은 되돌릴 수 없습니다."
+  - ES: "Acciones críticas. Algunas acciones no se pueden deshacer."
+  - FR: « Actions critiques. Certaines actions sont irréversibles. »
+  - pt-BR: "Ações críticas. Algumas ações não podem ser desfeitas."
+- **Group Types create form**: leftover gender-restriction checkbox
+  removed to match the Edit form, finishing the v0.74 deprecation.
+  Gender separation continues to be set per-unit (per-room) at
+  allocation time, which is the level the engine reads. The DB
+  column on `allocation_categories` stays for backward compat and is
+  scheduled to be dropped in a future migration.
+
+### Backend
+
+- `VALID_DATE_FORMATS` extended from 3 to 6 entries. Existing
+  preferences continue to round-trip; `String(20)` is wide enough
+  for the new presets (the widest, `YYYY년 MM월 DD일`, is 13 chars).
+  No migration required.
+
+### Translations
+
+- 1 new key (`register.group_code_none`) added to all six locales.
+- `register.group_code_own` shortened in all six locales (the
+  trailing "(or none)" is no longer accurate now that "none" is its
+  own option).
+- `event.danger_zone.hint` refreshed in all six locales.
+- Total key count: 1089 per locale, all alphabetically sorted.
+
+### Tests
+
+- No test changes. Backend test suite: 128 passed (unchanged from
+  v1.0.0i). Frontend test suite: 6 passed (unchanged).
+
+---
+
 ## [1.0.0j] — 2026-05-13
 
 CI/CD pipeline ship. Adds GitHub Actions workflow that builds backend

@@ -22,7 +22,8 @@ class UserPreferences(Base):
     language: Mapped[str] = mapped_column(String(10), default="en", nullable=False)
     date_format: Mapped[str] = mapped_column(
         String(20), default="DD/MM/YYYY", nullable=False
-    )  # DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD
+    )  # See VALID_DATE_FORMATS in api/user_preferences.py for full list.
+    # String(20) accommodates the widest preset ("YYYY년 MM월 DD일", 13 chars).
     timezone: Mapped[str] = mapped_column(
         String(50), default="Europe/London", nullable=False
     )

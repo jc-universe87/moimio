@@ -68,9 +68,16 @@ export default function UserPreferencesPanel({ onClose }) {
       <div>
         <label className="block text-[10px] text-white/40 mb-0.5">{t("prefs.date_format")}</label>
         <select value={prefs.date_format} onChange={e => setPrefs(p => ({ ...p, date_format: e.target.value }))} className={selectClass}>
-          <option value="DD/MM/YYYY" className="text-body bg-card-solid">DD/MM/YYYY</option>
-          <option value="MM/DD/YYYY" className="text-body bg-card-solid">MM/DD/YYYY</option>
-          <option value="YYYY-MM-DD" className="text-body bg-card-solid">YYYY-MM-DD</option>
+          {/* v1.0.0k: six numeric presets covering the main conventions
+              across the six supported locales. Hints in parens are
+              advisory — picking any format is allowed from any UI
+              language. Long-form (month name) presets deferred. */}
+          <option value="DD/MM/YYYY" className="text-body bg-card-solid">DD/MM/YYYY (UK, EU)</option>
+          <option value="MM/DD/YYYY" className="text-body bg-card-solid">MM/DD/YYYY (US)</option>
+          <option value="DD.MM.YYYY" className="text-body bg-card-solid">DD.MM.YYYY (DE)</option>
+          <option value="YYYY-MM-DD" className="text-body bg-card-solid">YYYY-MM-DD (ISO)</option>
+          <option value="YYYY.MM.DD" className="text-body bg-card-solid">YYYY.MM.DD (KR)</option>
+          <option value="YYYY년 MM월 DD일" className="text-body bg-card-solid">YYYY년 MM월 DD일 (KR)</option>
         </select>
       </div>
       <div>

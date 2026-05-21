@@ -34,6 +34,12 @@ export function DateFormatProvider({ children }) {
     switch (dateFormat) {
       case 'MM/DD/YYYY': return `${month}/${day}/${year}`;
       case 'YYYY-MM-DD': return `${year}-${month}-${day}`;
+      // v1.0.0k: locale-specific numeric presets. Long-form (with month
+      // name) is intentionally not handled here — it requires
+      // Intl.DateTimeFormat integration and is deferred.
+      case 'DD.MM.YYYY': return `${day}.${month}.${year}`;
+      case 'YYYY.MM.DD': return `${year}.${month}.${day}`;
+      case 'YYYY년 MM월 DD일': return `${year}년 ${month}월 ${day}일`;
       default: return `${day}/${month}/${year}`;
     }
   }, [dateFormat]);

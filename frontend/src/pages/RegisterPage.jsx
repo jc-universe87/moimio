@@ -135,6 +135,31 @@ function RegisterForm() {
         if (!ep.gdpr_consent) errs.gdpr_consent = true;
         if (isFieldEnabled('gender') && isFieldRequired('gender') && !ep.gender) errs.gender = true;
         if (isFieldEnabled('date_of_birth') && isFieldRequired('date_of_birth') && !ep.date_of_birth) errs.date_of_birth = true;
+        // v1.0.0k #6: extend required-field check to phone, address,
+        // country, church_organisation. Previously only name, email,
+        // gdpr, gender, DOB were validated for extras — if the
+        // organiser had marked phone required, the extras would
+        // silently submit empty.
+        if (isFieldEnabled('phone') && isFieldRequired('phone') && !ep.phone?.trim()) errs.phone = true;
+        if (isFieldEnabled('address') && isFieldRequired('address') && !ep.address?.trim()) errs.address = true;
+        if (isFieldEnabled('country') && isFieldRequired('country') && !ep.country?.trim()) errs.country = true;
+        if (isFieldEnabled('church_organisation') && isFieldRequired('church_organisation') && !ep.church_organisation?.trim()) errs.church_organisation = true;
+        // v1.0.0k #5: required custom fields validated per-person.
+        // Errors keyed as `cf_${cf.id}` so they don't collide with
+        // built-in field names. epInputClass + epCustomFieldClass
+        // pick the same prefix.
+        for (const cf of customFields) {
+          if (cf.is_required) {
+            const v = ep.customValues?.[cf.id];
+            // Boolean fields are "filled" if set to either 'true' or
+            // 'false'. Other types: any non-empty string.
+            if (cf.field_type === 'boolean') {
+              if (v !== 'true' && v !== 'false') errs[`cf_${cf.id}`] = true;
+            } else {
+              if (!v || !String(v).trim()) errs[`cf_${cf.id}`] = true;
+            }
+          }
+        }
         return errs;
       });
       const firstErrorIdx = epErrors.findIndex(e => Object.keys(e).length > 0);
@@ -226,15 +251,26 @@ function RegisterForm() {
         }
         // Gender: always per-person, regardless of copy mode.
         if (ep.gender) epSubmission.gender = ep.gender;
-        // Group code: per-person choice
+        // Group code: per-person three-way choice.
+        // 'own'  → use ep.group_code if filled, otherwise no code sent
+        // 'none' → explicitly no code, even if primary has one
+        // 'same' → inherit primary's code (or no code if primary has none)
         if (ep.groupCodeMode === 'own' && ep.group_code?.trim()) {
           epSubmission.group_code = ep.group_code.trim();
-        } else if (ep.groupCodeMode !== 'own') {
-          // 'same' — inherit from primary
+        } else if (ep.groupCodeMode === 'same') {
           if (groupingMode === 'code' && formData.group_code.trim()) {
             epSubmission.group_code = formData.group_code.trim();
             if (formData.group_code_categories) epSubmission.group_code_categories = formData.group_code_categories;
           }
+        }
+        // 'none' falls through: no group_code attached.
+        // v1.0.0k #5: per-person custom field values. Mirrors the
+        // primary's payload shape — empty values are filtered out so
+        // the backend treats unset fields the same way for primary
+        // and extras.
+        const epCfEntries = Object.entries(ep.customValues || {}).filter(([_, v]) => v !== '' && v != null);
+        if (epCfEntries.length > 0) {
+          epSubmission.custom_fields = Object.fromEntries(epCfEntries);
         }
         await participants.register(eventId, epSubmission);
       }
@@ -565,6 +601,19 @@ function RegisterForm() {
                 Object.keys(patch).forEach((k) => {
                   if (fieldErrs[k]) delete fieldErrs[k];
                 });
+                // v1.0.0k #5: custom-field patches arrive under the
+                // single key `customValues`. Walk the merged object
+                // and clear any `cf_${id}` error whose value is now
+                // filled. Without this, the burgundy border stays put
+                // even after the user supplies the missing answer.
+                if (patch.customValues) {
+                  const merged = patch.customValues;
+                  Object.keys(merged).forEach((cfId) => {
+                    const v = merged[cfId];
+                    const filled = (v === 'true' || v === 'false') ? true : (v && String(v).trim() !== '');
+                    if (filled && fieldErrs[`cf_${cfId}`]) delete fieldErrs[`cf_${cfId}`];
+                  });
+                }
                 errsCopy[idx] = fieldErrs;
                 setExtraPersonErrors(errsCopy);
               }
@@ -648,7 +697,7 @@ function RegisterForm() {
                     {isFieldEnabled('gender') && (
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">{t('register.gender')}{isFieldRequired('gender') && <span className="ml-1" style={{ color: 'var(--alert-burgundy)' }}>*</span>}</label>
-                        <select value={ep.gender || ''} onChange={e => updateEp({ gender: e.target.value })} className={inputClass}>
+                        <select value={ep.gender || ''} onChange={e => updateEp({ gender: e.target.value })} className={epInputClass(idx, 'gender')}>
                           <option value="">{t('register.gender.select')}</option>
                           <option value="male">{t('register.gender.male')}</option>
                           <option value="female">{t('register.gender.female')}</option>
@@ -661,7 +710,7 @@ function RegisterForm() {
                         <label className="block text-xs text-gray-500 mb-1">{t('register.dob')}{isFieldRequired('date_of_birth') && <span className="ml-1" style={{ color: 'var(--alert-burgundy)' }}>*</span>}</label>
                         <input type="date" value={ep.date_of_birth || ''}
                           onChange={e => updateEp({ date_of_birth: e.target.value })}
-                          className={inputClass} />
+                          className={epInputClass(idx, 'date_of_birth')} />
                       </div>
                     )}
 
@@ -670,7 +719,7 @@ function RegisterForm() {
                         <label className="block text-xs text-gray-500 mb-1">{t('register.phone')}{isFieldRequired('phone') && <span className="ml-1" style={{ color: 'var(--alert-burgundy)' }}>*</span>}</label>
                         <input type="tel" value={ep.phone || ''}
                           onChange={e => updateEp({ phone: e.target.value })}
-                          className={inputClass} />
+                          className={epInputClass(idx, 'phone')} />
                       </div>
                     )}
 
@@ -679,7 +728,7 @@ function RegisterForm() {
                         <label className="block text-xs text-gray-500 mb-1">{t('register.address')}{isFieldRequired('address') && <span className="ml-1" style={{ color: 'var(--alert-burgundy)' }}>*</span>}</label>
                         <input type="text" value={ep.address || ''}
                           onChange={e => updateEp({ address: e.target.value })}
-                          className={inputClass} />
+                          className={epInputClass(idx, 'address')} />
                       </div>
                     )}
 
@@ -688,7 +737,7 @@ function RegisterForm() {
                         <label className="block text-xs text-gray-500 mb-1">{t('register.country')}{isFieldRequired('country') && <span className="ml-1" style={{ color: 'var(--alert-burgundy)' }}>*</span>}</label>
                         <input type="text" value={ep.country || ''}
                           onChange={e => updateEp({ country: e.target.value })}
-                          className={inputClass} />
+                          className={epInputClass(idx, 'country')} />
                       </div>
                     )}
 
@@ -697,9 +746,50 @@ function RegisterForm() {
                         <label className="block text-xs text-gray-500 mb-1">{t('register.church')}{isFieldRequired('church_organisation') && <span className="ml-1" style={{ color: 'var(--alert-burgundy)' }}>*</span>}</label>
                         <input type="text" value={ep.church_organisation || ''}
                           onChange={e => updateEp({ church_organisation: e.target.value })}
-                          className={inputClass} />
+                          className={epInputClass(idx, 'church_organisation')} />
                       </div>
                     )}
+
+                    {/* v1.0.0k #5: per-extra-person custom EAV fields.
+                        Mirrors the primary registrant's rendering at
+                        line ~430. Values live in ep.customValues, keyed
+                        by custom_field.id. Required-field highlights
+                        use the `cf_${id}` key in epInputClass which
+                        the validator sets alongside other errors. */}
+                    {customFields.map(cf => {
+                      const errKey = `cf_${cf.id}`;
+                      const cfClass = epInputClass(idx, errKey);
+                      const value = ep.customValues?.[cf.id] || '';
+                      return (
+                        <div key={cf.id}>
+                          <label className="block text-xs text-gray-500 mb-1">
+                            {cf.label}{cf.is_required && <span className="ml-1" style={{ color: 'var(--alert-burgundy)' }}>*</span>}
+                          </label>
+                          {cf.field_type === 'select' && cf.options?.choices ? (
+                            <select value={value}
+                              onChange={e => updateEp({ customValues: { ...(ep.customValues || {}), [cf.id]: e.target.value } })}
+                              required={cf.is_required} className={cfClass}>
+                              <option value="">{t('common.select')}</option>
+                              {cf.options.choices.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                            </select>
+                          ) : cf.field_type === 'boolean' ? (
+                            <label className="flex items-center gap-2 text-xs text-gray-600">
+                              <input type="checkbox" checked={value === 'true'}
+                                onChange={e => updateEp({ customValues: { ...(ep.customValues || {}), [cf.id]: e.target.checked ? 'true' : 'false' } })}
+                                className={extraPersonErrors[idx]?.[errKey]
+                                  ? "h-4 w-4 text-steel-blue rounded border-2 border-burgundy ring-1 ring-burgundy/40"
+                                  : "h-4 w-4 text-steel-blue border-gray-300 rounded"} />
+                              {t('common.yes')}
+                            </label>
+                          ) : (
+                            <input type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : 'text'}
+                              value={value}
+                              onChange={e => updateEp({ customValues: { ...(ep.customValues || {}), [cf.id]: e.target.value } })}
+                              required={cf.is_required} className={cfClass} />
+                          )}
+                        </div>
+                      );
+                    })}
 
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">{t('register.message')}</label>
@@ -709,18 +799,32 @@ function RegisterForm() {
                         className={`${inputClass} resize-none`} />
                     </div>
 
-                    {/* Group code */}
+                    {/* Group code — v1.0.0k #4: three-way radio.
+                        Previously a two-way 'same' vs 'own' where
+                        selecting 'own' revealed an empty text field;
+                        leaving it blank meant "no code" but that was
+                        not visually obvious. The new 'none' option
+                        makes opting out an explicit, conscious
+                        choice. 'own' now only fires when the user
+                        actually intends to type a different code. */}
                     <div className="border border-steel-blue/20 rounded-xl p-3 bg-steel-blue/5 space-y-2">
                       <p className="text-xs font-semibold text-deep-navy">{t('register.group_code_for_person')}</p>
                       <label className="flex items-start gap-2 cursor-pointer">
                         <input type="radio" name={`gc_mode_${idx}`} value="same"
-                          checked={ep.groupCodeMode !== 'own'}
+                          checked={ep.groupCodeMode === 'same'}
                           onChange={() => updateEp({ groupCodeMode: 'same', group_code: '' })}
                           className="mt-0.5 h-4 w-4 text-steel-blue" />
                         <span className="text-xs text-gray-700">
                           {t('register.group_code_same').replace('{name}', formData.first_name || t('register.primary_person'))}
                           <span className="block text-gray-400 mt-0.5">{t('register.group_code_same.hint')}</span>
                         </span>
+                      </label>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input type="radio" name={`gc_mode_${idx}`} value="none"
+                          checked={ep.groupCodeMode === 'none'}
+                          onChange={() => updateEp({ groupCodeMode: 'none', group_code: '' })}
+                          className="mt-0.5 h-4 w-4 text-steel-blue" />
+                        <span className="text-xs text-gray-700">{t('register.group_code_none')}</span>
                       </label>
                       <label className="flex items-start gap-2 cursor-pointer">
                         <input type="radio" name={`gc_mode_${idx}`} value="own"
@@ -772,8 +876,22 @@ function RegisterForm() {
                   phone: formData.phone || '', address: formData.address || '',
                   country: formData.country || '', church_organisation: formData.church_organisation || '',
                   message: '', gdpr_consent: false, copyFromPrimary: true,
-                  groupCodeMode: 'same', // 'same' | 'own'
+                  // v1.0.0k #4: group-code mode now has three options.
+                  // 'same' (default): inherit primary's code (or no code
+                  // if primary has none). 'none': explicitly opt out for
+                  // this person. 'own': enter a different code in the
+                  // text field. The 'none' option makes "no code" a
+                  // conscious choice rather than implicit-when-blank,
+                  // which was the previous behaviour.
+                  groupCodeMode: 'same', // 'same' | 'none' | 'own'
                   group_code: '',
+                  // v1.0.0k #5: per-extra-person custom field values.
+                  // Mirrors the primary's customValues shape — keyed by
+                  // custom_field.id. Previously the extra-person card
+                  // never rendered custom fields, so any per-person
+                  // event-specific question (allergies, room
+                  // preference, role) was lost for participants 2–10.
+                  customValues: {},
                 };
                 const next = [...extraPersons, newEp];
                 setExtraPersons(next);

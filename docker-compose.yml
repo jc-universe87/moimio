@@ -22,6 +22,16 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
+      # v1.0.0k-2: prevent Python from writing .pyc files into the
+      # ./backend/app bind mount below. The backend container runs as
+      # root (default for the python:3.12-slim image), so any .pyc
+      # files Python writes during runtime appear on the host owned
+      # by root — making `rm -rf moimio-ce/` fail for the
+      # unprivileged host user during redeploys. Setting this is
+      # cheaper than reworking the image to run as a non-root user
+      # matching the host UID. Slight cold-start cost on first
+      # request after rebuild is negligible.
+      PYTHONDONTWRITEBYTECODE: "1"
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-moimio}:${POSTGRES_PASSWORD:-moimio_dev}@db:5432/${POSTGRES_DB:-moimio}
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production-use-64-chars-minimum}
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
