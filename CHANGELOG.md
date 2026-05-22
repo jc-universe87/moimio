@@ -14,6 +14,53 @@ Nothing yet. Open issues at <https://github.com/jc-universe87/moimio/issues> for
 
 ---
 
+## [1.0.0m] — 2026-05-21
+
+Bug fix on the public registration form. When an extra person ticked
+"Same group code as {primary}", they were quietly given a different
+group code anyway — two stacked causes, single user-visible symptom:
+families ended up in separate clusters during allocation.
+
+### Fixed
+
+- **Extras with "same group code" now actually share the primary's
+  code.** Two stacked bugs, one fix.
+
+  First, the frontend only forwarded the primary's typed code to extras
+  when the primary had explicitly picked the "I'll type a group code"
+  radio. Default-mode registrants (the common path) saw the checkbox,
+  ticked it, and silently sent no `group_code` field for extras at all
+  — the backend then auto-generated a fresh code per extra.
+
+  Second, even when the code was forwarded, the frontend sent the
+  *typed* stem (e.g. `SMITH`), not the *resolved* `STEM-NNN` the
+  backend had just persisted for the primary. The backend's collision-
+  safe resolver (v1.0-pre) treats bare stems as start-of-cluster and
+  appends a fresh random suffix on each call, so the extra still
+  landed in a different cluster.
+
+  The fix captures the primary's resolved code from its registration
+  response and sends that exact value for any extra with `groupCodeMode
+  === 'same'`, independent of which grouping radio the primary chose.
+  Complete `STEM-NNN` codes are taken verbatim by the backend, so the
+  inherited value is preserved. The "same" label now matches reality
+  in all three primary modes (`none`, `code`, `request`).
+
+  Frontend-only change; backend, schema, and tests untouched.
+
+### Affected files
+
+- `frontend/src/pages/RegisterPage.jsx` — capture primary response in
+  the submit handler; inherit `group_code` and `group_code_categories`
+  unconditionally for `groupCodeMode === 'same'`.
+- `frontend/package.json` — `moimioVersion` bumped to `v1.0.0m`.
+- `backend/deploy/production.yml` — image tags bumped to `v1.0.0m`
+  per the locked policy ("tags bumped together each CE release",
+  `backend/deploy/README.md`).
+- `backend/deploy/README.md` — example tag updated to match.
+
+---
+
 ## [1.0.0l] — 2026-05-21
 
 Production compose template for the hosted SaaS. No runtime behaviour
@@ -160,82 +207,21 @@ changes; v1.0.0k application behaviour is preserved exactly.
 
 ## [1.0.0k] — 2026-05-21
 
-Registration form polish + locale presets. Six items, no breaking
-changes, no migrations.
+Registration form polish + locale presets.
 
 ### Fixed
 
-- **Custom fields on additional participants** — multi-person
-  registrations now render and submit per-person custom field
-  answers. Previously the extra-person card showed only the built-in
-  optional fields (gender, DOB, phone, address, country, church),
-  silently dropping any custom EAV question (allergies, role, room
-  preference, etc.) for participants 2–10. Required custom fields are
-  now validated and highlighted on submit alongside the other
-  required fields.
-- **Submit-validation highlight extends to all required fields on
-  extras** — gender, date of birth, phone, address, country, church
-  organisation, and required custom fields now show the burgundy
-  border when missing on submit, matching the behaviour already in
-  place for name/email/GDPR. Previously the validator flagged some of
-  these but the inputs used the unstyled class so no red border
-  appeared.
+- Custom fields now render and submit on additional participants (was silently dropped)
+- Submit-validation highlight extended to all required fields on extras
 
 ### Changed
 
-- **Group code radio for additional participants is now three-way**:
-  "Same code as [primary]" (default), "No group code for this person"
-  (explicit opt-out), "Use a different group code" (text field
-  appears). The previous two-way radio left empty-and-own
-  ambiguous — leaving the text field blank meant "no code" but that
-  was not visually obvious. The explicit "none" option makes opting
-  out a conscious choice.
-- **Date format presets**: settings dropdown now offers six numeric
-  formats covering the main conventions across the six supported
-  locales — `DD/MM/YYYY` (UK, EU), `MM/DD/YYYY` (US), `DD.MM.YYYY`
-  (DE), `YYYY-MM-DD` (ISO), `YYYY.MM.DD` (KR), and the Korean
-  traditional `YYYY년 MM월 DD일`. Long-form (month name) presets are
-  intentionally deferred — they require `Intl.DateTimeFormat`
-  integration that touches every date display in the app.
-- **Danger zone hint copy** — refreshed across all six locales to be
-  honest that some actions in the section (archive) can in fact be
-  undone, while others (delete event, delete custom field, clear
-  allocations) cannot. The previous copy claimed everything was
-  irreversible.
-  - EN: "Critical actions. Some actions cannot be undone."
-  - DE: „Kritische Aktionen. Manche Änderungen lassen sich nicht
-    rückgängig machen."
-  - KO: "중요한 작업입니다. 일부 작업은 되돌릴 수 없습니다."
-  - ES: "Acciones críticas. Algunas acciones no se pueden deshacer."
-  - FR: « Actions critiques. Certaines actions sont irréversibles. »
-  - pt-BR: "Ações críticas. Algumas ações não podem ser desfeitas."
-- **Group Types create form**: leftover gender-restriction checkbox
-  removed to match the Edit form, finishing the v0.74 deprecation.
-  Gender separation continues to be set per-unit (per-room) at
-  allocation time, which is the level the engine reads. The DB
-  column on `allocation_categories` stays for backward compat and is
-  scheduled to be dropped in a future migration.
+- Group code on additional participants: three-way radio (same / none / different)
+- Six date format presets covering UK/EU, US, ISO, DE, KR conventions
+- Danger zone hint refreshed across all six locales — honest about which actions can be undone
+- Group Types create form: leftover gender toggle removed (finishes v0.74 deprecation)
 
-### Backend
-
-- `VALID_DATE_FORMATS` extended from 3 to 6 entries. Existing
-  preferences continue to round-trip; `String(20)` is wide enough
-  for the new presets (the widest, `YYYY년 MM월 DD일`, is 13 chars).
-  No migration required.
-
-### Translations
-
-- 1 new key (`register.group_code_none`) added to all six locales.
-- `register.group_code_own` shortened in all six locales (the
-  trailing "(or none)" is no longer accurate now that "none" is its
-  own option).
-- `event.danger_zone.hint` refreshed in all six locales.
-- Total key count: 1089 per locale, all alphabetically sorted.
-
-### Tests
-
-- No test changes. Backend test suite: 128 passed (unchanged from
-  v1.0.0i). Frontend test suite: 6 passed (unchanged).
+No migrations. No breaking changes.
 
 ---
 

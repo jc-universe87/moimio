@@ -221,7 +221,17 @@ function RegisterForm() {
           }));
         }
       }
-      await participants.register(eventId, submission);
+      // v1.0.0m: capture the primary's response so extras with
+      // groupCodeMode === 'same' can inherit the *resolved* code (the
+      // STEM-NNN the backend actually saved) rather than the typed
+      // stem. Pre-1.0.0m the typed value was re-sent and re-resolved
+      // for each extra, producing a fresh suffix per person and
+      // silently scattering "same code" families across clusters.
+      // The backend treats a complete STEM-NNN as verbatim, so the
+      // inherited value is taken as-is — same cluster guaranteed.
+      const primaryResp = await participants.register(eventId, submission);
+      const inheritedGroupCode = primaryResp?.group_code || null;
+      const inheritedGroupCodeCategories = primaryResp?.group_code_categories || null;
 
       // All extras pre-validated above — just submit, no skip-on-empty.
       for (const ep of extraPersons) {
@@ -254,13 +264,21 @@ function RegisterForm() {
         // Group code: per-person three-way choice.
         // 'own'  → use ep.group_code if filled, otherwise no code sent
         // 'none' → explicitly no code, even if primary has one
-        // 'same' → inherit primary's code (or no code if primary has none)
+        // 'same' → inherit the primary's *resolved* code from the
+        //          registration response (a complete STEM-NNN). Works
+        //          across all three primary groupingMode values — if
+        //          primary picked 'none' or 'request', they still got
+        //          an auto-generated code from the backend, and
+        //          "same" honours its label: the extra goes into that
+        //          same cluster regardless of which path the primary
+        //          took to get there. Fixes v1.0.0l symptom: extras
+        //          got a fresh STEM-NNN even when "same" was ticked.
         if (ep.groupCodeMode === 'own' && ep.group_code?.trim()) {
           epSubmission.group_code = ep.group_code.trim();
-        } else if (ep.groupCodeMode === 'same') {
-          if (groupingMode === 'code' && formData.group_code.trim()) {
-            epSubmission.group_code = formData.group_code.trim();
-            if (formData.group_code_categories) epSubmission.group_code_categories = formData.group_code_categories;
+        } else if (ep.groupCodeMode === 'same' && inheritedGroupCode) {
+          epSubmission.group_code = inheritedGroupCode;
+          if (inheritedGroupCodeCategories) {
+            epSubmission.group_code_categories = inheritedGroupCodeCategories;
           }
         }
         // 'none' falls through: no group_code attached.
