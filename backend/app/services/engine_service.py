@@ -12,7 +12,17 @@ PASS 1 — Group_code clusters
       unit fully (no other participants placed there even if
       leftover capacity remains).
     • If split_oversized_groups=false and no single fit: whole
-      cluster -> unplaced with cluster_oversized_split_disabled.
+      cluster -> unplaced with cluster_oversized_split_disabled,
+      AND members are added to held_back so PASS 4 cannot pick
+      them up as individuals (v1.0.0o — pre-1.0.0o the tag was
+      advisory only and PASS 4a's gender_drain dissolved the
+      cluster).
+    • If no eligible unit exists at all (e.g. mixed-gender cluster
+      vs gendered-only rooms) AND split_oversized_groups=false:
+      whole cluster -> unplaced with cluster_no_eligible_unit,
+      held_back populated. Metadata carries the cluster's gender
+      mix and the unit restrictions in the category so the UI can
+      render an actionable diagnostic (v1.0.0o).
   v0.74a: singletons (cluster of 1) skip PASS 1 — a "cluster of
   one" has no togetherness to preserve. They flow into PASS 4b
   alongside uncoded individuals.
@@ -174,6 +184,15 @@ async def run_engine(
     # Per-participant reasoning. Populated by each placement.
     placement_reasons: dict[str, dict] = {}
     unplaced_reasons: dict[str, dict] = {}
+    # v1.0.0o: cluster members tagged as "do not place individually".
+    # Populated when a group_code cluster is rejected in PASS 1 under
+    # split_oversized_groups=false (either no eligible unit at all, or
+    # no single-unit fit and combos disabled). PASS 4a/4b filter
+    # against this set so the engine actually honours the docstring
+    # promise of "whole cluster -> unplaced". Pre-1.0.0o the tag went
+    # only into unplaced_reasons (purely advisory) — PASS 4a would
+    # then pick the members up as individuals via gender_drain.
+    held_back: set[str] = set()
 
     # ── Setup: load category, units, settings, participants, marks ──
 
@@ -382,9 +401,11 @@ async def run_engine(
                 placed_ids=placed_ids,
                 placement_reasons=placement_reasons,
                 unplaced_reasons=unplaced_reasons,
+                held_back=held_back,
                 gender_eligible=gender_eligible,
                 cluster_gender_eligible=cluster_gender_eligible,
                 remaining_cap=remaining_cap,
+                units_by_id={str(u.id): u for u in units},
             )
             if placed_in_cluster:
                 if was_split:
@@ -435,9 +456,11 @@ async def run_engine(
             placed_ids=placed_ids,
             placement_reasons=placement_reasons,
             unplaced_reasons=unplaced_reasons,
+            held_back=held_back,
             gender_eligible=gender_eligible,
             cluster_gender_eligible=cluster_gender_eligible,
             remaining_cap=remaining_cap,
+            units_by_id={str(u.id): u for u in units},
         )
 
     # ── PASS 3: mark "split-evenly" pre-distribution ──
@@ -491,7 +514,11 @@ async def run_engine(
         [u for u in units if u.gender_restriction and str(u.id) not in exclusive_units],
         key=lambda u: (u.capacity, u.sort_order, u.created_at),
     )
-    remaining = [p for p in participants if str(p.id) not in placed_ids]
+    remaining = [
+        p for p in participants
+        if str(p.id) not in placed_ids
+        and str(p.id) not in held_back  # v1.0.0o: cluster rejected → keep out
+    ]
     for u in restricted_units:
         rest = u.gender_restriction.lower()
         free = remaining_cap(str(u.id))
@@ -740,9 +767,11 @@ def _place_cluster(
     placed_ids,
     placement_reasons,
     unplaced_reasons,
+    held_back,  # v1.0.0o: members tagged here are kept out of PASS 4
     gender_eligible,
     cluster_gender_eligible,
     remaining_cap,
+    units_by_id=None,  # v1.0.0o: lookup for restriction inventory in error meta
 ):
     """Place a single cluster (group_code or mark_together) per the
     v0.74 spec:
@@ -788,13 +817,34 @@ def _place_cluster(
     ]
     if not candidate_units:
         # No unit can hold this cluster. Tag and return.
+        # v1.0.0o: distinguish "no unit is eligible at all" (e.g. mixed-
+        # gender cluster vs gendered-only rooms) from the original
+        # "oversized vs any single unit" meaning. The new reason tag
+        # surfaces the actionable signal: cluster genders vs available
+        # restrictions. Both branches populate held_back so PASS 4
+        # cannot pick the cluster members up as individuals.
         if cluster_kind == "group_code" and not split_groups:
+            # Build a snapshot of unit restrictions for the error UI.
+            if units_by_id is not None:
+                restrictions_seen = sorted({
+                    (u.gender_restriction or "").lower()
+                    for u in units_by_id.values()
+                    if (u.gender_restriction or "").strip()
+                })
+            else:
+                restrictions_seen = []
+            cluster_gender_snapshot = sorted({
+                (g or "unknown").lower() for g in cluster_genders
+            })
             for p in cluster_members:
                 unplaced_reasons[str(p.id)] = {
-                    "reason": "cluster_oversized_split_disabled",
+                    "reason": "cluster_no_eligible_unit",
                     "cluster_size": cluster_size,
                     "group_code": cluster_id,
+                    "cluster_genders": cluster_gender_snapshot,
+                    "available_restrictions": restrictions_seen,
                 }
+                held_back.add(str(p.id))
         else:
             for p in cluster_members:
                 unplaced_reasons[str(p.id)] = {
@@ -826,13 +876,17 @@ def _place_cluster(
 
     # Try multi-unit combos starting from N=2.
     if not split_groups and cluster_kind == "group_code":
-        # Whole cluster → unplaced
+        # v1.0.0o: whole cluster → unplaced AND held back from PASS 4.
+        # This is the original meaning of cluster_oversized_split_disabled:
+        # eligible units exist, but no single one is large enough, and
+        # the organiser has opted out of multi-unit splits.
         for p in cluster_members:
             unplaced_reasons[str(p.id)] = {
                 "reason": "cluster_oversized_split_disabled",
                 "cluster_size": cluster_size,
                 "group_code": cluster_id,
             }
+            held_back.add(str(p.id))
         return False, False
 
     for n in range(2, len(candidate_units) + 1):

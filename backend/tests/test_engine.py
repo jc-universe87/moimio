@@ -267,25 +267,22 @@ async def test_oversized_cluster_splits_when_enabled(db):
 async def test_oversized_cluster_unplaced_when_split_disabled(db):
     """Family of 5 in rooms of 4 with split disabled.
 
-    v1.0.0i: contract updated. Originally asserted that the cluster
-    falls to UNPLACED (family of 5 goes nowhere). The engine now
-    **dissolves** the cluster — members lose their group binding and
-    get placed as individual fills, so the family ends up scattered
-    across the available units.
+    v1.0.0o: contract restored. The engine now honours the documented
+    promise — when a group_code cluster exceeds any single unit's
+    capacity AND split_oversized_groups=false, the WHOLE cluster goes
+    to unplaced for organiser review (not dissolved into individuals).
 
-    NOTE: this is the same behaviour as
-    `test_v074_a4_oversized_cluster_split_disabled` and brings back
-    something that looks like the pre-v0.53 'scatter bug' — but as
-    intentional behaviour rather than a fault. A customer who
-    explicitly sets split_oversized_groups=false probably expects
-    their cluster to stay together OR be left for manual review,
-    not to be silently scattered. Flagged in BACKLOG ENGINE-1 as a
-    product question pending review.
+    Pre-1.0.0o: the engine tagged the cluster as
+    cluster_oversized_split_disabled in unplaced_reasons, but the tag
+    was advisory — PASS 4a's gender_drain still picked the members
+    up as individuals. Net effect: setting toggled but behaviour
+    unchanged. v1.0.0o adds a held_back set that PASS 4 respects.
 
-    What this test now verifies:
-    - All 8 (family of 5 + 3 singles) are placed
-    - Cluster is recorded as neither kept-whole nor split
-      (dissolution, not splitting)
+    What this test verifies:
+    - The 5 family members go to UNPLACED
+    - The 3 singletons get placed normally
+    - Each family member's unplaced_reason carries the
+      cluster_oversized_split_disabled tag with group_code metadata
     """
     event = await make_event(db)
     cat = await make_category(
@@ -297,30 +294,105 @@ async def test_oversized_cluster_unplaced_when_split_disabled(db):
     await make_unit(db, cat.id, "A", capacity=4)
     await make_unit(db, cat.id, "B", capacity=4)
 
+    family_ids = []
     for i in range(5):
-        await make_participant(
+        p = await make_participant(
             db, event.id, first_name=f"Smith{i}", group_code="smith"
         )
+        family_ids.append(str(p.id))
     for i in range(3):
         await make_participant(db, event.id, first_name=f"Single{i}")
 
     result = await run_engine(db, event.id, cat.id, mode="replace")
 
-    # All 8 placed (no unplaced).
-    assert result["stats"]["placed"] == 8
-    assert result["stats"]["unplaced"] == 0
-    # Cluster neither kept whole nor split — dissolved.
+    # Family unplaced, singletons placed.
+    assert result["stats"]["placed"] == 3, (
+        f"Expected 3 singletons placed; got {result['stats']['placed']}"
+    )
+    assert result["stats"]["unplaced"] == 5, (
+        f"Expected 5 family members unplaced; got {result['stats']['unplaced']}"
+    )
+    # Every family member carries the correct reason tag.
+    for fid in family_ids:
+        reason = result["unplaced_reasons"].get(fid)
+        assert reason is not None, f"Missing unplaced reason for {fid}"
+        assert reason["reason"] == "cluster_oversized_split_disabled"
+        assert reason["group_code"] == "smith"
+        assert reason["cluster_size"] == 5
+    # Cluster recorded as neither kept-whole nor split (it's unplaced).
     assert result["stats"]["clusters_total"] == 1
     assert result["stats"]["clusters_kept_whole"] == 0
     assert result["stats"]["clusters_split"] == 0
-    # No cluster reason on placements (members treated as individuals).
-    cluster_reasons = [
-        r for r in result["placement_reasons"].values()
-        if r.get("reason") in ("group_code", "group_code_split")
-    ]
-    assert cluster_reasons == [], (
-        f"Expected no cluster reasons after dissolution; got {len(cluster_reasons)} entries"
+
+
+# Skipping A5 (250-person scale) as a pinned test — too implementation-
+# dependent for exact assertions. The scenarios A1-A4 + B1-B5 cover the
+# behaviour; A5 is paper-verified, not test-pinned.
+
+
+@pytest.mark.anyio
+async def test_v100o_mixed_gender_cluster_no_eligible_unit(db):
+    """Sanchez-class scenario: mixed-gender family, every room is
+    gender-restricted. Cluster cannot fit any single unit (no unit
+    accepts both male and female members). With
+    split_oversized_groups=false the family goes to unplaced with the
+    cluster_no_eligible_unit reason tag.
+
+    Pre-1.0.0o: the engine tagged the cluster but PASS 4a's
+    gender_drain still picked up members individually. Females ended
+    up in the female-only room, males in the male-only room — split
+    by gender, family bond invisible in the audit trail.
+
+    v1.0.0o: cluster goes to unplaced as a whole. Each member's
+    unplaced_reason carries cluster_no_eligible_unit with metadata
+    describing the cluster's gender mix and the available unit
+    restrictions, so the UI can render an actionable diagnostic.
+    """
+    event = await make_event(db)
+    cat = await make_category(
+        db, event.id, has_capacity=True,
+        settings={"engine": {"split_oversized_groups": False,
+                             "use_group_codes": True}},
     )
+    # Two gender-restricted rooms only — no mixed-gender option exists.
+    await make_unit(db, cat.id, "Boys", capacity=10, gender_restriction="male")
+    await make_unit(db, cat.id, "Girls", capacity=10, gender_restriction="female")
+
+    # Mixed-gender Sanchez family of 7 (3M + 4F), all sharing group_code.
+    family_ids = []
+    for name, gender in [
+        ("Eli", "male"), ("Matthew", "male"), ("Caleb", "male"),
+        ("Audrey", "female"), ("Savannah", "female"),
+        ("Margaret", "female"), ("Paige", "female"),
+    ]:
+        p = await make_participant(
+            db, event.id, first_name=name, last_name="Sanchez",
+            gender=gender, group_code="SANCHEZ-975",
+        )
+        family_ids.append(str(p.id))
+
+    result = await run_engine(db, event.id, cat.id, mode="replace")
+
+    # All 7 family members unplaced — no one slips through into a room.
+    assert result["stats"]["placed"] == 0, (
+        f"Expected nobody placed (family is the only input); "
+        f"got {result['stats']['placed']} placed"
+    )
+    assert result["stats"]["unplaced"] == 7, (
+        f"Expected 7 family members unplaced; got {result['stats']['unplaced']}"
+    )
+    # Each carries the correct reason + metadata.
+    for fid in family_ids:
+        reason = result["unplaced_reasons"].get(fid)
+        assert reason is not None, f"Missing unplaced_reasons entry for {fid}"
+        assert reason["reason"] == "cluster_no_eligible_unit", (
+            f"Expected cluster_no_eligible_unit; got {reason['reason']} for {fid}"
+        )
+        assert reason["group_code"] == "SANCHEZ-975"
+        assert reason["cluster_size"] == 7
+        # Metadata for the diagnostic UI.
+        assert set(reason["cluster_genders"]) == {"male", "female"}
+        assert set(reason["available_restrictions"]) == {"male", "female"}
 
 
 # ─── 9. Unknown-gender placement surfaced in stats ────────────────────

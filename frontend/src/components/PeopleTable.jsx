@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { participants as participantsApi, customFields as cfApi, getToken } from '../services/api';
-import { STATUS_LABELS } from '../services/display';
 import { useDateFormat } from '../hooks/useDateFormat';
 import { useI18n } from '../hooks/useI18n';
 import { useToast } from '../hooks/useToast';
@@ -925,7 +924,7 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
                     style={active
                       ? { background: sp.bg, color: sp.color }
                       : { background: 'transparent', color: 'var(--text-subtle)', border: '1px solid var(--card-border)' }}>
-                    {STATUS_LABELS[s]}
+                    {t(STATUS_LABELS_KEYS[s] || s)}
                   </button>
                 );
               })}
@@ -937,7 +936,7 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
           <button onClick={() => isAdmin && setStatusEditing(p.id)}
             className={`text-xs font-semibold px-1.5 py-0.5 rounded ${isAdmin ? 'cursor-pointer hover:ring-1' : ''}`}
             style={{ background: pill.bg, color: pill.color }}>
-            {STATUS_LABELS[p.registration_status] || p.registration_status}
+            {t(STATUS_LABELS_KEYS[p.registration_status] || p.registration_status)}
           </button>
         );
       }
@@ -1002,7 +1001,7 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
           <button onClick={() => onOpenNotes && onOpenNotes(p)}
             className="text-xs hover:underline"
             style={{ color: 'var(--io-accent)' }}>
-            Notes{nc > 0 && (
+            {t('common.notes')}{nc > 0 && (
               <span className="ml-0.5 text-[8px] px-1 py-0 rounded-full"
                 style={{
                   background: 'var(--io-accent)',
@@ -1226,16 +1225,25 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
         </div>
       ) : (
         <>
-        {/* Desktop table — hidden on mobile */}
-        <div className="hidden md:block overflow-x-auto">
+        {/* Desktop table — hidden on mobile.
+            v1.0.0p: scroll-within-card. Wrapper now constrains both
+            axes: vertical scroll inside the card (sticky thead) plus
+            horizontal scroll, so the horizontal scrollbar sits at the
+            bottom of the card where it's actually visible — instead
+            of 300 rows below the fold. max-h tuned for typical
+            chrome (event header + phase strip + filter bar ~= 16rem
+            above the table). On exceptionally short viewports the
+            inner scroll still works, just with less visible height. */}
+        <div className="hidden md:block overflow-auto max-h-[calc(100vh-20rem)]">
           <table className="w-full min-w-max text-sm">
-            <thead>
+            <thead className="sticky top-0 z-20">
               <tr
                 className="text-left text-[10px] uppercase tracking-caps font-semibold"
                 style={{
-                  background: 'rgba(0,0,0,0.03)',
+                  background: 'var(--card-bg-solid)',
                   color: 'var(--text-subtle)',
                   borderBottom: '1px solid var(--card-border)',
+                  boxShadow: '0 1px 0 var(--card-border)',
                 }}>
                 {activeColumns.map(col => (
                   <th key={col.id}
@@ -1245,7 +1253,11 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
                     onDrop={() => { if (dragColId) handleColDrop(dragColId, col.id); }}
                     onDragEnd={() => setDragColId(null)}
                     onClick={() => !['notes'].includes(col.id) && handleSort(col.id)}
-                    className={`px-4 py-2 whitespace-nowrap select-none transition-colors ${dragColId === col.id ? 'opacity-40' : ''} ${!['notes'].includes(col.id) ? 'cursor-pointer' : ''} ${col.id === 'notes' ? 'text-center' : ''} ${col.id !== 'participant_number' && col.id !== 'notes' ? 'cursor-move' : ''}`}>
+                    className={`px-4 py-2 whitespace-nowrap select-none transition-colors ${dragColId === col.id ? 'opacity-40' : ''} ${!['notes'].includes(col.id) ? 'cursor-pointer' : ''} ${col.id === 'notes' ? 'text-center' : ''} ${col.id !== 'participant_number' && col.id !== 'notes' ? 'cursor-move' : ''} ${col.id === 'name' ? 'sticky left-0 z-30' : ''}`}
+                    style={col.id === 'name' ? {
+                      background: 'var(--card-bg-solid)',
+                      boxShadow: '1px 0 0 0 var(--card-border)',
+                    } : undefined}>
                     {col.id !== 'participant_number' && col.id !== 'notes' && (
                       <span className="mr-1 text-[10px]" style={{ color: 'var(--text-subtle)', opacity: 0.5 }}>⠿</span>
                     )}
@@ -1410,7 +1422,7 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
                             style={active
                               ? { background: sp.bg, color: sp.color }
                               : { background: 'transparent', color: 'var(--text-subtle)', border: '1px solid var(--card-border)' }}>
-                            {STATUS_LABELS[s]}
+                            {t(STATUS_LABELS_KEYS[s] || s)}
                           </button>
                         );
                       })}
@@ -1424,7 +1436,7 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
                       disabled={!isAdmin}
                       className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${isAdmin ? 'cursor-pointer' : 'cursor-default'}`}
                       style={{ background: pill.bg, color: pill.color }}>
-                      {STATUS_LABELS[p.registration_status] || p.registration_status}
+                      {t(STATUS_LABELS_KEYS[p.registration_status] || p.registration_status)}
                     </button>
                   )}
                 </div>

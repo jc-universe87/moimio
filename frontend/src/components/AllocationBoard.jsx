@@ -38,6 +38,13 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   const [allMembers, setAllMembers] = useState({});
   const [showCreate, setShowCreate] = useState(false);
   const [editingUnit, setEditingUnit] = useState(null);
+  // v1.0.0q: lightweight inline-rename for unit names. Separate from
+  // editingUnit (which opens the full edit form for name + description
+  // + capacity + gender_restriction). This one only sets a single
+  // field — same UX as the group-type title inline rename: click,
+  // type, Enter or blur saves, Esc reverts, empty reverts.
+  const [editingUnitRenameId, setEditingUnitRenameId] = useState(null);
+  const [unitRenameDraft, setUnitRenameDraft] = useState('');
   const [form, setForm] = useState({ name: '', description: '', capacity: '', gender_restriction: '' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -620,6 +627,40 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     } catch (err) { setError(err); }
   };
 
+  // v1.0.0q: inline-rename handlers. Same shape as the group-type
+  // title rename in OrganiseDashboard but scoped to one field.
+  const startInlineRenameUnit = (unit) => {
+    setEditingUnitRenameId(unit.id);
+    setUnitRenameDraft(unit.name || '');
+  };
+  const commitInlineRenameUnit = async (unitId) => {
+    const trimmed = (unitRenameDraft || '').trim();
+    const existing = units.find(u => u.id === unitId);
+    if (!trimmed || (existing && trimmed === existing.name)) {
+      setEditingUnitRenameId(null);
+      setUnitRenameDraft('');
+      return;
+    }
+    try {
+      await allocationUnits.update(eventId, category.id, unitId, {
+        name: trimmed,
+        description: existing?.description || null,
+        capacity: existing?.capacity ? parseInt(existing.capacity) : 1,
+        gender_restriction: existing?.gender_restriction || null,
+      });
+      await loadAll();
+      if (onDataChange) onDataChange();
+    } catch (err) {
+      setError(err);
+    }
+    setEditingUnitRenameId(null);
+    setUnitRenameDraft('');
+  };
+  const cancelInlineRenameUnit = () => {
+    setEditingUnitRenameId(null);
+    setUnitRenameDraft('');
+  };
+
   const handleDeleteUnit = async (unitId) => {
     const ok = await confirm({
       title: `Delete ${itemLabel}?`,
@@ -652,9 +693,27 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   // any drag/drop/edit that changes allMembers triggers a recompute.
   // Pure function; cheap (O(N) over assignments + placed members);
   // safe to recompute on every render-cycle.
+  // v1.0.0o: pass the active mark_priorities for this category so the
+  // hint strip only reports splits on marks the organiser actually
+  // asked the engine to keep together. Two filter layers:
+  //   1. Mark must be in this category's mark_priorities.
+  //   2. Effective cluster_behaviour must be 'together' — a mark
+  //      configured as 'split' is *expected* to spread across units,
+  //      so reporting its spread would be wrong, not informative.
+  // activeMarkPriorityList (built around line 485) carries both id
+  // and effective behaviour, so this slice is cheap.
+  const activeMarkPriorityIds = useMemo(
+    () => activeMarkPriorityList
+      .filter(e => e.behaviour === 'together')
+      .map(e => e.id),
+    [activeMarkPriorityList]
+  );
   const markSplits = useMemo(
-    () => computeMarkSplits({ allMembers, units, markAssignments, markDefs }),
-    [allMembers, units, markAssignments, markDefs]
+    () => computeMarkSplits({
+      allMembers, units, markAssignments, markDefs,
+      activeMarkPriorityIds,
+    }),
+    [allMembers, units, markAssignments, markDefs, activeMarkPriorityIds]
   );
 
   const leftPanelPeople = isOverlapping ? activeParticipants : unassigned;
@@ -2074,9 +2133,39 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                         </div>
                       )}
                       <div className="flex items-start justify-between mb-1">
-                        <h4 className="font-heading font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>
-                          {unit.name}
-                        </h4>
+                        {/* v1.0.0q: click-to-rename unit name. Admins
+                            (and only in detail view, not overview)
+                            click the title → input → Enter or blur
+                            commits, Esc reverts. Falls back to the
+                            full edit form via the "Bearbeiten" / Edit
+                            button for capacity / gender / description. */}
+                        {isAdmin && !isOverview && editingUnitRenameId === unit.id ? (
+                          <input
+                            type="text"
+                            autoFocus
+                            value={unitRenameDraft}
+                            onChange={e => setUnitRenameDraft(e.target.value)}
+                            onBlur={() => commitInlineRenameUnit(unit.id)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') { e.preventDefault(); commitInlineRenameUnit(unit.id); }
+                              else if (e.key === 'Escape') { e.preventDefault(); cancelInlineRenameUnit(); }
+                            }}
+                            className="font-heading font-bold text-sm bg-transparent border-b focus:outline-none focus:border-steel-blue truncate"
+                            style={{
+                              color: 'var(--text-primary)',
+                              borderColor: 'var(--io-accent)',
+                              minWidth: '140px',
+                            }}
+                          />
+                        ) : (
+                          <h4
+                            onClick={isAdmin && !isOverview ? (e) => { e.stopPropagation(); startInlineRenameUnit(unit); } : undefined}
+                            title={isAdmin && !isOverview ? t('organise.title_click_to_rename') : undefined}
+                            className={`font-heading font-bold text-sm truncate ${isAdmin && !isOverview ? 'cursor-text hover:underline decoration-dotted decoration-1 underline-offset-4' : ''}`}
+                            style={{ color: 'var(--text-primary)' }}>
+                            {unit.name}
+                          </h4>
+                        )}
                         {(() => {
                           // v0.50d-5i: capacity pill — inline colour via capColor helper
                           // or neutral tint for overlapping (no-capacity) mode.

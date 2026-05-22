@@ -32,14 +32,25 @@ const HAS_FINE_POINTER = typeof window !== 'undefined'
  * so parents can refresh their derived state (grid, summary text).
  *
  * Props:
- *   eventId  — required
- *   isAdmin  — required; renders nothing if false (non-admins can't edit)
- *   onChange — optional callback; fired after create/update/delete
+ *   eventId           — required
+ *   isAdmin           — required; renders nothing if false (non-admins can't edit)
+ *   onChange          — optional callback; fired after create/update/delete
+ *   initialEditCatId  — v1.0.0p: optional cat.id to seed editingCat
+ *                       when the editor mounts/opens. Lets the parent's
+ *                       per-column kebab "Settings" action jump straight
+ *                       into edit mode for the clicked category without
+ *                       the user having to find the row and click Edit
+ *                       again. Cleared internally once consumed.
+ *   initialShowAddCat — v1.0.0q: optional bool. When true, the
+ *                       add-new form is expanded on mount. Lets the
+ *                       parent's "+ Add group type" button open the
+ *                       band and land directly on the create form
+ *                       (one click instead of two).
  */
-export default function GroupTypesEditor({ eventId, isAdmin, onChange }) {
+export default function GroupTypesEditor({ eventId, isAdmin, onChange, initialEditCatId = null, initialShowAddCat = false }) {
   const [categories, setCategories] = useState([]);
   const [editingCat, setEditingCat] = useState(null);
-  const [showAddCat, setShowAddCat] = useState(false);
+  const [showAddCat, setShowAddCat] = useState(!!initialShowAddCat);
   const [newCat, setNewCat] = useState({
     name: '',
     item_label: '',
@@ -69,6 +80,18 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange }) {
   }, [eventId]);
 
   useEffect(() => { loadCategories(); }, [loadCategories]);
+
+  // v1.0.0p: when the parent passes an initialEditCatId (the kebab
+  // "Settings" action), find that category in the loaded list and
+  // open the inline edit form for it. Runs once per id change so
+  // re-opening the same kebab does not re-trigger.
+  useEffect(() => {
+    if (!initialEditCatId || categories.length === 0) return;
+    const target = categories.find(c => c.id === initialEditCatId);
+    if (target) {
+      setEditingCat({ ...target });
+    }
+  }, [initialEditCatId, categories]);
 
   const notifyChange = () => { if (onChange) onChange(); };
 

@@ -14,6 +14,515 @@ Nothing yet. Open issues at <https://github.com/jc-universe87/moimio/issues> for
 
 ---
 
+## [1.0.0r] — 2026-05-22
+
+Two ships in one day — the "+" double-render fix and the long-queued
+Review band Tier 2. Both small.
+
+### Fixed
+
+- **Literal "+" removed from `organise.add_group_type` value across
+  all 6 locales.** v1.0.0p put a "+" in the translated string itself
+  to signal "add"; v1.0.0q added a rotating disclosure arrow (▶/▼)
+  before the label to signal "toggle". Together they rendered as
+  "▶ + Gruppentyp hinzufügen" — two add-signifiers next to each
+  other, visually loud. Plus the inner `GroupTypesEditor` button
+  has its own JSX-literal "+", which combined with the i18n "+"
+  produced "+ + Gruppentyp hinzufügen" — the double-plus bug.
+  Fix: drop the "+" from the i18n value. Now:
+  - Outer button: `<span>▶</span> Gruppentyp hinzufügen` — toggle
+    arrow + label, clean.
+  - Inner button: `+ {label}` — JSX literal supplies the "+"
+    for the create-action signifier, clean.
+  - Same in all 6 locales.
+
+### Added — Review band Tier 2
+
+- **`CategoryHintsStrip` is now collapsible** with a header showing
+  the count of items needing review. Default open when `count ≥ 3`,
+  default closed otherwise — keeps the board visually quiet when
+  there are only one or two minor items while still surfacing the
+  count so the organiser knows there's something to look at.
+- Header layout: rotating ▶/▼ arrow + "N items to review" label,
+  full-width clickable. Body renders the existing mark-split lines
+  and unallocated line unchanged when expanded — no data changes,
+  only the wrapping.
+- Tier 1 (filter noisy mark splits to active priorities only)
+  remains in place from v1.0.0o.
+- New i18n key: `organise.review.header` with `{n}` placeholder
+  — six locales each. Total locale keys 1099 → 1100.
+
+### Affected files
+
+- `frontend/src/i18n/locales/{en,de,es,fr,pt-BR,ko}.json` —
+  `add_group_type` value rephrased (drop "+"); `review.header`
+  added. 1100 keys per locale, alphabetic order intact, validator
+  passes.
+- `frontend/src/components/CategoryHintsStrip.jsx` — added
+  `useState` for `open`, total-count gating, collapsible header
+  with rotating arrow; existing render body conditionally shown.
+- `frontend/package.json` — `moimioVersion` → `v1.0.0r`.
+- `backend/deploy/production.yml` — image tags bumped.
+- `backend/deploy/README.md` — example tag updated.
+
+### Notes
+
+- Review band Tier 2 stays scoped to the existing two data sources
+  (mark splits + unallocated count). Engine unplaced-reason tags
+  (`cluster_no_eligible_unit` etc.) continue to show in the
+  per-participant "Nicht zugewiesen" panel rows where they're
+  contextually richer — bubbling them up into the band as
+  summary lines is a future iteration if customer pressure
+  arrives. Tier 2 as shipped is the visual consolidation step,
+  not a data-aggregation expansion.
+
+---
+
+## [1.0.0q] — 2026-05-22
+
+Polish ship — five fixes surfaced from real use of v1.0.0p.
+
+### Fixed
+
+- **Plural-s in `{item}s` removed across all locales.** The pattern
+  appended a literal English "s" to whatever singular noun the
+  organiser typed as their item_label, producing "Zimmers verwalten"
+  (DE), "Gestionar Zimmers" (ES), etc. — wrong in every non-English
+  language. Four affected keys (`organise.manage_units`,
+  `organise.no_units`, `engine.no_units_hint`, `engine.run_from_board`)
+  rewritten across EN/DE/ES/FR/PT-BR to interpolate `{item}` without
+  forcing a plural. KO was already plural-neutral and unaffected.
+  Grammatically the phrasing is now "Manage {item}" / "{item}
+  verwalten" / "Gérer les {item}" — slightly stiffer in singular form
+  but correct everywhere. Future-proof option (separate plural field
+  in `item_label`) was considered and deferred.
+
+- **Click-to-rename in the group-type detail view.** v1.0.0p added
+  inline rename on the overview cards; v1.0.0q extends it to the
+  detail-view header that shows "Zimmereinteilung" / the category
+  name above the unit grid. Reuses the same
+  `editingCatRenameId` / `renameDraft` state and handlers so a
+  rename triggered from either surface goes through one code path.
+
+- **Click-to-rename on unit names.** The `<h4>` titles on each
+  unit card ("Zimmer 1", "Zimmer 2"…) inside AllocationBoard are
+  now click-to-edit for admins in detail view. Separate state
+  (`editingUnitRenameId` / `unitRenameDraft`) from the existing
+  full-edit form (`editingUnit`) so a quick rename doesn't open
+  the full capacity/gender/description form. The full edit form
+  is still available via the per-unit "Bearbeiten" button for
+  capacity / gender / description changes. Overview mode (the
+  read-only category-overview rendering of AllocationBoard) does
+  not get inline rename — discoverability is wrong there.
+
+- **"+ Add group type" is now a proper toggle.** v1.0.0p left it
+  as set-only — clicking it opened the band but a second click
+  did not close it. v1.0.0q restores toggle semantics
+  (`setManageOpen(o => !o)`) and brings back the rotating
+  disclosure arrow (▶ / ▼) so the open/closed state is visually
+  obvious. The kebab-Settings flow (open band, edit-mode-for-cat)
+  continues to work — only the global button changed.
+
+- **Add-group-type form opens on the first click.** v1.0.0p
+  required two clicks: the outer button opened the band, then
+  the inner "+ Add new" button inside the editor expanded the
+  create form. v1.0.0q wires `initialShowAddCat` from the parent:
+  when the user clicks "+ Add group type" with no `editingCat`
+  context, the create form is auto-expanded as the band opens.
+  When the user clicks a per-card kebab "Settings", the create
+  form stays collapsed and the edit form for the targeted
+  category opens instead (existing v1.0.0p behaviour preserved).
+
+- **Scroll-within-card height tuned.** v1.0.0p used
+  `max-h-[calc(100vh-16rem)]` which left the horizontal scrollbar
+  almost touching the page footer — practically invisible on
+  shorter viewports. Bumped to `100vh-20rem` so the scrollbar
+  sits a clear ~4rem above the bottom of the viewport. Applied
+  to both PeopleTable and CheckInPanel for consistency.
+
+### Affected files
+
+- `frontend/src/i18n/locales/{en,de,es,fr,pt-BR}.json` — four
+  affected keys, 14 line edits total. JSON valid, alphabetic
+  order intact (1099 keys per locale unchanged).
+- `frontend/src/components/OrganiseDashboard.jsx` — detail-view
+  header h2 wrapped in inline-rename pattern; "+ Add group type"
+  button is now a toggle with disclosure arrow; `GroupTypesEditor`
+  invocation passes new `initialShowAddCat` prop.
+- `frontend/src/components/GroupTypesEditor.jsx` — accepts new
+  `initialShowAddCat` prop, seeds internal `showAddCat` state
+  from it.
+- `frontend/src/components/AllocationBoard.jsx` —
+  `editingUnitRenameId` / `unitRenameDraft` state + three
+  handlers (`startInlineRenameUnit`, `commitInlineRenameUnit`,
+  `cancelInlineRenameUnit`); unit `<h4>` wrapped in inline-rename
+  pattern, admin + detail-view gated.
+- `frontend/src/components/PeopleTable.jsx` — `max-h`
+  16rem → 20rem.
+- `frontend/src/components/CheckInPanel.jsx` — same `max-h` tune.
+- `frontend/package.json` — `moimioVersion` → `v1.0.0q`.
+- `backend/deploy/production.yml` — image tags bumped per locked
+  policy.
+- `backend/deploy/README.md` — example tag updated.
+
+### Queued
+
+- **Review band Tier 2** — still queued. Tier 1 (filter noisy
+  mark splits to active priorities only) shipped in v1.0.0o;
+  Tier 2 is the visual consolidation step. No customer
+  pressure on this; will surface for a future ship when there's
+  appetite.
+
+---
+
+## [1.0.0p] — 2026-05-22
+
+Frontend polish ship covering three of the four items queued from
+v1.0.0o, plus the half-finished `STATUS_LABELS` and `Notes` i18n
+discoveries that surfaced during user testing of v1.0.0o.
+
+This ship deliberately does NOT include the **unit-name inline
+rename** in AllocationBoard (queued v1.0.0q) and the **Review band
+Tier 2** (queued v1.0.0q). Both are bigger jobs that deserve their
+own focused turn rather than riding on a single scaffold — same
+lesson learned from v1.0.0o's mid-build scope reduction.
+
+### Added — CSV import modal
+
+- **Visible two-radio format band** at the top of the import modal,
+  replacing the 10px grey footnote that disappeared on preview. The
+  band shows two options with examples — European (DD.MM.YYYY) and
+  ISO / Korean (YYYY.MM.DD) — and stays visible until file upload
+  starts. Default European; preselects ISO when the user's UI
+  language is Korean. The selection rides the `dob_format` query
+  param into `/batch/preview`, which v1.0.0o's backend has accepted
+  since the engine ship. With this radio in place the genuinely-
+  ambiguous date round-trip case (`01.05.2000`-style values where
+  both first components ≤ 12) parses without rejection.
+- **Auto-detect mode dropped** from the radio set. Pre-1.0.0p the
+  parser silently refused ambiguous dates with `ambiguous_date_of_birth`;
+  forcing a choice removes the failure mode entirely. Auto remains
+  the backend default for any API consumer that doesn't pass
+  `dob_format` — only the user-facing UI is opinionated.
+- New i18n keys: `batch.date_format.label`, `batch.date_format.eu`,
+  `batch.date_format.eu.example`, `batch.date_format.iso`,
+  `batch.date_format.iso.example` — six locales each. The legacy
+  `batch.date_format_hint` key is removed (no consumers remain).
+
+### Added — Allocation board UX
+
+- **Click-to-rename group-type titles.** Admins click the `<h3>`
+  on any category card → input replaces the title → Enter or blur
+  commits, Esc reverts, empty value reverts. Hover affordance is
+  a dotted-underline + text cursor so the discoverability of the
+  rename action matches the action itself. Resolves the
+  "even-the-founder couldn't find rename" complaint from v1.0.0n
+  testing.
+- **Per-column kebab menu** (⋮) on every category card. Four
+  actions, ordered by frequency: **Rename** (also accessible via
+  the inline click), **Settings…** (opens the existing
+  `GroupTypesEditor` band in edit mode, preselected on this
+  category — see `initialEditCatId` wiring below), **Manage
+  units** (navigates into the category's AllocationBoard view),
+  **Delete** (alert-coloured, separated by a divider). Up/Down
+  reorder stay outside the menu — they were already inline and
+  are the most common action.
+- **`initialEditCatId` prop on `GroupTypesEditor`** — when the
+  parent sets it, the editor auto-opens the inline edit form for
+  the specified category as soon as `categories` finishes loading.
+  Lets the kebab Settings click land directly in edit mode for the
+  right row instead of opening a blank editor band and making the
+  user re-click into the right row.
+- **"Manage Group Types" link renamed** to **"+ Add group type"**.
+  With the per-column kebab handling the deeper actions, the only
+  remaining job of this global link is creating a new group type.
+  The disclosure-arrow toggle (▶/▼) is gone — clicking just opens
+  the band (no longer toggles it closed) since users now
+  approach the band as a "create" affordance, not a "manage"
+  drawer.
+- New i18n keys: `organise.column_menu`, `organise.menu.rename`,
+  `organise.menu.settings`, `organise.menu.manage_units`,
+  `organise.title_click_to_rename` — six locales each.
+  `organise.add_group_type` value updated to the new wording
+  across six locales.
+
+### Added — Scroll-within-card
+
+- **People view (`PeopleTable`)** and **Check-in view
+  (`CheckInPanel`)** both gain a scroll-within-card wrapper.
+  The desktop table's outer div is now
+  `overflow-auto max-h-[calc(100vh-16rem)]`, the `<thead>` is
+  `sticky top-0 z-20`, and the sticky-left name (PeopleTable) /
+  participant_number (CheckInPanel) header column is bumped to
+  `z-30` so the row/column intersection layers correctly.
+
+  Before: with 300 participants the horizontal scrollbar sat at
+  the bottom of the page, hundreds of rows below the visible
+  viewport. To scroll the table sideways you had to first scroll
+  the entire page vertically to find the scrollbar. After: both
+  scrollbars sit inside the card, the column headers stay
+  visible while scrolling rows, and the outer page stops
+  scrolling once the table fills its container.
+
+  Caveat: the `calc(100vh-16rem)` approximation assumes typical
+  page chrome (event header + phase strip + filter bar). On
+  unusually tall chrome (e.g. multiple banners stacked) the
+  table area gets shorter; on unusually short chrome it gets
+  taller than strictly available, which forces a small page
+  scroll as well as the inner scroll. Acceptable for now; a
+  flex-column page shell that computes the table height
+  exactly is a v1.0.0q-or-later refactor if it bites.
+
+### Queued for v1.0.0q
+
+- **Unit-name inline rename** in `AllocationBoard.jsx`. Same
+  pattern as the group-type title rename but for `<h4>{unit.name}</h4>`
+  at line 2095. Today users can rename units via the kebab's
+  "Manage units" → click into the unit's edit panel. Functional,
+  just slower.
+- **Review band Tier 2** — collapsible "Items to review" component
+  consolidating mark-split warnings + unplaced-reason summaries
+  above the unit grid. Tier 1 (filter noisy mark splits) shipped
+  in v1.0.0o; Tier 2 is the visual consolidation step.
+
+### Affected files
+
+- `frontend/src/components/BatchRegisterModal.jsx` — `dobFormat`
+  state seeded from UI lang, query param wired, footnote replaced
+  with two-radio band.
+- `frontend/src/components/PeopleTable.jsx` — table wrapper gains
+  `max-h` + both-axes overflow; `<thead>` sticky; name column
+  header sticky-left z-30.
+- `frontend/src/components/CheckInPanel.jsx` — same scroll-within-
+  card treatment.
+- `frontend/src/components/OrganiseDashboard.jsx` — inline-rename
+  state + handlers + click-outside listener; kebab UI per
+  category card; title `<h3>` becomes click-to-edit input for
+  admins; global toggle repurposed as "+ Add group type".
+- `frontend/src/components/GroupTypesEditor.jsx` — accepts
+  `initialEditCatId` prop, seeds `editingCat` from it once
+  categories load.
+- `frontend/src/i18n/locales/{en,de,es,fr,pt-BR,ko}.json` — 5 new
+  CSV-modal keys; 5 new organise-menu/title keys;
+  `organise.add_group_type` value updated to the new wording;
+  legacy `batch.date_format_hint` removed. 1099 keys per locale
+  (+9 net vs v1.0.0o), alphabetised, validator passes.
+- `frontend/package.json` — `moimioVersion` bumped to `v1.0.0p`.
+- `backend/deploy/production.yml` — image tags bumped per locked
+  policy.
+- `backend/deploy/README.md` — example tag updated.
+
+---
+
+## [1.0.0o] — 2026-05-21
+
+Engine correctness fix (the Sanchez-class allocation bug) plus a
+focused round of i18n + UX cleanups in the People view.
+
+This ship was originally bundled larger; mid-build I scope-reduced
+the riskier UX items (allocation-board inline-rename + per-column
+kebab, scroll-within-card, CSV import modal redesign, Review-band
+Tier 2) to v1.0.0p so each gets a clean focused test pass rather
+than riding on a single mega-scaffold. The engine fix and the
+critical-path i18n / wiring fixes are in v1.0.0o.
+
+### Fixed
+
+- **Allocation engine — mixed-gender families now correctly land
+  unplaced instead of being silently dissolved.** Two stacked bugs.
+
+  When an organiser set `split_oversized_groups=false` and a group-
+  code cluster could not fit any single unit (either too large, or
+  no unit eligible for every member — e.g. a 3M+4F Sanchez family
+  in a category with only gendered-only rooms), the engine tagged
+  the cluster as `cluster_oversized_split_disabled` in
+  `unplaced_reasons` and returned. **But the tag was purely
+  advisory** — the cluster members were never added to a "do not
+  place" set. PASS 4a's gender_drain then picked them up as
+  individuals: females flowed into the female-only rooms, males
+  into the male-only rooms, and the family's group binding
+  disappeared from the audit trail.
+
+  Net effect pre-1.0.0o: `split_oversized_groups=false` was
+  effectively a no-op for any cluster that lacked a single
+  eligible unit. The setting's docstring promised "whole cluster
+  → unplaced"; the implementation did the opposite.
+
+  v1.0.0o adds a `held_back: set[str]` populated wherever a
+  group_code cluster is rejected by PASS 1 under split-disabled.
+  PASS 4a's `remaining` pool filters against it, so the cluster
+  members are kept out of individual placement and surface in
+  `unplaced_reasons` for organiser review — exactly as documented.
+
+- **New `cluster_no_eligible_unit` reason tag** distinguishes
+  "no unit accepts every cluster member" (mixed-gender vs
+  gendered-only) from `cluster_oversized_split_disabled` (cluster
+  larger than any single unit's capacity). Metadata
+  `{cluster_genders, available_restrictions}` carried on the tag
+  so the diagnostic UI can render an actionable message. EN
+  canonical: *"Members with group code {group_code} could not be
+  placed. A mixed-gender unit is required."* — translated for all
+  six locales.
+
+- **PeopleTable status pills now translate.** Pre-1.0.0o the row
+  pill rendered hardcoded English "Pending" / "Confirmed" /
+  "Cancelled" even when the rest of the UI was in German or Korean.
+  The i18n keys (`status.pending` etc.) already existed and were
+  used by the dropdown filter; the row pill at PeopleTable:940
+  and PeopleTable:1427 imported a dead English constant from
+  `services/display.js`. Replaced both with
+  `t(STATUS_LABELS_KEYS[...])`. The dead constant has been deleted.
+
+- **PeopleTable Notes button now translates.** Same half-finished
+  i18n migration: line 1005 had a literal `Notes` string while
+  the mobile-card equivalents on lines 1516 and 1556 correctly
+  used `t('common.notes')`. Replaced.
+
+- **Ausstehend header pill now filters the People view to pending
+  participants.** Pre-1.0.0o the pill navigated to the People
+  section but never passed the filter param, so the admin landed
+  on the full list and had to apply the filter manually. The
+  `goToSection(section, extras)` plumbing has accepted a status
+  hint since v1.0-pre #20; the click handler at
+  EventDetailPage.jsx:604 just didn't use it. One-line fix:
+  `goToSection('people', { status: 'pending' })`. PeopleTable
+  was already consuming `initialStatusFilter` from `?status=`.
+
+- **Mark-distribution lines no longer report on marks that
+  weren't priorities for this allocation.** Pre-1.0.0o
+  `computeMarkSplits` reported every named mark with ≥ 2 distinct
+  unit placements, regardless of whether the organiser had asked
+  the engine to keep that mark's holders together for this
+  category. Result: "Vegetarier aufgeteilt:" appeared in
+  allocation hints even when Vegetarier wasn't prioritised — true
+  but not actionable. v1.0.0o adds an `activeMarkPriorityIds`
+  filter (id-list passed from AllocationBoard, scoped to marks
+  with effective `cluster_behaviour='together'`). Marks outside
+  that set fall silent.
+
+- **"Erste {item} erstellen" grammar trap removed across six
+  locales.** The empty-state CTA in the Organise dashboard
+  interpolated `{item}` (a user-renameable singular noun like
+  "Raum" / "Gruppe" / "habitación") after an ordinal that
+  grammatically agrees with the noun's gender — wrong in DE / ES
+  / FR / PT-BR for any item whose gender doesn't match the locked
+  ordinal form. Dropped the ordinal entirely; the CTA reads
+  `+ Create {item}` / `+ {item} erstellen` / `+ Crear {item}`
+  etc. Consistent with subsequent "+ Add {item}" affordances.
+
+### Added — CSV import API
+
+- **`POST /api/events/{event_id}/participants/batch/preview`
+  accepts new `dob_format` query param**: `eu` (default) or
+  `iso`. Resolves the genuinely-ambiguous numeric date case
+  (where both first components are ≤ 12, e.g. `01.05.2000`)
+  per the hint — `eu` treats as DMY, `iso` as YMD. Korean
+  YYYY.MM.DD is shape-identical to ISO and covered by `iso`.
+  When the format is already unambiguous (one of the first two
+  components > 12) the hint has no effect. The frontend modal
+  redesign that exposes this as a visible radio is queued for
+  v1.0.0p; the backend is ready to accept the param today.
+
+### Backlog
+
+- **ENGINE-2** marked resolved; the BACKLOG framing as an "open
+  product question" was a misreading — the engine docstring at
+  PASS 1 always specified the correct behaviour and the
+  implementation had drifted. v1.0.0o restores the documented
+  contract.
+
+### Queued for v1.0.0p
+
+These were in the original v1.0.0o scope; scope-reduced mid-build
+so each gets a clean focused ship:
+
+- CSV import modal — visible two-radio format band, promote the
+  10px hint.
+- Allocation board UX — click-to-rename group-type titles and
+  unit names; per-column kebab (Rename / Settings / Manage units
+  / Move up·down / Delete); global "Manage Group Types" link
+  becomes "+ Add group type".
+- Review band (mark-split Tier 2) — collapsible band consolidating
+  mark-split warnings and unplaced-reason summaries above the
+  unit grid.
+- Scroll-within-card — People + Check-in views get their own
+  vertical+horizontal scroll inside the card, outer page scroll
+  suppressed (horizontal scrollbar stops being 300 rows below
+  the fold).
+
+### Affected files
+
+- `backend/app/services/engine_service.py` — `held_back` set,
+  `cluster_no_eligible_unit` reason tag, two unplaced branches
+  updated to populate held_back, PASS 4a `remaining` filter,
+  docstring PASS 1 updated.
+- `backend/tests/test_engine.py` — two stale tests rewritten;
+  new `test_v100o_mixed_gender_cluster_no_eligible_unit`.
+- `backend/tests/test_engine_v074.py` — A4 stale test rewritten.
+- `backend/app/api/participants.py` — `dob_format` query param
+  on `batch_preview`.
+- `backend/app/services/batch_register_service.py` — `dob_format`
+  kwarg threaded through `parse_csv` → `_validate_row` →
+  `_parse_dob_smart`; both ambiguous branches resolve per hint.
+- `frontend/src/components/PeopleTable.jsx` — status pill i18n
+  at four render sites, Notes button i18n, dead `STATUS_LABELS`
+  import removed.
+- `frontend/src/services/display.js` — dead `STATUS_LABELS`
+  export removed.
+- `frontend/src/pages/EventDetailPage.jsx` — Ausstehend pill
+  passes `{status: 'pending'}` to `goToSection`.
+- `frontend/src/utils/computeCategoryHints.js` —
+  `activeMarkPriorityIds` filter parameter on `computeMarkSplits`.
+- `frontend/src/components/AllocationBoard.jsx` — passes the
+  active mark-priority ids (behaviour=together only) into the
+  hint computation.
+- `frontend/src/services/placementReason.js` — dispatch branch
+  for `cluster_no_eligible_unit` with `{group_code}` interpolation.
+- `frontend/src/i18n/locales/{en,de,es,fr,pt-BR,ko}.json` — new
+  key `alloc.unplaced.cluster_no_eligible_unit` (6 locales,
+  Johannes's refined wording); `organise.create_first` ordinal
+  dropped (6 locales).
+- `frontend/package.json` — `moimioVersion` bumped to `v1.0.0o`.
+- `backend/deploy/production.yml` — image tags bumped per locked
+  policy.
+- `backend/deploy/README.md` — example tag updated.
+- `BACKLOG.md` — ENGINE-2 marked resolved.
+
+---
+
+## [1.0.0n] — 2026-05-21
+
+Deploy and upgrade safety: automated database backup on every deploy, and a new self-hoster upgrade script.
+
+### Added
+
+- **`upgrade.sh`** — self-hoster upgrade script. One command (`./upgrade.sh` or `./upgrade.sh vX.Y.Z`) pulls the new code via git, takes a `pg_dump` snapshot, preserves `.env`, rebuilds, restarts, and verifies the backend becomes healthy. Prints clear rollback instructions if anything fails. Supports `--dry-run` and `--yes`.
+
+### Changed
+
+- **`deploy.sh`** now takes a `pg_dump` database snapshot before any mutation, gzipped to `../pgdata-pre-<TAG>.sql.gz`. The script reads `POSTGRES_USER` and `POSTGRES_DB` from `.env` (falling back to the compose defaults `moimio`/`moimio` if not set). If `pg_dump` fails, the deploy aborts before any files are touched. Restore command is printed on success.
+- **`deploy.sh` wipe list** now includes `BACKLOG.md` (added in v1.0.0l) and `ARCHITECTURE.md` for completeness.
+
+### Documentation
+
+- **`README.md`** gains an "Upgrading" subsection in Quick start pointing self-hosters to `./upgrade.sh`.
+
+### Why two scripts?
+
+`deploy.sh` is the **release-engineer/operator** workflow: it expects a scaffold zip at `../moimio-ce-<TAG>.zip` and replaces the on-disk scaffold from that zip. Used when shipping new versions from a packaged release.
+
+`upgrade.sh` is the **self-hoster** workflow: it uses `git pull` (or `git checkout` for a specific version) and rebuilds from the source tree. Used by anyone running CE from a git clone, which is the typical self-host pattern.
+
+Both scripts share the same safety guarantees: pre-flight checks before any mutation, `.env` and database backups, atomic-ish staging, loud failures with clear next actions.
+
+### Unchanged
+
+- All application code (backend, frontend, migrations, tests).
+- Production compose template (other than image tag bump).
+- Dev compose at project root.
+
+---
+
 ## [1.0.0m] — 2026-05-21
 
 Bug fix on the public registration form. When an extra person ticked

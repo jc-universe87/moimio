@@ -487,6 +487,7 @@ async def resend_confirmation(
 async def batch_preview(
     event_id: uuid.UUID,
     file: UploadFile = File(...),
+    dob_format: str = "eu",  # v1.0.0o: "eu" (default) or "iso" — disambiguates DD.MM.YYYY vs YYYY.MM.DD when both numeric components are ≤ 12. Anything else falls back to "eu".
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -514,12 +515,16 @@ async def batch_preview(
             detail={"key": "errors.batch.empty_file"},
         )
 
-    result = await parse_csv(content, event_id, db)
+    # v1.0.0o: normalise dob_format. "iso" covers Korean YYYY.MM.DD too
+    # (same shape, year-first); only "iso" and "eu" are valid.
+    normalised_dob_format = "iso" if dob_format == "iso" else "eu"
+    result = await parse_csv(content, event_id, db, dob_format=normalised_dob_format)
     logger.info(
         "batch_preview",
         event_id=str(event_id),
         total=result["summary"]["total"],
         valid=result["summary"]["valid"],
+        dob_format=normalised_dob_format,
         by=str(current_user.id),
     )
     return result

@@ -74,12 +74,24 @@
  * @returns {Array<{markId: string, markName: string, distribution: Array<{unitId: string, unitName: string, count: number}>}>}
  *          Empty array if no splits exist. Sorted by markName ascending;
  *          within each split, distribution sorted by count descending.
+ *
+ * v1.0.0o: when ``activeMarkPriorityIds`` is provided, marks not in
+ * that set are silently dropped — the organiser didn't ask the engine
+ * to keep them together for this allocation, so a split distribution
+ * isn't actionable feedback, just noise. Pre-1.0.0o: every named mark
+ * with ≥2 distinct unit placements got reported, including ones the
+ * engine never tried to cluster, producing "Vegetarier aufgeteilt:"
+ * lines on allocations where Vegetarier wasn't a priority at all.
+ * When ``activeMarkPriorityIds`` is null/undefined the legacy
+ * behaviour is preserved (everything reported) — call sites pass the
+ * filter set explicitly to opt in.
  */
 export function computeMarkSplits({
   allMembers,
   units,
   markAssignments,
   markDefs,
+  activeMarkPriorityIds = null,
 }) {
   // Defensive: any missing input → no signals to render.
   if (
@@ -118,11 +130,18 @@ export function computeMarkSplits({
   if (placedParticipantToUnit.size === 0) return [];
 
   // 3. Build markId → markName lookup, skipping nameless marks.
+  // v1.0.0o: if activeMarkPriorityIds is provided, also drop marks
+  // outside that set — they aren't priorities for this allocation
+  // so their split distribution isn't an actionable finding.
+  const activeSet = activeMarkPriorityIds
+    ? new Set(activeMarkPriorityIds.map(String))
+    : null;
   const markNameById = new Map();
   for (const d of markDefs) {
-    if (d && d.id != null && d.name && d.name.trim()) {
-      markNameById.set(String(d.id), d.name);
-    }
+    if (!d || d.id == null || !d.name || !d.name.trim()) continue;
+    const mid = String(d.id);
+    if (activeSet && !activeSet.has(mid)) continue;
+    markNameById.set(mid, d.name);
   }
 
   // 4. For each mark, gather the placed participants and their units.

@@ -601,7 +601,7 @@ export default function EventDetailPage() {
             <div className="text-lg font-bold leading-none" style={{ color: 'var(--io-accent)' }}>{checkedInCount}</div>
             <div className="text-[10px]" style={{ color: 'var(--text-subtle)' }}>{t('event.checkedin_count')}</div>
           </div>
-          <div onClick={() => goToSection('people')} className="text-center cursor-pointer hover:opacity-80 transition-opacity">
+          <div onClick={() => goToSection('people', { status: 'pending' })} className="text-center cursor-pointer hover:opacity-80 transition-opacity">
             <div className="text-lg font-bold leading-none" style={{ color: 'var(--pending-color)' }}>{pendingCount}</div>
             <div className="text-[10px]" style={{ color: 'var(--text-subtle)' }}>{t('event.pending_count')}</div>
           </div>

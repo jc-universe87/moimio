@@ -231,24 +231,21 @@ async def test_v074_a4_oversized_cluster_split_disabled(db):
     """A4 variant: same setup, split_oversized_groups=false. Cluster is
     too big for any single unit (8 > 5).
 
-    v1.0.0i: contract updated. The original test asserted that an
-    oversized cluster with split disabled falls UNPLACED (eight cluster
-    members go nowhere, only the four individuals get placed). The
-    engine now **dissolves** the cluster — members lose their cluster
-    binding and get placed as individual fills, so all 12 participants
-    land.
+    v1.0.0o: contract restored. Engine now honours the docstring —
+    cluster goes to unplaced as a whole, members held back from
+    PASS 4 individual placement. See engine_service docstring PASS 1.
 
-    Worth flagging as a product question: a customer who explicitly
-    sets split_oversized_groups=false might still see their cluster
-    broken apart, just labelled 'fill' rather than 'group_code_split'.
-    The visible outcome is similar; the audit trail differs.
-    [Pending product review — see BACKLOG ENGINE-1 notes.]
+    Pre-1.0.0o (v1.0.0i through v1.0.0n): the engine dissolved the
+    cluster — all 12 participants landed, members scattered across
+    units. The setting was effectively a no-op. Tracked in
+    BACKLOG ENGINE-2 as a product question; v1.0.0o resolves it by
+    restoring the documented behaviour.
 
     What this test now verifies:
-    - All 12 placed (no unplaced)
-    - The cluster is recorded as neither kept-whole nor split
-      (clusters_kept_whole=0, clusters_split=0)
-    - No participant carries a `group_code` cluster reason
+    - 4 individuals placed, 8 cluster members unplaced
+    - Cluster recorded with clusters_kept_whole=0, clusters_split=0
+    - Every cluster member has unplaced_reason
+      cluster_oversized_split_disabled
     """
     event = await make_event(db)
     cat = await make_category(
@@ -260,30 +257,33 @@ async def test_v074_a4_oversized_cluster_split_disabled(db):
     await make_unit(db, cat.id, "C", capacity=3)
     await make_unit(db, cat.id, "D", capacity=3)
 
+    huge_ids = []
     for i in range(8):
-        await make_participant(
+        p = await make_participant(
             db, event.id, first_name=f"HUGE-{i}", group_code="HUGE",
         )
+        huge_ids.append(str(p.id))
     for i in range(4):
         await make_participant(db, event.id, first_name=f"Ind{i}")
 
     result = await run_engine(db, event.id, cat.id, mode="replace")
 
     assert result["stats"]["total"] == 12
-    assert result["stats"]["placed"] == 12
-    assert result["stats"]["unplaced"] == 0
-    # Cluster is neither kept whole nor split — dissolved.
+    assert result["stats"]["placed"] == 4, (
+        f"Expected 4 individuals placed; got {result['stats']['placed']}"
+    )
+    assert result["stats"]["unplaced"] == 8, (
+        f"Expected 8 cluster members unplaced; got {result['stats']['unplaced']}"
+    )
+    # Each cluster member carries the correct reason.
+    for hid in huge_ids:
+        reason = result["unplaced_reasons"].get(hid)
+        assert reason is not None
+        assert reason["reason"] == "cluster_oversized_split_disabled"
+        assert reason["group_code"] == "HUGE"
     assert result["stats"]["clusters_total"] == 1
     assert result["stats"]["clusters_kept_whole"] == 0
     assert result["stats"]["clusters_split"] == 0
-    # No cluster reason on any placement (members treated as individuals).
-    cluster_reasons = [
-        r for r in result["placement_reasons"].values()
-        if r.get("reason") in ("group_code", "group_code_split")
-    ]
-    assert cluster_reasons == [], (
-        f"Expected no cluster reasons after dissolution; got {cluster_reasons}"
-    )
 
 
 # Skipping A5 (250-person scale) as a pinned test — too implementation-

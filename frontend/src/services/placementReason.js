@@ -185,6 +185,15 @@ export function unplacedReasoningLine(t, meta = null) {
   if (reason === 'cluster_oversized_split_disabled') {
     return t('alloc.unplaced.cluster_oversized_split_disabled');
   }
+  // v1.0.0o: distinct reason for "no unit eligible at all" (e.g.
+  // mixed-gender family in gendered-only rooms). The message is more
+  // specific than the generic oversized case and interpolates the
+  // group_code so the organiser can locate the cluster in the People
+  // view at a glance.
+  if (reason === 'cluster_no_eligible_unit') {
+    const gc = p?.group_code || '';
+    return t('alloc.unplaced.cluster_no_eligible_unit', { group_code: gc });
+  }
   if (reason === 'no_capacity_remaining') {
     return t('alloc.unplaced.no_capacity_remaining');
   }

@@ -13,10 +13,22 @@
 #   1. The version-tagged scaffold zip exists and unpacks cleanly BEFORE
 #      we wipe anything on disk.
 #   2. The .env file is backed up before any mutation.
-#   3. Containers are stopped without `-v` (pgdata volume is preserved).
-#   4. Every failure is loud: ERR trap prints the line + step.
-#   5. The current deploy.sh is preserved across the wipe (the new one
+#   3. A pg_dump database snapshot is taken before any mutation, gzipped
+#      to ../pgdata-pre-<TAG>.sql.gz. Restore command is printed.
+#   4. Containers are stopped without `-v` (pgdata volume is preserved).
+#   5. Every failure is loud: ERR trap prints the line + step.
+#   6. The current deploy.sh is preserved across the wipe (the new one
 #      lands when staged contents are moved into place).
+#
+# Rollback (if the new version is broken):
+#   1. Stop and remove the new containers:
+#        sudo docker compose down
+#   2. Restore the previous scaffold from the previous version's zip
+#      (you should have ../moimio-ce-<prev>.zip on disk):
+#        ./deploy.sh <prev-version>
+#   3. Restore the database from the snapshot:
+#        gunzip -c ../pgdata-pre-<NEW>.sql.gz | \
+#          sudo docker compose exec -T db psql -U <DB_USER> -d <DB_NAME>
 #
 # Pre-conditions (script enforces these):
 #   - Run from the moimio site directory (must contain docker-compose.yml).
@@ -144,6 +156,36 @@ BACKUP=".env.pre-${TAG}.bak"
 cp .env "$BACKUP"
 echo "✓ .env backed up to $BACKUP"
 
+STEP="backup: pg_dump (database snapshot for rollback)"
+# Extract DB credentials from .env (fall back to compose defaults if not set).
+# This matters because POSTGRES_USER is the only superuser in the moimio
+# image (no default 'postgres' role exists). If the operator customized
+# the username/database, we honour that.
+DB_USER=$(grep -E '^POSTGRES_USER=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+DB_USER="${DB_USER:-moimio}"
+DB_NAME=$(grep -E '^POSTGRES_DB=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+DB_NAME="${DB_NAME:-moimio}"
+DB_BACKUP="../pgdata-pre-${TAG}.sql.gz"
+echo "Taking database backup to $DB_BACKUP..."
+echo "  user: $DB_USER, database: $DB_NAME"
+if ! sudo docker compose exec -T db pg_dump -U "$DB_USER" "$DB_NAME" 2>/tmp/pg_dump.err | gzip > "$DB_BACKUP"; then
+  echo "ERROR: pg_dump failed. Aborting deploy before any further mutations." >&2
+  if [[ -s /tmp/pg_dump.err ]]; then
+    echo "pg_dump output:" >&2
+    sed 's/^/  /' /tmp/pg_dump.err >&2
+  fi
+  echo "Likely causes:" >&2
+  echo "  - db container not currently running ('sudo docker compose ps')" >&2
+  echo "  - POSTGRES_USER/POSTGRES_DB in .env don't match what's in pgdata volume" >&2
+  rm -f "$DB_BACKUP" /tmp/pg_dump.err
+  exit 8
+fi
+rm -f /tmp/pg_dump.err
+DB_BACKUP_SIZE=$(du -h "$DB_BACKUP" | cut -f1)
+echo "✓ Database backed up to $DB_BACKUP ($DB_BACKUP_SIZE)"
+echo "  Restore later if needed:"
+echo "    gunzip -c $DB_BACKUP | sudo docker compose exec -T db psql -U $DB_USER -d $DB_NAME"
+
 STEP="docker compose down"
 sudo docker compose down
 
@@ -160,10 +202,12 @@ sudo rm -rf \
   README.md \
   LICENSE \
   CHANGELOG.md \
+  BACKLOG.md \
   CONTRIBUTING.md \
   CODE_OF_CONDUCT.md \
   SECURITY.md \
   TRANSLATION_RULE.md \
+  ARCHITECTURE.md \
   .env.example \
   .gitignore
 

@@ -210,8 +210,19 @@ def _to_iso_date(year: int, month: int, day: int) -> str | None:
         return None
 
 
-def _parse_dob_smart(raw: str):
-    """Return ISO 'YYYY-MM-DD', the literal string 'ambiguous', or None."""
+def _parse_dob_smart(raw: str, *, dob_format: str = "eu"):
+    """Return ISO 'YYYY-MM-DD', the literal string 'ambiguous', or None.
+
+    v1.0.0o: ``dob_format`` resolves ambiguous numeric dates where the
+    first two components are both ≤ 12 (e.g. ``01.05.2000`` — could be
+    1 May or 5 Jan). Values:
+      - ``"eu"`` (default): treat as DD.MM.YYYY (or DD.MM.YY).
+      - ``"iso"``: treat as YYYY.MM.DD (the year-first case covers
+        both ISO and Korean conventions — same shape).
+    Other values fall back to ``"eu"``. When ``dob_format`` doesn't
+    apply (one of the first two is > 12, so the date is already
+    unambiguous), the value is parsed deterministically regardless.
+    """
     s = raw.strip()
     if not s:
         return None
@@ -271,7 +282,12 @@ def _parse_dob_smart(raw: str):
             if b > 12 and a <= 12:
                 # Definitely MDY.
                 return _to_iso_date(y, a, b)
-            # Both ≤ 12 — genuinely ambiguous. Refuse to guess.
+            # Both ≤ 12 — genuinely ambiguous. v1.0.0o: resolve per hint.
+            # "iso" cannot apply here (year is last, not first) so the
+            # only meaningful hint is "eu" → DMY. Anything else (or
+            # historical "auto") falls back to refusing the guess.
+            if dob_format == "eu":
+                return _to_iso_date(y, b, a)
             return "ambiguous"
         # Two-digit year fallback: assume 2-digit year is in the last
         # position (DD-MM-YY or MM-DD-YY). For DOB, year 70..99 → 19xx;
@@ -283,6 +299,9 @@ def _parse_dob_smart(raw: str):
                 return _to_iso_date(year, b, a)
             if b > 12 and a <= 12:
                 return _to_iso_date(year, a, b)
+            # v1.0.0o: same hint-driven resolution for short-year DMY.
+            if dob_format == "eu":
+                return _to_iso_date(year, b, a)
             return "ambiguous"
         return None
 
@@ -295,6 +314,8 @@ def _validate_row(
     custom_fields: list[CustomFieldDefinition],
     seen_emails: set[str],
     existing_emails: set[str],
+    *,
+    dob_format: str = "eu",  # v1.0.0o
 ) -> dict:
     """
     Validate a single CSV row.
@@ -355,7 +376,7 @@ def _validate_row(
     # importer can prompt the user to clarify (or re-export with ISO).
     dob_raw = raw.get("date_of_birth", "").strip()
     if dob_raw:
-        parsed = _parse_dob_smart(dob_raw)
+        parsed = _parse_dob_smart(dob_raw, dob_format=dob_format)
         if parsed == "ambiguous":
             errors.append("ambiguous_date_of_birth")
         elif parsed is None:
@@ -434,6 +455,8 @@ async def parse_csv(
     content: bytes,
     event_id: uuid.UUID,
     db: AsyncSession,
+    *,
+    dob_format: str = "eu",  # v1.0.0o: "eu" or "iso" — disambiguates numeric dates where both first two components are ≤ 12.
 ) -> dict:
     """
     Parse and validate a CSV upload.
@@ -501,7 +524,8 @@ async def parse_csv(
         if first_name_check.startswith("#"):
             continue
         validated = _validate_row(
-            row_num, remapped, custom_fields, seen_emails, existing_emails
+            row_num, remapped, custom_fields, seen_emails, existing_emails,
+            dob_format=dob_format,
         )
         rows.append(validated)
         # Capture this row's values for unknown columns; the commit

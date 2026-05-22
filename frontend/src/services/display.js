@@ -2,11 +2,10 @@
  * Shared display utilities.
  */
 
-export const STATUS_LABELS = {
-  pending: 'Pending',
-  confirmed: 'Confirmed',
-  cancelled: 'Cancelled',
-};
+// v1.0.0o: STATUS_LABELS export removed — was hardcoded English.
+// All consumers now use t(STATUS_LABELS_KEYS[s]) for proper i18n.
+// Keys live in PeopleTable.jsx as STATUS_LABELS_KEYS; resolve via
+// status.pending / status.confirmed / status.cancelled in locale files.
 
 // v0.70b: brand-aligned 2-color status system. Drops the traffic-light
 // (gray/green/amber/red) for the Moimio palette: io-accent for the active

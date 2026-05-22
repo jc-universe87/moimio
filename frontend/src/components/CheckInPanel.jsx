@@ -625,12 +625,15 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
         </div>
       )}
 
-      {/* Desktop table — hidden on mobile */}
-      <div className="hidden md:block overflow-x-auto">
+      {/* Desktop table — hidden on mobile.
+          v1.0.0p: scroll-within-card. See PeopleTable for the same
+          treatment — vertical+horizontal both inside the card,
+          sticky thead, sticky-left participant_number column. */}
+      <div className="hidden md:block overflow-auto max-h-[calc(100vh-20rem)]">
           <table className="w-full min-w-max text-sm">
-            <thead>
+            <thead className="sticky top-0 z-20">
               <tr className="bg-gray-50 dark:bg-white/5 text-left text-xs text-muted uppercase tracking-wide">
-                <th onClick={() => handleSort('participant_number')} className="px-4 py-2 sticky left-0 bg-gray-50 dark:bg-white/5 z-10 cursor-pointer hover:text-mid-navy select-none whitespace-nowrap">{t('checkin.participant_number')}{sortArrow('participant_number')}</th>
+                <th onClick={() => handleSort('participant_number')} className="px-4 py-2 sticky left-0 bg-gray-50 dark:bg-white/5 z-30 cursor-pointer hover:text-mid-navy select-none whitespace-nowrap">{t('checkin.participant_number')}{sortArrow('participant_number')}</th>
                 {/* Draggable columns — Name is draggable too.
                     v0.50e-1d: group_code moved to visibleRegList (toggleable). */}
                 {[

@@ -31,34 +31,39 @@ ENGINE-2, ENGINE-3, ENGINE-4. None are blocking; all three are
 
 ## ENGINE-2 — Cluster dissolution under `split_oversized_groups=false`
 
-**Status:** Open product question, surfaced during ENGINE-1 rewrite.
-**Severity:** Medium. Possible UX surprise but no functional bug.
+**Status:** ✅ Resolved in v1.0.0o.
 
-When an organiser explicitly sets `split_oversized_groups=false` and
-provides a cluster that doesn't fit any single unit, the engine
-**dissolves the cluster** — members lose their group binding and
-get placed as individual fills. The original behaviour (and the
-intent suggested by the setting name) was to leave the cluster
-**unplaced**, for organiser review.
+The implementation now matches the documented contract: when an
+organiser sets `split_oversized_groups=false` and a cluster does not
+fit any single unit (or no unit is eligible at all — e.g. mixed-
+gender family vs gendered-only rooms), the whole cluster is left
+unplaced for organiser review. A new `held_back` set in the engine
+prevents PASS 4a's gender-drain from picking the members up as
+individuals after PASS 1 has rejected them as a cluster — the source
+of the pre-1.0.0o silent dissolution.
 
-Current behaviour brings back something that looks like the
-pre-v0.53 "scatter bug," but as deliberate engine output rather
-than a fault. Two tests (`test_oversized_cluster_unplaced_when_split_disabled`,
-`test_v074_a4_oversized_cluster_split_disabled`) document this.
+A second reason tag was added: `cluster_no_eligible_unit` (distinct
+from `cluster_oversized_split_disabled`) for the "no unit accepts
+every cluster member" case, with metadata
+`{cluster_genders, available_restrictions}` so the diagnostic UI can
+render an actionable message ("Members with group code X could not
+be placed. A mixed-gender unit is required.").
 
-**Product question:** what should this setting mean today?
+Two tests rewritten to assert the correct behaviour
+(`test_oversized_cluster_unplaced_when_split_disabled`,
+`test_v074_a4_oversized_cluster_split_disabled`); one new test added
+covering the Sanchez-class mixed-gender-no-mixed-room scenario.
 
-- Option A — leave cluster unplaced (original v0.53 intent). Setting
-  name matches behaviour. Better for organisers who explicitly want
-  manual review for oversized groups.
-- Option B — dissolve cluster, scatter members (current behaviour).
-  Maximises placement count. Setting name becomes misleading.
-- Option C — surface a UI warning when the configuration would
-  produce dissolution, let the organiser confirm.
+---
 
-No deadline. Worth deciding before the public OSS release of CE,
-since the setting name vs behaviour mismatch is a CR-class issue
-for first-time users.
+## ENGINE-2-old — Original framing (preserved for context)
+
+The original BACKLOG framing called this an "open product question"
+between three options (cluster unplaced, dissolve and scatter, prompt
+user). Re-reading the engine docstring at PASS 1 made it clear this
+was a defect: the implementation diverged from the documented
+contract. v1.0.0o restores the documented behaviour. The product
+question is closed.
 
 ---
 
@@ -145,6 +150,80 @@ Targets, roughly priority-ordered:
 
 No deadline. Just don't let it accumulate to the point where adding
 the first test for a new feature feels heavy.
+
+---
+
+## TEST-BACKEND-1 — Set up dedicated test Postgres so the 96 skipped tests actually run
+
+**Status:** Open.
+**Severity:** Medium. Coverage gap, not a regression — visible since
+v1.0.0i suite expansion but unblocking the integration tests becomes
+more important as the engine accumulates correctness fixes
+(v1.0.0o's Sanchez-class fix being the most recent).
+
+### What's happening
+
+Running `pytest` against the production-style backend container on
+Nipogi yields **33 passed, 96 skipped** with every skip reporting
+the same reason:
+
+```
+SKIPPED [1] tests/test_engine_v074.py:137:
+  Postgres test DB not reachable: [Errno 2] No such file or directory
+```
+
+The 33 passing tests are pure-Python logic tests (engine algorithm
+on in-memory fixtures, schema validation, allocation event
+serialisation). The 96 skipped tests are db-backed integration tests
+that need a real Postgres connection — and `conftest.py` is looking
+for a *separate* test instance, not the dev/prod-style db container
+serving real data.
+
+The "128 passed" figure from earlier CHANGELOG entries (v1.0.0i and
+v1.0.0k) must have been recorded on a machine where a test Postgres
+was configured. On Nipogi today, none is.
+
+### What to do
+
+Roughly an hour of work:
+
+1. **Add a `test-db` service** to `docker-compose.yml` (or a separate
+   `docker-compose.test.yml`) running `postgres:16-alpine` on an
+   internal-only network, exposed only to the backend container.
+2. **Point `conftest.py` at it** via a `TEST_DATABASE_URL` env var
+   that resolves to the test-db service over Docker DNS. Currently
+   `conftest.py` is looking for a unix socket (the `[Errno 2]`
+   hint) — switch to a TCP URL pointing at the test container.
+3. **Run migrations on session setup.** The conftest fixture
+   should `alembic upgrade head` against the test database before
+   tests run, then `drop_all` (or `down`) on teardown.
+4. **Ensure isolation.** Each test function (or class) should
+   start with a clean slate — typically a transactional fixture
+   that rolls back at teardown. The existing 96 skipped tests
+   presumably assume this is in place; verify their assumptions
+   when un-skipping.
+
+### Why now is good timing
+
+Engine correctness work landed in v1.0.0o (the Sanchez-class fix).
+Future engine work — and there will be more, given customer use
+cases keep surfacing — benefits from the integration tests being
+green and gating CI. Wiring this up is the foundation for confident
+engine ships.
+
+### Why this isn't urgent
+
+The 33 passing tests *do* cover the v1.0.0o engine logic at the
+algorithmic level (pure-Python with in-memory fixtures). The 96
+skipped tests are end-to-end variants that confirm the persistence
+layer behaves correctly alongside the algorithm. Persistence
+patterns haven't changed in many versions, so the coverage gap is
+real but contained.
+
+**No deadline.** Worth doing before the public CE release so the
+"128+ passed" claim in the CHANGELOG is reproducible from a fresh
+clone. Until then, run manual smoke tests for engine changes and
+trust the unit-test pass.
 
 ---
 

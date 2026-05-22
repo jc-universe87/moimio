@@ -50,6 +50,17 @@ docker compose up -d --build
 
 First-run setup (creating the initial admin account, configuring email, creating your first event) is covered in the **[Installation Guide](docs/installation/README.md)**.
 
+### Upgrading
+
+Once you've installed Moimio, upgrading to a newer version is a single command from the repo root:
+
+```bash
+./upgrade.sh           # pull the latest commit on your current branch and rebuild
+./upgrade.sh v1.0.0n   # check out a specific version tag and rebuild
+```
+
+The script automatically backs up `.env` and takes a `pg_dump` snapshot of your database before any changes, verifies the new version starts up healthy, and prints rollback instructions if anything goes wrong. Backups live in the parent directory as `pgdata-pre-upgrade-<timestamp>.sql.gz` — keep them until you're confident the new version is stable, then delete them.
+
 ---
 
 ## Documentation

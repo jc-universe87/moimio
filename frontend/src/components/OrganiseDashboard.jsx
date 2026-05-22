@@ -37,6 +37,16 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
   const [dragCatId, setDragCatId] = useState(null);
   const [dragOverCatId, setDragOverCatId] = useState(null);
   const [manageOpen, setManageOpen] = useState(false); // collapsible manage section
+  // v1.0.0p: per-column inline rename + kebab. State scoped to the
+  // dashboard since both the title click and the kebab Rename action
+  // need to drive the same input. editingCatRenameId = null when
+  // nothing is being inline-renamed; otherwise the cat.id. Draft
+  // buffer holds the in-progress text; saved on Enter/blur, reverted
+  // on Esc or empty value. kebabOpenCatId tracks which column's
+  // dropdown is open (null when all closed).
+  const [editingCatRenameId, setEditingCatRenameId] = useState(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [kebabOpenCatId, setKebabOpenCatId] = useState(null);
   // v0.70d-1 R1: dead proposal / committing / handleCommit state
   // removed alongside the legacy modal. The real engine flow lives
   // in AllocationBoard; this dashboard only routes users into it.
@@ -102,6 +112,52 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
     } catch (err) { setError(err); }
   };
 
+  // v1.0.0p: inline-rename open/save/cancel. Same shape as PeopleTable
+  // editing flow — Enter or blur commits, Esc reverts, empty string
+  // reverts (we don't allow nameless group types).
+  const startInlineRename = (cat) => {
+    setKebabOpenCatId(null);
+    setEditingCatRenameId(cat.id);
+    setRenameDraft(cat.name || '');
+  };
+  const commitInlineRename = async (catId) => {
+    const trimmed = (renameDraft || '').trim();
+    const existing = categories.find(c => c.id === catId);
+    if (!trimmed || (existing && trimmed === existing.name)) {
+      // Nothing to save — empty or unchanged. Revert input state.
+      setEditingCatRenameId(null);
+      setRenameDraft('');
+      return;
+    }
+    try {
+      await allocationCategories.update(eventId, catId, { ...existing, name: trimmed });
+      await loadCategories();
+      onDataChange?.();
+    } catch (err) {
+      setError(err);
+    }
+    setEditingCatRenameId(null);
+    setRenameDraft('');
+  };
+  const cancelInlineRename = () => {
+    setEditingCatRenameId(null);
+    setRenameDraft('');
+  };
+
+  // Close any open kebab when clicking outside. Single document-level
+  // listener registered while a kebab is open.
+  useEffect(() => {
+    if (!kebabOpenCatId) return;
+    const onDocClick = () => setKebabOpenCatId(null);
+    // Defer to next tick so the click that opened the menu doesn't
+    // immediately close it.
+    const id = setTimeout(() => document.addEventListener('click', onDocClick), 0);
+    return () => {
+      clearTimeout(id);
+      document.removeEventListener('click', onDocClick);
+    };
+  }, [kebabOpenCatId]);
+
   // v50c-3b: allocation lifecycle confirm/unconfirm.
   // Keyed by catId so multiple cards can show their own in-flight state.
   const [confirmingCatId, setConfirmingCatId] = useState(null);
@@ -152,7 +208,38 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
               className="text-sm text-steel-blue hover:text-mid-navy inline-flex items-center gap-1">
               {t('organise.back')}
             </button>
-            <h2 className="font-heading text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{selectedCat.name}</h2>
+            {/* v1.0.0q: click-to-rename also inside the detail view.
+                Mirrors the overview-card inline rename. Reuses the
+                same editingCatRenameId / renameDraft state so a
+                rename triggered from either surface uses one code
+                path. */}
+            {isAdmin && editingCatRenameId === selectedCat.id ? (
+              <input
+                type="text"
+                autoFocus
+                value={renameDraft}
+                onChange={e => setRenameDraft(e.target.value)}
+                onBlur={() => commitInlineRename(selectedCat.id)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); commitInlineRename(selectedCat.id); }
+                  else if (e.key === 'Escape') { e.preventDefault(); cancelInlineRename(); }
+                }}
+                className="font-heading text-xl font-bold bg-transparent border-b focus:outline-none focus:border-steel-blue"
+                style={{
+                  color: 'var(--text-primary)',
+                  borderColor: 'var(--io-accent)',
+                  minWidth: '240px',
+                }}
+              />
+            ) : (
+              <h2
+                onClick={isAdmin ? () => startInlineRename(selectedCat) : undefined}
+                title={isAdmin ? t('organise.title_click_to_rename') : undefined}
+                className={`font-heading text-xl font-bold ${isAdmin ? 'cursor-text hover:underline decoration-dotted decoration-1 underline-offset-4' : ''}`}
+                style={{ color: 'var(--text-primary)' }}>
+                {selectedCat.name}
+              </h2>
+            )}
             {/* v0.60e: removed the "one per person / several per person"
                 badge that used to sit here. It was redundant (organiser
                 already picked this category; the rule is set), and its
@@ -224,11 +311,19 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
           {t('organise.title')}
         </h2>
         {isAdmin && (
-          <button onClick={() => { setManageOpen(o => !o); setEditingCat(null); }}
+          <button onClick={() => {
+            // v1.0.0q: now a proper toggle (was set-only in v1.0.0p,
+            // which forced users to click outside to close). Also
+            // clears any kebab-Settings target so opening fresh
+            // from this button doesn't accidentally pre-load an
+            // edit form for some previously-clicked category.
+            setEditingCat(null);
+            setManageOpen(o => !o);
+          }}
             className="text-xs font-semibold hover:underline flex items-center gap-1"
             style={{ color: 'var(--io-accent)' }}>
             <span style={{ display: 'inline-block', transform: manageOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>
-            {t('organise.manage_group_types')}
+            {t('organise.add_group_type')}
           </button>
         )}
       </div>
@@ -245,6 +340,8 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
           <GroupTypesEditor
             eventId={eventId}
             isAdmin={isAdmin}
+            initialEditCatId={editingCat?.id || null}
+            initialShowAddCat={!editingCat}
             onChange={() => { loadCategories(); if (onDataChange) onDataChange(); }}
           />
         </div>
@@ -319,12 +416,115 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
                       >
                         ↓
                       </button>
+                      {/* v1.0.0p: per-column kebab menu. Hosts the
+                          deeper actions (Rename / Settings / Manage
+                          units / Delete) at the column level rather
+                          than under the global "Manage Group Types"
+                          drawer, where they were buried two clicks
+                          deep. Up/Down stay outside the menu — quick
+                          reorder is the most common action. */}
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setKebabOpenCatId(kebabOpenCatId === cat.id ? null : cat.id);
+                          }}
+                          aria-label={t('organise.column_menu')}
+                          title={t('organise.column_menu')}
+                          className="w-6 h-6 rounded-md flex items-center justify-center text-sm hover:bg-black/5 dark:hover:bg-white/10"
+                          style={{ color: 'var(--text-subtle)' }}
+                        >
+                          ⋮
+                        </button>
+                        {kebabOpenCatId === cat.id && (
+                          <div
+                            onClick={e => e.stopPropagation()}
+                            className="absolute right-0 top-7 z-40 min-w-[180px] rounded-lg shadow-lg py-1"
+                            style={{
+                              background: 'var(--card-bg-solid)',
+                              border: '1px solid var(--card-border)',
+                            }}>
+                            <button
+                              type="button"
+                              onClick={() => startInlineRename(cat)}
+                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+                              style={{ color: 'var(--text-primary)' }}>
+                              {t('organise.menu.rename')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setKebabOpenCatId(null);
+                                setEditingCat(cat);
+                                setManageOpen(true);
+                              }}
+                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+                              style={{ color: 'var(--text-primary)' }}>
+                              {t('organise.menu.settings')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setKebabOpenCatId(null);
+                                setSelectedCatId(cat.id);
+                              }}
+                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+                              style={{ color: 'var(--text-primary)' }}>
+                              {t('organise.menu.manage_units')}
+                            </button>
+                            <div className="my-1" style={{ borderTop: '1px solid var(--card-border)' }} />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setKebabOpenCatId(null);
+                                handleDeleteCat(cat.id);
+                              }}
+                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-alert/10"
+                              style={{ color: 'var(--alert)' }}>
+                              {t('common.delete')}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <h3 className="font-heading font-bold text-lg text-body group-hover:text-steel-blue dark:group-hover:text-gold transition-colors">{cat.name}</h3>
+                    {/* v1.0.0p: click-to-rename. Admin clicks title →
+                        input → Enter or blur saves, Esc reverts. The
+                        outer card has its own onClick (navigates to
+                        AllocationBoard), so the inline form needs
+                        stopPropagation on its events to keep clicks
+                        inside it from triggering navigation. */}
+                    {isAdmin && editingCatRenameId === cat.id ? (
+                      <input
+                        type="text"
+                        autoFocus
+                        value={renameDraft}
+                        onClick={e => e.stopPropagation()}
+                        onChange={e => setRenameDraft(e.target.value)}
+                        onBlur={() => commitInlineRename(cat.id)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') { e.preventDefault(); commitInlineRename(cat.id); }
+                          else if (e.key === 'Escape') { e.preventDefault(); cancelInlineRename(); }
+                        }}
+                        className="font-heading font-bold text-lg bg-transparent border-b focus:outline-none focus:border-steel-blue"
+                        style={{
+                          color: 'var(--text-primary)',
+                          borderColor: 'var(--io-accent)',
+                          minWidth: '180px',
+                        }}
+                      />
+                    ) : (
+                      <h3
+                        onClick={isAdmin ? (e) => { e.stopPropagation(); startInlineRename(cat); } : undefined}
+                        title={isAdmin ? t('organise.title_click_to_rename') : undefined}
+                        className={`font-heading font-bold text-lg text-body group-hover:text-steel-blue dark:group-hover:text-gold transition-colors ${isAdmin ? 'cursor-text hover:underline decoration-dotted decoration-1 underline-offset-4' : ''}`}>
+                        {cat.name}
+                      </h3>
+                    )}
                     <p className="text-[10px] text-gray-400 mt-0.5">
                       {ruleLabel(cat.rule_type)}
                       {cat.has_capacity && ' · ' + t('organise.capacity')}{cat.has_gender_restriction && ' · ' + t('organise.gender')}

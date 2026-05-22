@@ -13,7 +13,7 @@ import TranslatedError from './TranslatedError';
  *   onDone   — () => void  called after a successful commit so PeopleTable refreshes
  */
 export default function BatchRegisterModal({ eventId, onClose, onDone }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { showToast, ToastHost } = useToast();
   const fileRef = useRef(null);
 
@@ -23,6 +23,12 @@ export default function BatchRegisterModal({ eventId, onClose, onDone }) {
   const [result, setResult] = useState(null);             // response from /batch/commit
   const [error, setError] = useState(null);
   const [fileName, setFileName] = useState('');
+  // v1.0.0p: user-selected date format. 'eu' = DD.MM.YYYY (default
+  // for everyone except KO UI); 'iso' = YYYY.MM.DD (also covers
+  // Korean numeric convention — same shape). Sent as query param
+  // to /batch/preview; the backend's _parse_dob_smart resolves any
+  // genuinely-ambiguous numeric date per this hint.
+  const [dobFormat, setDobFormat] = useState(lang === 'ko' ? 'iso' : 'eu');
 
   // ── Template download ──────────────────────────────────────────────────────
   const handleTemplateDownload = async () => {
@@ -70,7 +76,7 @@ export default function BatchRegisterModal({ eventId, onClose, onDone }) {
       const form = new FormData();
       form.append('file', file);
       const res = await fetch(
-        `/api/events/${eventId}/participants/batch/preview`,
+        `/api/events/${eventId}/participants/batch/preview?dob_format=${dobFormat}`,
         { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` }, body: form }
       );
       const json = await res.json().catch(() => null);
@@ -288,14 +294,62 @@ export default function BatchRegisterModal({ eventId, onClose, onDone }) {
                   onChange={handleFileChange}
                 />
               </div>
-              {/* v0.83 #15: brief hint about the canonical DOB format,
-                  to head off the most common Excel-mangled-dates bug
-                  before the user fills in the template. The parser is
-                  lenient — but DD.MM.YYYY is what the docs recommend. */}
+              {/* v1.0.0p: prominent date-format selector. Was a 10px
+                  grey footnote that disappeared once preview rendered;
+                  now a proper band above the upload area, two clear
+                  radios, default European (or ISO for KO UI). The
+                  backend honours this hint to disambiguate genuinely-
+                  ambiguous numeric dates (both first components ≤ 12,
+                  e.g. 01.05.2000) — Excel-mangled round-trips no
+                  longer reject ~40% of real DOBs. */}
               {stage !== 'previewing' && stage !== 'committing' && !previewData && (
-                <p className="text-[10px] mt-2" style={{ color: 'var(--text-subtle)' }}>
-                  {t('batch.date_format_hint')}
-                </p>
+                <div className="mt-3 rounded-xl border p-3"
+                  style={{ borderColor: 'var(--card-border)', background: 'var(--app-bg)' }}>
+                  <div className="text-[10px] uppercase tracking-caps font-semibold mb-2"
+                    style={{ color: 'var(--text-subtle)' }}>
+                    {t('batch.date_format.label')}
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <label className="flex-1 flex items-start gap-2 cursor-pointer rounded-lg px-3 py-2 transition-colors"
+                      style={{
+                        background: dobFormat === 'eu' ? 'var(--accent-tint)' : 'transparent',
+                        border: '1px solid',
+                        borderColor: dobFormat === 'eu' ? 'var(--io-accent)' : 'var(--card-border)',
+                      }}>
+                      <input type="radio" name="dob-format" value="eu"
+                        checked={dobFormat === 'eu'}
+                        onChange={() => setDobFormat('eu')}
+                        className="mt-0.5" />
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+                          {t('batch.date_format.eu')}
+                        </div>
+                        <div className="text-[10px]" style={{ color: 'var(--text-subtle)' }}>
+                          {t('batch.date_format.eu.example')}
+                        </div>
+                      </div>
+                    </label>
+                    <label className="flex-1 flex items-start gap-2 cursor-pointer rounded-lg px-3 py-2 transition-colors"
+                      style={{
+                        background: dobFormat === 'iso' ? 'var(--accent-tint)' : 'transparent',
+                        border: '1px solid',
+                        borderColor: dobFormat === 'iso' ? 'var(--io-accent)' : 'var(--card-border)',
+                      }}>
+                      <input type="radio" name="dob-format" value="iso"
+                        checked={dobFormat === 'iso'}
+                        onChange={() => setDobFormat('iso')}
+                        className="mt-0.5" />
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+                          {t('batch.date_format.iso')}
+                        </div>
+                        <div className="text-[10px]" style={{ color: 'var(--text-subtle)' }}>
+                          {t('batch.date_format.iso.example')}
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
               )}
 
               {/* Summary bar */}
