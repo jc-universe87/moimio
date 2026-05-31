@@ -416,3 +416,15 @@ export const outboundWebhooks = {
   sendTest: (id) => request(`/webhooks/endpoints/${id}/test`, { method: 'POST' }),
   listDeliveries: (id, limit = 50) => request(`/webhooks/endpoints/${id}/deliveries?limit=${limit}`),
 };
+
+// ─── Danger Zone — workspace-level destructive actions (v1.0.0v) ───
+// Backed by /api/admin/workspace/* on the backend; super-admin only.
+// The confirmation token is the canonical English literal "DELETE"
+// regardless of UI locale (the modal lets the user type it; the
+// frontend normalises case before submitting).
+export const dangerZone = {
+  requestDeletion: (confirmation) => request('/admin/workspace/request-deletion', {
+    method: 'POST',
+    body: JSON.stringify({ confirmation }),
+  }),
+};

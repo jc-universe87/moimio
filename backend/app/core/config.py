@@ -60,15 +60,22 @@ class Settings(BaseSettings):
     # would want it (billing).
     feature_create_event_confirmation: bool = False
 
-    # Supporting data for the confirmation dialog. Read at runtime via
-    # GET /api/billing-info so the frontend doesn't need a rebuild when
-    # values change — SaaS just updates the env vars and restarts the
-    # container. All three are independent: if a value is missing, the
-    # dialog falls back gracefully (e.g. card last-4 missing → "your
-    # card on file" instead of "card ending YYYY").
-    event_charge_amount: str = ""        # e.g. "120" — string so the frontend's Intl can format
-    event_charge_currency: str = ""      # e.g. "EUR", "GBP", "KRW" — ISO 4217
-    billing_card_last4: str = ""         # e.g. "4242" — last 4 digits only, never the full PAN
+    # v1.0.0w (prepaid-credit model): where CE's "buy a credit" button in
+    # the out-of-credits notice points. Read at runtime via GET
+    # /api/billing-info so the SaaS can change it without a CE rebuild.
+    # Empty = no self-serve link, and CE omits the button. Self-hosters
+    # never set it.
+    buy_credit_url: str = ""
+
+    # DEPRECATED (pre-v1.0.0w charge-on-creation model, superseded by the
+    # prepaid-credit model in product policy v1). No longer read by the
+    # billing-info endpoint. Retained as recognised settings so existing
+    # tenant .env files still carrying EVENT_CHARGE_AMOUNT /
+    # EVENT_CHARGE_CURRENCY / BILLING_CARD_LAST4 keep parsing on upgrade
+    # rather than erroring. Safe to remove once no live .env references them.
+    event_charge_amount: str = ""
+    event_charge_currency: str = ""
+    billing_card_last4: str = ""
 
     # ─── Tenant identity (v1.0.0h) ───
     #

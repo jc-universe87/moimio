@@ -39,6 +39,7 @@ import SetupPage from './pages/SetupPage';
 import BackupPage from './pages/BackupPage';
 import UserManagementPage from './pages/UserManagementPage';
 import WebhooksPage from './pages/WebhooksPage';
+import WorkspacePage from './pages/WorkspacePage';
 import { setup as setupApi } from './services/api';
 import { I18nProvider } from './hooks/useI18n';
 import { CapabilitiesProvider } from './hooks/useCapabilities';
@@ -143,6 +144,7 @@ function App() {
                       a reasonable failure mode if someone hand-types the
                       URL while the flag is disabled. */}
                   <Route path="webhooks" element={<WebhooksPage />} />
+                  <Route path="workspace" element={<WorkspacePage />} />
                 </Route>
 
                 {/* Full-screen overview (light + dark, §9.9) */}

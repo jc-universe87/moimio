@@ -492,6 +492,17 @@ export default function AdminLayout() {
                       {t('nav.webhooks')}
                     </button>
                   )}
+                  {/* v1.0.0v: Workspace settings — currently houses only the
+                      Danger Zone (customer-triggered workspace deletion).
+                      Super-admin-only; no capability flag — basic admin
+                      feature, the endpoint just queues a webhook event
+                      that's a no-op for self-hosters with no SaaS endpoint. */}
+                  {user?.role === 'super_admin' && (
+                    <button onClick={() => { navigate('/admin/workspace'); closeSidebar(); }}
+                      className="block w-full text-left px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">
+                      {t('nav.workspace')}
+                    </button>
+                  )}
                 </div>
               </div>
             )}

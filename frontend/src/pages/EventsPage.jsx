@@ -57,12 +57,21 @@ export default function EventsPage() {
   const [deleting, setDeleting] = useState(false);
 
   // v1.0.0h: create-event confirmation modal. Only shown when
-  // capabilities.create_event_confirmation is true (typical for SaaS
-  // tenants on a per-event plan). Billing info is fetched lazily on
-  // first show and cached for the session.
+  // capabilities.create_event_confirmation is true (the SaaS sets it).
+  // Billing info, fetched lazily on first show and cached for the
+  // session, carries the "buy a credit" link (v1.0.0w).
   const { capabilities } = useCapabilities();
   const [showConfirmCreate, setShowConfirmCreate] = useState(false);
   const [billingInfoData, setBillingInfoData] = useState(null);
+  // v1.0.0w: shown when a create is blocked by the SaaS credit gate
+  // (HTTP 402). Carries the "out of credits, buy one" notice + button.
+  const [outOfCredits, setOutOfCredits] = useState(false);
+
+  // v1.0.0x: type-to-confirm on the (paid) create action. The admin must
+  // re-type the event name before Confirm enables — the same deliberate-
+  // intent gate the delete flow uses, so spending a credit is never one
+  // stray click. Reset whenever the confirm modal closes.
+  const [confirmTyped, setConfirmTyped] = useState('');
 
   // v0.51: ephemeral banner (no global toast system in the codebase;
   // same inline pattern AllocationBoard uses).
@@ -74,6 +83,9 @@ export default function EventsPage() {
     toastTimer.current = setTimeout(() => setToast(null), 3000);
   };
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+  // v1.0.0x: clear the type-to-confirm field whenever the create-confirm
+  // modal closes, so a stale value never carries into the next create.
+  useEffect(() => { if (!showConfirmCreate) setConfirmTyped(''); }, [showConfirmCreate]);
 
   const createFormRef = useRef(null);
   const { user, staffContext, logout } = useAuth();
@@ -124,19 +136,18 @@ export default function EventsPage() {
     // the admin clicks Confirm.
     if (capabilities?.create_event_confirmation) {
       setShowConfirmCreate(true);
-      // Lazy-load billing info on first show. If the fetch fails, we
-      // fall back to a generic dialog with no charge text rather than
-      // blocking the admin entirely — failing closed here would
-      // prevent event creation just because one auxiliary endpoint
-      // is unreachable, which is worse UX than a slightly less
-      // informative dialog.
+      // Lazy-load billing info on first show. The confirmation body no
+      // longer needs it, but it carries the "buy a credit" link that the
+      // out-of-credits notice shows if the create is then blocked for
+      // lack of credits. On failure we fall back to an empty link (the
+      // buy button simply doesn't appear) rather than blocking creation.
       if (!billingInfoData) {
         try {
           const data = await billingInfoApi.get();
           setBillingInfoData(data);
         } catch (err) {
-          console.warn('billing-info fetch failed; using fallback dialog', err);
-          setBillingInfoData({ amount: '', currency: '', card_last4: '' });
+          console.warn('billing-info fetch failed; buy link unavailable', err);
+          setBillingInfoData({ buy_credit_url: '' });
         }
       }
       return;
@@ -146,7 +157,7 @@ export default function EventsPage() {
 
   // v1.0.0h: extracted from handleCreate. Called directly when no
   // confirmation is required, or by the create-confirm modal's
-  // Confirm button after the admin has approved the charge.
+  // Confirm button after the admin confirms.
   const executeCreate = async () => {
     setCreating(true);
     setError(null);
@@ -178,8 +189,15 @@ export default function EventsPage() {
       }
       navigate(`/admin/events/${newEvent.id}`);
     } catch (err) {
-      setError(err);
       setShowConfirmCreate(false);
+      // v1.0.0w: a 402 here is the SaaS credit gate refusing the create
+      // for lack of credits. Show the dedicated "buy a credit" notice
+      // instead of a generic error; every other failure stays generic.
+      if (err && err.status === 402) {
+        setOutOfCredits(true);
+      } else {
+        setError(err);
+      }
     } finally {
       setCreating(false);
     }
@@ -695,16 +713,13 @@ export default function EventsPage() {
           onCancel={() => { if (!deleting) setDeleteTarget(null); }}
         />
       )}
-      {/* v1.0.0h: create-event confirmation modal. Only shown when
-          capabilities.create_event_confirmation is on. Body picks
-          between three keys based on which data is available, so a
-          partially-configured tenant still gets a sensible dialog
-          rather than empty placeholders.
-          - Both amount and last4: full charge message
-          - Amount only:           "card on file" wording
-          - Neither:               generic "will be charged" wording
-          Cancel just closes the modal; admin can edit the name and
-          re-submit. Confirm proceeds to executeCreate. */}
+      {/* v1.0.0h: create-event confirmation modal, repurposed in v1.0.0w
+          for the prepaid-credit model. Only shown when
+          capabilities.create_event_confirmation is on (the SaaS sets it).
+          Body states that creating an event uses one credit; no charge
+          amount or card is shown. Cancel just closes the modal; the admin
+          can edit the name and re-submit. Confirm proceeds to
+          executeCreate. */}
       {showConfirmCreate && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -717,38 +732,29 @@ export default function EventsPage() {
             <h3 className="font-heading font-bold text-lg mb-3" style={{ color: 'var(--text-primary)' }}>
               {t('event.create.confirm.title')}
             </h3>
-            <p className="text-sm mb-5" style={{ color: 'var(--text-primary)' }}>
-              {(() => {
-                // Locale-aware amount formatting via Intl. Falls back
-                // to the raw string if Intl can't parse (e.g. missing
-                // currency code), so the dialog never crashes on a
-                // malformed env var.
-                const amount = billingInfoData?.amount || '';
-                const currency = billingInfoData?.currency || '';
-                const last4 = billingInfoData?.card_last4 || '';
-                let formattedAmount = amount;
-                if (amount && currency) {
-                  try {
-                    const n = Number(amount);
-                    if (!Number.isNaN(n)) {
-                      formattedAmount = new Intl.NumberFormat(
-                        (typeof navigator !== 'undefined' && navigator.language) || 'en',
-                        { style: 'currency', currency }
-                      ).format(n);
-                    }
-                  } catch (_err) {
-                    // keep formattedAmount as the raw string
-                  }
-                }
-                if (amount && last4) {
-                  return t('event.create.confirm.body', { amount: formattedAmount, last4 });
-                }
-                if (amount) {
-                  return t('event.create.confirm.body_no_card', { amount: formattedAmount });
-                }
-                return t('event.create.confirm.body_no_info');
-              })()}
+            <p className="text-sm mb-3" style={{ color: 'var(--text-primary)' }}>
+              {t('event.create.confirm.body')}
             </p>
+            {/* v1.0.0x: re-type the event name to confirm the credit spend.
+                Reuses the generic strong_delete confirm label (same wording
+                as the delete flow). NOTE: that key is shared — editing it
+                for delete also changes this text. */}
+            <div className="mb-5">
+              <label
+                className="block text-[10px] uppercase tracking-caps font-semibold mb-1"
+                style={{ color: 'var(--text-subtle)' }}
+              >
+                {t('strong_delete.type_to_confirm_label', { name: form.name })}
+              </label>
+              <input
+                type="text"
+                value={confirmTyped}
+                onChange={(e) => setConfirmTyped(e.target.value)}
+                autoFocus
+                className="w-full rounded-card border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]"
+                style={{ background: 'var(--app-bg)', borderColor: 'var(--card-border)', color: 'var(--text-primary)' }}
+              />
+            </div>
             <div className="flex gap-2 justify-end">
               <button
                 type="button"
@@ -762,13 +768,53 @@ export default function EventsPage() {
               <button
                 type="button"
                 onClick={executeCreate}
-                disabled={creating}
+                disabled={creating || confirmTyped.trim().toLocaleLowerCase() !== (form.name || '').trim().toLocaleLowerCase()}
                 className="text-sm font-semibold px-4 py-2 rounded-card text-white bg-steel-blue hover:bg-steel-blue-700 dark:bg-gold dark:text-deep-navy dark:hover:bg-gold/80 disabled:opacity-50 transition-colors"
               >
                 {creating
                   ? t('event.create.confirm.confirming')
                   : t('event.create.confirm.confirm_button')}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* v1.0.0w: out-of-credits notice. Shown when the SaaS credit gate
+          refused a create (402). States that no credits remain and, when
+          the SaaS has configured a buy link, offers a button to it; with
+          no link configured only the notice and a close action remain. No
+          title key is needed — the notice text stands on its own. */}
+      {outOfCredits && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setOutOfCredits(false)}
+        >
+          <div
+            className="card-surface-solid rounded-2xl p-6 max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-sm mb-5" style={{ color: 'var(--text-primary)' }}>
+              {t('event.create.out_of_credits')}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setOutOfCredits(false)}
+                className="text-sm font-semibold px-4 py-2 rounded-card hover:opacity-80 transition-opacity"
+                style={{ color: 'var(--text-subtle)' }}
+              >
+                {t('common.cancel')}
+              </button>
+              {billingInfoData?.buy_credit_url && (
+                <a
+                  href={billingInfoData.buy_credit_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-semibold px-4 py-2 rounded-card text-white bg-steel-blue hover:bg-steel-blue-700 dark:bg-gold dark:text-deep-navy dark:hover:bg-gold/80 transition-colors"
+                >
+                  {t('event.create.buy_credit')}
+                </a>
+              )}
             </div>
           </div>
         </div>

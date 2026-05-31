@@ -14,6 +14,157 @@ Nothing yet. Open issues at <https://github.com/jc-universe87/moimio/issues> for
 
 ---
 
+## [1.0.0w] — 2026-05-30
+
+The optional create-event confirmation is reframed around event credits.
+This is an opt-in capability that is off by default; self-hosters who do
+not enable it see no change.
+
+### Changed
+
+- **Create-event confirmation dialog** — when the
+  `create_event_confirmation` capability is on, the dialog now states
+  that creating an event uses one event credit, instead of showing a
+  charge amount and card. Wording is native in all six locales.
+- **`GET /api/billing-info`** — now returns a single field,
+  `buy_credit_url`: the destination for the new "buy a credit" button.
+  It replaces the previous charge amount, currency, and card last-four.
+  An empty value means no self-serve link is configured, and the button
+  is omitted.
+
+### Added
+
+- **Out-of-credits notice** — if creating an event is refused for lack
+  of credits, the organiser sees a clear notice and, when a buy link is
+  configured, a "buy a credit" button. Two new locale strings in all six
+  locales; total key count unchanged at 1117 (two charge-model keys
+  removed, two credit keys added).
+
+### Deprecated
+
+- `EVENT_CHARGE_AMOUNT`, `EVENT_CHARGE_CURRENCY`, and `BILLING_CARD_LAST4`
+  are no longer read. They are retained as recognised settings so
+  existing `.env` files keep parsing on upgrade, and may be removed in a
+  later release.
+
+---
+
+## [1.0.0v] — 2026-05-29
+
+Ship 2 of the Danger Zone — the customer-facing UI. With v1.0.0t the
+plumbing was proven; with this release a super admin can actually
+press a button. The wire contract is unchanged.
+
+The voice across all six locales is **warmer-but-firm** by deliberate
+choice. The reasoning: target customers are church and mission
+organisations — relational rather than transactional. Operational
+facts stated plainly, no apologies and no minimising, but framed in a
+way that respects the gravity of the action without making the
+customer feel adversarial. Same content in clinical-corporate voice
+would have read as legal disclaimer; that's not who Moimio is talking
+to.
+
+### Added
+
+- **`/admin/workspace`** — new super-admin-only page housing
+  workspace-level settings. Currently holds one section (the Danger
+  Zone) with room for future workspace settings (rename, branding,
+  billing contact) to land here without restructuring.
+- **`components/DangerZoneDeletionModal.jsx`** — custom typed-
+  confirmation modal with three states: confirm (explainer + the
+  "Type DELETE" field), submitting (button spinner), success (what
+  happens next + close). Reuses CE's CSS-variable system so it picks
+  up light/dark mode and the burgundy alert colour without
+  hardcoding. Custom rather than reusing `StrongDeleteConfirm`
+  because that component is built around typing the specific item's
+  name and shows a "no items affected" zero-assignee message that
+  would mislead in the workspace-deletion context.
+- **Sidebar nav entry** for super admins, after Webhooks. No
+  capability flag — basic admin feature, with self-hosters (no SaaS
+  endpoint configured) seeing the request acknowledged via a 202
+  and `queue_event` being a silent no-op for them.
+- **15 new locale strings** in all six locales (EN/DE/ES/FR/KO/pt-BR).
+  Locale key count 1102 → 1117.
+
+### Fixed
+
+- **DE locale** — `errors.danger_zone.confirmation_mismatch` previously
+  used Sie-form ("Geben Sie genau DELETE ein…"); CE convention
+  throughout is capitalised Du-form. Corrected to "Gib genau DELETE
+  ein…". Caught while drafting the v1.0.0v German strings (which had
+  to match the existing tone).
+
+---
+
+## [1.0.0u] — 2026-05-29
+
+Test-fix ship: closes one broken enum reference in
+`tests/test_danger_zone.py` that would have failed in Postgres CI on a
+fresh test run. No runtime code touched, no behaviour change.
+
+Discipline note: a normally-no-bump situation (test-only change, zero
+runtime impact) earned a suffix bump anyway, because re-rolling
+v1.0.0t with different contents under the same version tag would have
+created ambiguity about which zip was canonical. Bumping cleanly is
+the lesser of the two evils when a release has already been packaged.
+
+### Fixed
+
+- **`tests/test_danger_zone.py`** — `WebhookEndpointManagedBy.ENVIRONMENT`
+  → `WebhookEndpointManagedBy.SAAS`. The enum value `ENVIRONMENT` does
+  not exist on the model; the real auto-registered-by-SaaS-env-vars
+  enum value is `SAAS`. Caught during the v1.0.0t live smoke when an
+  in-shell helper script (different code, same wrong constant) raised
+  `AttributeError`.
+
+---
+
+## [1.0.0t] — 2026-05-28
+
+Danger Zone plumbing. The customer-facing button + confirmation modal
+ship in a follow-up; this release wires up the backend endpoint and the
+outbound webhook the SaaS receiver listens for. Locale strings for the
+backend error messages are added in all six locales so the UI ship can
+focus on the customer-facing copy.
+
+### Added
+
+- **`POST /api/admin/workspace/request-deletion`** — emits a
+  `workspace.delete_requested` event via the existing outbound-webhooks
+  subsystem when an authenticated super admin posts
+  `{"confirmation": "DELETE"}`. The SaaS control plane receives that
+  event, generates the data export, and pauses the workspace (full
+  erasure follows the day-44 schedule). Self-hosters with no configured
+  outbound endpoint see the request acknowledged with a 202 and a log
+  line — `queue_event` is a no-op when no endpoint subscribes.
+- **Two new error keys** in all six locales:
+  `errors.danger_zone.confirmation_mismatch` and
+  `errors.danger_zone.super_admin_only`. Locale key count 1100 → 1102.
+
+The wire contract uses the canonical English token "DELETE"; locale-
+appropriate UI framing ships with the customer-facing modal in the
+next release.
+
+---
+
+## [1.0.0s] — 2026-05-28
+
+A new command-line tool for exporting an entire workspace.
+
+### Added
+
+- **`python -m app.cli.export_all --out <path>`** — exports every event
+  in the workspace to a single ZIP archive: a top-level `manifest.json`
+  (export time, event count, and the list of events) plus
+  `events/<event_id>.zip` for each event, each one a full per-event
+  backup identical to the in-app "backup.zip" download. Archived events
+  are included. This is the whole-workspace counterpart to the existing
+  per-event backup — useful for a complete off-box backup or for
+  migrating a workspace between installations. Exits non-zero on failure
+  so it is safe to drive from automation.
+
+---
+
 ## [1.0.0r] — 2026-05-22
 
 Two ships in one day — the "+" double-render fix and the long-queued

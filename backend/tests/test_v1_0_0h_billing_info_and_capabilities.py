@@ -1,7 +1,10 @@
-"""Tests for v1.0.0h /api/billing-info and the updated /api/capabilities.
+"""Tests for /api/billing-info and the updated /api/capabilities.
 
-billing-info is auth-gated (card last-4 is customer data). capabilities
-is public but now exposes the create_event_confirmation flag.
+billing-info is auth-gated (the buy-credit link is tenant-specific).
+capabilities is public but exposes the create_event_confirmation flag.
+Under the prepaid-credit model (v1.0.0w) billing-info returns a single
+field, buy_credit_url; before v1.0.0w it returned a charge amount,
+currency and card last-four.
 """
 
 import pytest
@@ -73,83 +76,44 @@ async def test_capabilities_remains_unauthenticated(client, monkeypatch):
     assert resp.status_code == 200
 
 
-# ─── /api/billing-info — auth-gated, returns env values ─────────────────
+# ─── /api/billing-info — auth-gated, returns the buy-credit link ─────────
 
 
 async def test_billing_info_requires_auth(client):
     """Without a valid JWT, /api/billing-info returns 401 (or 403).
 
-    Card last-4 is customer data; an attacker without an account
-    shouldn't be able to fingerprint a tenant's billing setup.
+    The buy-credit link is tenant-specific; an attacker without an
+    account shouldn't be able to read it.
     """
     resp = await client.get("/api/billing-info")
-    # Could be 401 (missing auth) or 403 (forbidden), depending on
-    # the auth scheme. Either is acceptable as long as it's not 200.
+    # 401 (missing auth) or 403 (forbidden); either is fine, just not 200.
     assert resp.status_code in (401, 403)
 
 
-async def test_billing_info_returns_env_values_when_authed(client, monkeypatch):
-    """All three env values come through as-is for an authenticated caller."""
-    monkeypatch.setenv("EVENT_CHARGE_AMOUNT", "120")
-    monkeypatch.setenv("EVENT_CHARGE_CURRENCY", "EUR")
-    monkeypatch.setenv("BILLING_CARD_LAST4", "4242")
+async def test_billing_info_returns_buy_url_when_authed(client, monkeypatch):
+    """The configured buy link comes through as-is for an authed caller."""
+    monkeypatch.setenv("BUY_CREDIT_URL", "https://moimio.app/buy?tenant=abc")
     get_settings.cache_clear()
 
     app.dependency_overrides[get_current_user] = _fake_user
     try:
         resp = await client.get("/api/billing-info")
         assert resp.status_code == 200
-        body = resp.json()
-        assert body == {
-            "amount": "120",
-            "currency": "EUR",
-            "card_last4": "4242",
-        }
+        assert resp.json() == {"buy_credit_url": "https://moimio.app/buy?tenant=abc"}
     finally:
         app.dependency_overrides.pop(get_current_user, None)
 
 
-async def test_billing_info_returns_empty_strings_when_unset(client, monkeypatch):
-    """Unconfigured env vars → empty strings, not nulls or 500s.
-
-    Empty-string defaults keep the response shape stable for the
-    frontend's i18n template logic — it switches body keys based on
-    truthy checks, which empty strings handle correctly.
-    """
-    monkeypatch.delenv("EVENT_CHARGE_AMOUNT", raising=False)
-    monkeypatch.delenv("EVENT_CHARGE_CURRENCY", raising=False)
-    monkeypatch.delenv("BILLING_CARD_LAST4", raising=False)
+async def test_billing_info_empty_when_unset(client, monkeypatch):
+    """No link configured → empty string, not null or a 500. CE hides the
+    buy button when this is empty."""
+    monkeypatch.delenv("BUY_CREDIT_URL", raising=False)
     get_settings.cache_clear()
 
     app.dependency_overrides[get_current_user] = _fake_user
     try:
         resp = await client.get("/api/billing-info")
         assert resp.status_code == 200
-        body = resp.json()
-        assert body == {"amount": "", "currency": "", "card_last4": ""}
-    finally:
-        app.dependency_overrides.pop(get_current_user, None)
-
-
-async def test_billing_info_partial_config_returns_what_is_set(client, monkeypatch):
-    """Amount + currency set, last4 missing → last4 empty, others present.
-
-    Common in early days when a tenant exists but hasn't completed
-    card setup, or after a card update before SaaS has redeployed.
-    Frontend uses the empty last4 to fall back to "your card on file"
-    wording — this test confirms backend supplies the data it expects.
-    """
-    monkeypatch.setenv("EVENT_CHARGE_AMOUNT", "80")
-    monkeypatch.setenv("EVENT_CHARGE_CURRENCY", "EUR")
-    monkeypatch.delenv("BILLING_CARD_LAST4", raising=False)
-    get_settings.cache_clear()
-
-    app.dependency_overrides[get_current_user] = _fake_user
-    try:
-        resp = await client.get("/api/billing-info")
-        body = resp.json()
-        assert body["amount"] == "80"
-        assert body["currency"] == "EUR"
-        assert body["card_last4"] == ""
+        assert resp.json() == {"buy_credit_url": ""}
     finally:
         app.dependency_overrides.pop(get_current_user, None)

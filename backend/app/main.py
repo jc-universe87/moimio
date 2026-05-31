@@ -34,6 +34,7 @@ from app.api.preferences import router as pref_router
 from app.api.streams import router as streams_router
 from app.api.outbound_webhooks import router as outbound_webhooks_router
 from app.api.billing_info import router as billing_info_router
+from app.api.danger_zone import router as danger_zone_router
 
 settings = get_settings()
 logger = get_logger(__name__)
@@ -131,6 +132,7 @@ app.include_router(users_router)
 app.include_router(assignments_router)
 app.include_router(pref_router)
 app.include_router(streams_router)
+app.include_router(danger_zone_router)
 
 # Capability-gated routers (v1.0.0g)
 #
