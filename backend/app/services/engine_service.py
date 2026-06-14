@@ -113,6 +113,7 @@ from app.models.allocation import Allocation
 from app.models.allocation_event import AllocationEventSource, AllocationEventType
 from app.models.mark import MarkAssignment
 from app.services.allocation_events_service import record_allocation_event
+from app.services.webhook_service import queue_event
 
 
 DEFAULT_ENGINE_SETTINGS = {
@@ -1392,5 +1393,22 @@ async def commit_proposal(
                 meta=meta,
             )
             created += 1
+    # v1.0.0y: emit event.allocated — an engine allocation run was just
+    # finalised for this event. Queued in the SAME transaction as the
+    # commit (queue_event only inserts a PENDING delivery row; it does not
+    # commit), so the signal and the allocation land together or roll back
+    # together. The business event id rides in data.event_id; the envelope
+    # event_id is a per-message idempotency key, NOT this (see
+    # webhook_service / docs/webhooks.md). GDPR-minimal: no counts, no
+    # participant data. A no-op for self-hosters with no endpoint configured.
+    # Fires on engine commits only — manual per-participant assigns are edits,
+    # not a "run". Multiple commits across an event's categories is by design;
+    # the control plane correlates them on data.event_id.
+    await queue_event(
+        db,
+        event_type="event.allocated",
+        data={"event_id": str(event_id)},
+    )
+
     await db.flush()
     return {"cleared": cleared, "created": created}

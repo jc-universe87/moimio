@@ -13,6 +13,9 @@ from app.models.participant import Participant, RegistrationStatus
 from app.models.preference_request import ParticipantPreferenceRequest
 from app.models.custom_field import CustomFieldValue
 from app.schemas.participant import ParticipantRegister, ParticipantUpdate
+from app.models.event import Event
+from app.core.config import get_settings
+from app.services.webhook_service import queue_event
 
 
 # ─── v1.0-pre: collision-safe group-code allocation ─────────────────────────
@@ -390,3 +393,69 @@ async def soft_delete_participant(
     await db.flush()
     await db.refresh(participant)
     return participant
+
+
+# ─── Over-cap signalling (v1.0.0y) ───────────────────────────────────
+
+
+def _round_up_to_band(n: int, step: int = 50) -> int:
+    """Round n UP to the next multiple of `step`. We report this coarse
+    band instead of an exact headcount."""
+    return ((n + step - 1) // step) * step
+
+
+async def maybe_signal_over_cap(
+    db: AsyncSession, event_id: uuid.UUID
+) -> bool:
+    """Emit `event.over_cap` ONCE if this event's active roster has crossed
+    the configured participant cap.
+
+    Active roster = confirmed + pending, excluding removed (deleted_at set).
+    No-op when:
+      - no cap is configured (MOIMIO_PARTICIPANT_CAP unset) — self-hosters;
+      - the event has already signalled (over_cap_signalled is true);
+      - the event is missing, or the count is at/under the cap.
+
+    The exact count never leaves CE: only an approximate band (rounded up to
+    the next 50) plus the cap travels in the webhook. Queued in the caller's
+    transaction (queue_event only inserts a PENDING row); the request commit
+    ships it alongside the participant change. Never blocks anything — purely
+    a signal. Returns True iff a signal was emitted.
+    """
+    cap = get_settings().moimio_participant_cap
+    if not cap:
+        return False
+
+    event = await db.get(Event, event_id)
+    if event is None or event.over_cap_signalled:
+        return False
+
+    count = (
+        await db.execute(
+            select(sa_func.count())
+            .select_from(Participant)
+            .where(
+                Participant.event_id == event_id,
+                Participant.registration_status.in_(
+                    [RegistrationStatus.PENDING, RegistrationStatus.CONFIRMED]
+                ),
+                Participant.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one()
+
+    if count <= cap:
+        return False
+
+    event.over_cap_signalled = True
+    db.add(event)
+    await queue_event(
+        db,
+        event_type="event.over_cap",
+        data={
+            "event_id": str(event_id),
+            "participant_estimate": _round_up_to_band(count),
+            "cap": cap,
+        },
+    )
+    return True

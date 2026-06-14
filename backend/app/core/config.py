@@ -88,6 +88,17 @@ class Settings(BaseSettings):
     # string chosen by whoever is provisioning the install.
     moimio_tenant_id: str = ""
 
+    # ─── Participant cap (v1.0.0y) ───
+    #
+    # Optional. When set (an integer, e.g. 300), CE watches each event's
+    # active roster (confirmed + pending, excluding removed) and — the
+    # first time it crosses this number — emits ONE `event.over_cap`
+    # webhook carrying an APPROXIMATE band (never the exact count) plus
+    # this cap value. It never blocks registration; it only signals. When
+    # unset (None) CE does no cap check at all, so self-hosters see no
+    # change. SaaS provisioning sets this per-tenant from the plan size.
+    moimio_participant_cap: int | None = None
+
     # ─── SaaS-managed webhook auto-registration (v1.0.0g) ───
     #
     # When both env vars are set at first boot AND no outbound webhook

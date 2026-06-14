@@ -21,7 +21,7 @@ from app.schemas.participant import (
 from app.services.participant_service import (
     register_participant, get_participant_by_id, list_participants,
     update_participant, update_group_code, check_in_participant,
-    soft_delete_participant, confirm_participant,
+    soft_delete_participant, confirm_participant, maybe_signal_over_cap,
 )
 from app.services.event_service import get_event_by_id
 from app.api.deps import get_current_user, require_role, ensure_event_writable, ensure_event_admin
@@ -85,6 +85,10 @@ async def public_register(
         participant_id=str(participant.id),
         confirmation_required=require_confirmation,
     )
+
+    # v1.0.0y: signal once if this registration pushed the active roster
+    # past the configured participant cap. No-op when no cap is set.
+    await maybe_signal_over_cap(db, event_id)
 
     # Send email (non-blocking — log failures but don't fail registration)
     lang = data.preferred_language or 'en'
@@ -298,6 +302,10 @@ async def patch_participant(
         participant_id=str(participant_id),
         updated_by=str(current_user.id),
     )
+
+    # v1.0.0y: a status change (e.g. cancelled → active) can lift the
+    # active roster past the cap; signal once if so. No-op otherwise.
+    await maybe_signal_over_cap(db, participant.event_id)
     return participant
 
 
@@ -582,6 +590,10 @@ async def batch_commit(
         new_custom_fields=len(result.get("created_custom_fields", [])),
         by=str(current_user.id),
     )
+
+    # v1.0.0y: a batch can add many at once and cross the cap in one go;
+    # check once after the whole batch (not per row). No-op when no cap.
+    await maybe_signal_over_cap(db, event_id)
     return result
 
 

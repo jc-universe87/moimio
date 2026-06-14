@@ -60,6 +60,12 @@ class Event(Base):
     is_archived: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
+    # v1.0.0y: set true once CE has emitted an event.over_cap signal for
+    # this event, so the signal fires exactly once even as more
+    # participants register. Orthogonal to `status`/`is_archived`.
+    over_cap_signalled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
     settings: Mapped[dict | None] = mapped_column(
         JSON, nullable=True, default=lambda: {
             "published_notes_writers": ["event_admin"],

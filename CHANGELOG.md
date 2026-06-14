@@ -14,6 +14,31 @@ Nothing yet. Open issues at <https://github.com/jc-universe87/moimio/issues> for
 
 ---
 
+## [1.0.0y] — 2026-06-14
+
+Two outbound webhook event types for integrating with the allocation
+lifecycle, plus an optional participant-cap signal. Self-hosters who have
+not configured a webhook endpoint see no change.
+
+### Added
+
+- **`event.allocated`** webhook — emitted each time an allocation run is
+  committed for a category, carrying the event id. Re-running an allocation
+  emits again (re-allocation is expected, not an error).
+- **`event.over_cap`** webhook — emitted once, the first time an event's
+  active roster (confirmed + pending) crosses the configured participant
+  cap. It carries the cap and an approximate band, never an exact count,
+  and never blocks registration.
+- **`MOIMIO_PARTICIPANT_CAP`** setting (optional integer). When unset — the
+  default — the over-cap check is skipped entirely.
+
+### Database
+
+- New `events.over_cap_signalled` column (migration `100y00000`),
+  defaulting false, recording that the one-time over-cap signal has fired.
+
+---
+
 ## [1.0.0w] — 2026-05-30
 
 The optional create-event confirmation is reframed around event credits.
