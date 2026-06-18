@@ -48,7 +48,7 @@ services:
       retries: 5
 
   backend:
-    image: ghcr.io/jc-universe87/moimio-backend:v1.0.0v
+    image: ghcr.io/jc-universe87/moimio-backend:v1.0.0z
     restart: unless-stopped
     environment:
       PYTHONDONTWRITEBYTECODE: "1"
@@ -79,6 +79,11 @@ services:
       MOIMIO_WEBHOOK_URL:    ${MOIMIO_WEBHOOK_URL:?MOIMIO_WEBHOOK_URL must be set}
       MOIMIO_WEBHOOK_SECRET: ${MOIMIO_WEBHOOK_SECRET:?MOIMIO_WEBHOOK_SECRET must be set}
       WEBHOOK_DELIVERY_RETENTION_DAYS: ${WEBHOOK_DELIVERY_RETENTION_DAYS:-30}
+      # Optional participant cap (SaaS injects it per tenant). Blank/unset
+      # means no cap: CE coerces a blank value to "no check" and never
+      # blocks registration. Self-hosters who don't set it get the empty
+      # default, i.e. no cap.
+      MOIMIO_PARTICIPANT_CAP: ${MOIMIO_PARTICIPANT_CAP:-}
     networks:
       - internal
     depends_on:
@@ -92,7 +97,7 @@ services:
       start_period: 30s
 
   frontend:
-    image: ghcr.io/jc-universe87/moimio-frontend:v1.0.0v
+    image: ghcr.io/jc-universe87/moimio-frontend:v1.0.0z
     restart: unless-stopped
     networks:
       - internal

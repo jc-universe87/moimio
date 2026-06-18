@@ -14,6 +14,24 @@ Nothing yet. Open issues at <https://github.com/jc-universe87/moimio/issues> for
 
 ---
 
+## [1.0.0z] — 2026-06-14
+
+Completes the `event.over_cap` wiring introduced in v1.0.0y.
+
+### Fixed
+
+- The production compose template (`backend/deploy/production.yml`) now
+  passes `MOIMIO_PARTICIPANT_CAP` through to the backend container. In
+  v1.0.0y the setting existed but the variable was never forwarded by the
+  template, so the over-cap signal could not fire under the standard
+  deployment. Self-hosters using the bundled template get the passthrough
+  automatically.
+- A blank `MOIMIO_PARTICIPANT_CAP` value is now treated as "no cap" rather
+  than failing to start, making the unset case safe under Compose's
+  `${VAR:-}` default.
+
+---
+
 ## [1.0.0y] — 2026-06-14
 
 Two outbound webhook event types for integrating with the allocation

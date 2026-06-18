@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -98,6 +99,17 @@ class Settings(BaseSettings):
     # unset (None) CE does no cap check at all, so self-hosters see no
     # change. SaaS provisioning sets this per-tenant from the plan size.
     moimio_participant_cap: int | None = None
+
+    @field_validator("moimio_participant_cap", mode="before")
+    @classmethod
+    def _blank_participant_cap_is_none(cls, v: object) -> object:
+        # An unset env var arrives as None; a present-but-empty one — e.g.
+        # Compose's `${MOIMIO_PARTICIPANT_CAP:-}` when nothing is injected —
+        # arrives as "". Treat blank/whitespace as "no cap" so a tenant
+        # without a cap doesn't fail to start on integer parsing.
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
 
     # ─── SaaS-managed webhook auto-registration (v1.0.0g) ───
     #

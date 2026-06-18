@@ -72,6 +72,23 @@ def test_band_rounds_up_to_next_50():
     assert _round_up_to_band(1) == 50
 
 
+# ─── cap env parsing (the v1.0.0z startup-safety fix) ───────────────────
+
+
+def test_blank_cap_env_coerces_to_none(monkeypatch):
+    # Compose's ${MOIMIO_PARTICIPANT_CAP:-} hands CE "" when nothing is
+    # injected; that must read as "no cap", not crash on integer parsing.
+    monkeypatch.setenv("MOIMIO_PARTICIPANT_CAP", "")
+    get_settings.cache_clear()
+    assert get_settings().moimio_participant_cap is None
+
+
+def test_numeric_cap_env_parses(monkeypatch):
+    monkeypatch.setenv("MOIMIO_PARTICIPANT_CAP", "300")
+    get_settings.cache_clear()
+    assert get_settings().moimio_participant_cap == 300
+
+
 # ─── crossing the cap: one signal, right band + id, flag set ────────────
 
 
