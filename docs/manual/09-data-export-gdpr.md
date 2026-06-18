@@ -4,7 +4,11 @@ Moimio is built so that an organiser running an event can fulfil their GDPR obli
 
 This section is operational — what to do when. For the architectural and legal posture, see [GDPR compliance](../gdpr-compliance.md).
 
-<!-- TODO: screenshot at docs/assets/insight-panel-export.png — the InsightPanel slide-in showing a participant's details with the Export data button at the top -->
+<p align="center">
+  <img src="../assets/insight-panel-export.png" alt="The InsightPanel slide-in showing a participant's details with the Export data button at the top" width="560">
+  <br>
+  <em>The InsightPanel, with the Export data button at the top</em>
+</p>
 
 ---
 

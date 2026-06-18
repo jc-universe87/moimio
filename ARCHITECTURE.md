@@ -218,7 +218,7 @@ From v1.0.0g, Moimio CE can POST signed HTTP notifications to URLs you configure
 
 The subsystem is a deliberate architectural commitment, not a feature add. It has three load-bearing properties:
 
-**Generic, not SaaS-specific.** Moimio CE doesn't know who's listening on the other end of a webhook. The receiver might be a self-hoster's Zapier flow, a hosted-Moimio billing layer, or a researcher's data-collection script — CE treats them identically. There is no SaaS-specific code path inside CE. This is what "CE stays clean" means in concrete terms: the hosted edition's billing pipeline is built on the same public capability that any self-hoster has.
+**Generic, not deployment-specific.** Moimio CE doesn't know who's listening on the other end of a webhook. The receiver might be a self-hoster's Zapier flow, an external billing layer, or a researcher's data-collection script — CE treats them identically. There is no special-cased code path inside CE for any particular receiver. This is what "CE stays clean" means in concrete terms: any automated platform built on top of CE uses the same public webhook capability that any self-hoster has.
 
 **Signed at the wire.** Every outbound POST carries a `Moimio-Signature` header containing an HMAC-SHA256 over the raw body. Receivers verify with a per-endpoint secret that was shown once at endpoint creation. The signing scheme is symmetric with Paddle's inbound convention so receivers can reuse code if they're already handling Paddle webhooks.
 

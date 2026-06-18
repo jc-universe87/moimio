@@ -84,7 +84,7 @@ Group codes link related registrations so the allocation engine treats them as a
 
 The registration form includes an optional **group code** field. The convention is `STEM-NNN` (e.g. `SMITH-742`). A family of four registering together would all enter `SMITH-742`. The engine will then keep them together when allocating rooms (or whatever the relevant exclusive category is).
 
-If a registrant doesn't enter one, Moimio derives a stem from their surname and appends a unique three-digit suffix (e.g. `SMITH-742`), and includes the result in the registration confirmation email — so the registrant can share it with anyone else who'd like to be grouped with them.
+If a registrant doesn't enter one, Moimio derives a stem from their surname and appends a unique numeric suffix — normally three digits (e.g. `SMITH-742`), rolling to four or five only if that surname already has many clusters in the event — and includes the result in the registration confirmation email — so the registrant can share it with anyone else who'd like to be grouped with them.
 
 If a registrant types only a stem (e.g. `SMITH` with no number), the same logic applies — a unique suffix is added before saving. This is collision-safe: two unrelated families both typing `SMITH` end up with different codes, so they don't accidentally cluster together. To deliberately join an existing cluster, the registrant types the full code (`SMITH-742`); that's saved verbatim.
 

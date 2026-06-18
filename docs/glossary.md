@@ -221,7 +221,7 @@ A health indicator on each webhook endpoint: `active` (healthy), `degraded` (5 c
 
 ### SaaS-managed endpoint
 
-A webhook endpoint that was auto-registered at container startup via the `MOIMIO_WEBHOOK_URL` and `MOIMIO_WEBHOOK_SECRET` environment variables. Flagged `managed_by="saas"` in the database and hidden from the admin UI. Used by deployment automation (notably the hosted Moimio platform) to wire each tenant's CE container to a central event receiver without admin involvement. Self-hosters who manage endpoints themselves leave these env vars empty.
+A webhook endpoint that was auto-registered at container startup via the `MOIMIO_WEBHOOK_URL` and `MOIMIO_WEBHOOK_SECRET` environment variables. Flagged `managed_by="saas"` in the database and hidden from the admin UI. This is how automated deployment platforms wire a Moimio container to a central event receiver without an admin having to configure it by hand. If you manage your own endpoints, leave these two environment variables empty and the flag never appears.
 
 ---
 

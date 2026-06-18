@@ -36,7 +36,7 @@ A self-hosted Moimio is a small Linux server you are now responsible for. Concre
 - [ ] If something breaks at 11pm during the event, you have someone (or the skills) to fix it.
 - [ ] You have a backup strategy, not just an intention.
 
-**If any of these is *no*, please consider [moimio.app](https://moimio.app) — the managed hosted version of the same product.** It runs the same code, the same allocation engine, the same registration flow. Hosting, backups, updates, and SSL are handled. Hosting starts from €10/month; current pricing is on the website.
+**If any of these is *no*, please consider [moimio.app](https://moimio.app) — the managed hosted version of the same product.** It runs the same code, the same allocation engine, the same registration flow. Hosting, backups, updates, and SSL are handled. Current pricing is on the website.
 
 This guide will continue to walk you through self-hosting if you want it. The cost of self-hosting is not the few euros a month for a VPS — it's the on-call posture during a live event. Make the decision with your eyes open.
 

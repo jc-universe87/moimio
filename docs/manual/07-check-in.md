@@ -2,7 +2,11 @@
 
 The check-in panel is what staff use on the day of the event to mark people as arrived. It's intentionally separate from the rest of the admin UI: a focused full-page view with big tick boxes, optimised for tablets at a registration desk.
 
-<!-- TODO: screenshot at docs/assets/check-in.png — Check-in panel in immersive mode with tick boxes -->
+<p align="center">
+  <img src="../assets/check-in.png" alt="Check-in panel in immersive mode with tick boxes" width="560">
+  <br>
+  <em>Check-in panel in immersive mode</em>
+</p>
 
 ---
 

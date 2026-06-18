@@ -2,7 +2,11 @@
 
 The Reports section is the at-a-glance overview of an event's progress and the place to download printable rosters. Three dashboard tiles plus per-category PDF downloads.
 
-<!-- TODO: screenshot at docs/assets/reports.png — Reports page with the three dashboard tiles plus per-category roster downloads -->
+<p align="center">
+  <img src="../assets/reports.png" alt="Reports page with the three dashboard tiles plus per-category roster downloads" width="560">
+  <br>
+  <em>Reports page: dashboard tiles and per-category roster downloads</em>
+</p>
 
 ---
 

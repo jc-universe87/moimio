@@ -93,7 +93,7 @@ Custom fields are stored per-event — adding "T-shirt size" to one event doesn'
 
 The form always asks for an optional **group code** — a short alphanumeric string typed by people who registered together (a family, a friend group). Anyone entering the same group code becomes a cluster the engine will try to keep together. See [section 5](05-group-types-and-units.md) for the full mechanics.
 
-Group codes follow the format `STEM-NNN` (e.g. `SMITH-742`) for readability. **If a registrant doesn't enter one**, Moimio auto-generates one server-side using their surname and a random three-digit suffix, and includes it in the registration confirmation email — so the registrant can share it with anyone else who'd like to be grouped with them later.
+Group codes follow the format `STEM-NNN` (e.g. `SMITH-742`) for readability. **If a registrant doesn't enter one**, Moimio auto-generates one server-side using their surname and a unique numeric suffix (three digits in the normal case, more only if that surname is already very common in the event), and includes it in the registration confirmation email — so the registrant can share it with anyone else who'd like to be grouped with them later.
 
 ---
 
