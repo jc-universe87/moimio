@@ -591,6 +591,8 @@
   "nav.backup": "Sauvegarde",
   "nav.checkin": "Check-in",
   "nav.events": "Événements",
+  "nav.manage": "Gestion",
+  "nav.manage_account": "Gérer le compte",
   "nav.marks": "Marques",
   "nav.more": "Plus",
   "nav.more.event_details": "Détails de l’événement",

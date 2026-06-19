@@ -13,6 +13,8 @@ import { events as eventsApi } from '../services/api';
 import {
   IconDetails, IconRegistrationForm,
   IconMarks, IconStaff,
+  IconCalendar, IconBackup, IconWebhook, IconWorkspace,
+  IconAccount, IconTour, IconSettings, IconSignOut,
 } from './icons/MoreIcons';
 
 // v0.58i: auto-populated at build time from frontend/package.json
@@ -444,10 +446,11 @@ export default function AdminLayout() {
                    them on whatever page they'd reached. */
                 <NavLink to="/admin" end onClick={closeSidebar}
                   className={({ isActive }) =>
-                    `block px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       isActive ? 'bg-steel-blue text-white' : 'text-white/60 hover:text-white hover:bg-white/5'
                     }`}>
-                  {t('nav.events')}
+                  <IconCalendar className="shrink-0" />
+                  <span>{t('nav.events')}</span>
                 </NavLink>
               )}
             </div>
@@ -470,38 +473,82 @@ export default function AdminLayout() {
                 </div>
               </div>
             )}
-            {/* Backup — always visible for admins.
-                v0.70d-2b (R11): routes to the BackupPage at /admin/backup
-                instead of opening a sidebar modal that duplicated the
-                page. The modal is gone. */}
-            {!isStaff && (
+            {/* Verwaltung — workspace admin tools (v1.0.1). Previously an
+                unlabelled strip of Backup/Webhooks/Workspace/Manage account;
+                now one labelled band with Benutzer pulled up from the footer.
+                Shows for any admin, plus staff who can manage users (so a
+                can_manage_users staff keeps the Benutzer link they used to
+                have in the footer). Each row keeps its own gate; the wrapper
+                is true only when at least one child can render, so the label
+                never appears on its own. */}
+            {(!isStaff || canManageUsers) && (
               <div className="px-3 pb-1">
-                <div className="border-t border-white/10 pt-2">
-                  <button onClick={() => { navigate('/admin/backup'); closeSidebar(); }}
-                    className="block w-full text-left px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">
-                    {t('nav.backup')}
-                  </button>
-                  {/* v1.0.0g: Webhooks. Super-admin only AND the outbound
-                      webhook capability has to be on. Hidden for staff
-                      and event-admins; hidden when FEATURE_OUTBOUND_WEBHOOKS
-                      is off (in which case the backend router isn't
-                      registered either, so clicking would 404). */}
-                  {user?.role === 'super_admin' && capabilities.outbound_webhooks && (
-                    <button onClick={() => { navigate('/admin/webhooks'); closeSidebar(); }}
-                      className="block w-full text-left px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">
-                      {t('nav.webhooks')}
+                <div className="border-t border-white/10 pt-2 space-y-0.5">
+                  <p className="px-2 py-0.5 text-[8px] uppercase tracking-wider text-white/20 font-semibold">{t('nav.manage')}</p>
+                  {/* Benutzer (Users) — admins with permission. ?from={eventId}
+                      when opened inside an event so UserManagementPage can
+                      render a "Back to event" breadcrumb (v0.50d-4b). */}
+                  {canManageUsers && (
+                    <button onClick={() => {
+                        const target = insideEvent ? `/admin/users?from=${eventId}` : '/admin/users';
+                        navigate(target);
+                        closeSidebar();
+                      }}
+                      className={`flex items-center gap-2.5 w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                        location.pathname === '/admin/users'
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/50 hover:text-white/80 hover:bg-white/5'
+                      }`}>
+                      <IconStaff className="shrink-0" />
+                      <span>{t('nav.users')}</span>
                     </button>
                   )}
-                  {/* v1.0.0v: Workspace settings — currently houses only the
-                      Danger Zone (customer-triggered workspace deletion).
-                      Super-admin-only; no capability flag — basic admin
-                      feature, the endpoint just queues a webhook event
-                      that's a no-op for self-hosters with no SaaS endpoint. */}
-                  {user?.role === 'super_admin' && (
-                    <button onClick={() => { navigate('/admin/workspace'); closeSidebar(); }}
-                      className="block w-full text-left px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">
-                      {t('nav.workspace')}
+                  {/* Backup — admins (not staff). v0.70d-2b (R11): routes to
+                      the BackupPage at /admin/backup. */}
+                  {!isStaff && (
+                    <button onClick={() => { navigate('/admin/backup'); closeSidebar(); }}
+                      className="flex items-center gap-2.5 w-full text-left px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">
+                      <IconBackup className="shrink-0" />
+                      <span>{t('nav.backup')}</span>
                     </button>
+                  )}
+                  {/* Webhooks. Super-admin only AND the outbound webhook
+                      capability on (when off, the backend router isn't
+                      registered, so clicking would 404). Kept visible for
+                      self-hosters — posting allocation events to an endpoint
+                      you control is a genuine integration feature. */}
+                  {isSuperAdmin && capabilities.outbound_webhooks && (
+                    <button onClick={() => { navigate('/admin/webhooks'); closeSidebar(); }}
+                      className="flex items-center gap-2.5 w-full text-left px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">
+                      <IconWebhook className="shrink-0" />
+                      <span>{t('nav.webhooks')}</span>
+                    </button>
+                  )}
+                  {/* Workspace settings — currently houses only the Danger
+                      Zone (customer-triggered workspace deletion). v1.0.1:
+                      gated on capabilities.account_url, the "managed instance"
+                      signal the SaaS injects (same gate as Manage account).
+                      Self-hosters have no SaaS endpoint, so the delete action
+                      is a no-op for them — hide it. */}
+                  {isSuperAdmin && capabilities.account_url && (
+                    <button onClick={() => { navigate('/admin/workspace'); closeSidebar(); }}
+                      className="flex items-center gap-2.5 w-full text-left px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">
+                      <IconWorkspace className="shrink-0" />
+                      <span>{t('nav.workspace')}</span>
+                    </button>
+                  )}
+                  {/* Manage account — external link to the SaaS account portal
+                      (billing, credits, workspace details). Super-admin only,
+                      and only when the SaaS injected an account URL. Opens in
+                      a new tab — a separate app, not in-app navigation. */}
+                  {isSuperAdmin && capabilities.account_url && (
+                    <a href={capabilities.account_url} target="_blank" rel="noopener noreferrer"
+                      onClick={closeSidebar}
+                      className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">
+                      <IconAccount className="shrink-0" />
+                      <span className="flex-1">{t('nav.manage_account')}</span>
+                      <span aria-hidden="true" className="text-[9px] opacity-60">↗</span>
+                    </a>
                   )}
                 </div>
               </div>
@@ -518,41 +565,25 @@ export default function AdminLayout() {
                 <div className="text-[11px] text-white/65 truncate">{user?.full_name}</div>
                 <div className="text-[9px] text-white/40 truncate">{user?.role ? t('role.' + user.role) : ''}</div>
               </div>
-              {/* User management link — admins with permission. When
-                  clicked from inside an event, passes ?from={eventId} so
-                  UserManagementPage can render a "Back to event" breadcrumb
-                  (v0.50d-4b). Single-click return to the event context. */}
-              {canManageUsers && (
-                <button onClick={() => {
-                    const target = insideEvent
-                      ? `/admin/users?from=${eventId}`
-                      : '/admin/users';
-                    navigate(target);
-                    closeSidebar();
-                  }}
-                  className={`block w-full text-left px-2 py-1 rounded-lg text-[10px] transition-colors mb-0.5 ${
-                    location.pathname === '/admin/users'
-                      ? 'text-white bg-white/10'
-                      : 'text-white/55 hover:text-white hover:bg-white/5'
-                  }`}>
-                  {t('nav.users')}
-                </button>
-              )}
               {/* v0.70d-2c (R3-C-hybrid): re-open the welcome overlay
                   any time. Sits above Preferences so it reads as a
-                  "review" action rather than a settings toggle. */}
+                  "review" action rather than a settings toggle.
+                  (v1.0.1: Benutzer moved up into the Verwaltung band.) */}
               <button onClick={() => { setShowWelcome(true); closeSidebar(); }}
-                className="block w-full text-left px-2 py-1 rounded-lg text-[10px] text-white/55 hover:text-white hover:bg-white/5 transition-colors">
-                {t('nav.welcome_tour')}
+                className="flex items-center gap-2.5 w-full text-left px-2 py-1 rounded-lg text-[10px] text-white/55 hover:text-white hover:bg-white/5 transition-colors">
+                <IconTour className="shrink-0" width={13} height={13} />
+                <span>{t('nav.welcome_tour')}</span>
               </button>
               <button onClick={() => setShowPrefs(!showPrefs)}
-                className="block w-full text-left px-2 py-1 rounded-lg text-[10px] text-white/55 hover:text-white hover:bg-white/5 transition-colors">
-                {showPrefs ? t('common.close_prefs') : t('prefs.title')}
+                className="flex items-center gap-2.5 w-full text-left px-2 py-1 rounded-lg text-[10px] text-white/55 hover:text-white hover:bg-white/5 transition-colors">
+                <IconSettings className="shrink-0" width={13} height={13} />
+                <span>{showPrefs ? t('common.close_prefs') : t('prefs.title')}</span>
               </button>
               {showPrefs && <UserPreferencesPanel onClose={() => setShowPrefs(false)} />}
               <button onClick={handleLogout}
-                className="block w-full text-left px-2 py-1 rounded-lg text-[10px] text-white/55 hover:text-white hover:bg-white/5 transition-colors">
-                {t('nav.sign_out')}
+                className="flex items-center gap-2.5 w-full text-left px-2 py-1 rounded-lg text-[10px] text-white/55 hover:text-white hover:bg-white/5 transition-colors">
+                <IconSignOut className="shrink-0" width={13} height={13} />
+                <span>{t('nav.sign_out')}</span>
               </button>
               {/* Version + legal + theme toggle (§9.8) */}
               <div className="flex items-center justify-between mt-1 gap-1">

@@ -58,6 +58,11 @@ services:
       MOIMIO_WEBHOOK_URL: ${MOIMIO_WEBHOOK_URL:-}
       MOIMIO_WEBHOOK_SECRET: ${MOIMIO_WEBHOOK_SECRET:-}
       WEBHOOK_DELIVERY_RETENTION_DAYS: ${WEBHOOK_DELIVERY_RETENTION_DAYS:-30}
+      # v1.0.0aa: SaaS account-portal URL. Empty by default (self-hosters
+      # see no "Manage account" link). Listed here so Compose forwards it
+      # from .env when set — without this line the var is ignored, same as
+      # the capability flags above.
+      ACCOUNT_URL: ${ACCOUNT_URL:-}
     ports:
       - "${BACKEND_PORT:-6121}:8000"
     volumes:

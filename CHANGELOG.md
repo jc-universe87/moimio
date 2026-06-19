@@ -14,6 +14,41 @@ Nothing yet. Open issues at <https://github.com/jc-universe87/moimio/issues> for
 
 ---
 
+## [1.0.1] — 2026-06-19
+
+### Changed
+
+- **Tidier admin sidebar.** The workspace-admin items (Users, Backup,
+  Webhooks, Workspace, Manage account) are now grouped under a single
+  labelled section, each with an icon, and the Users link moved up from
+  the footer into that group. The footer is now purely personal — welcome
+  tour, preferences, sign out. Nothing was removed; items were regrouped
+  and reordered.
+- **Workspace settings is hidden on self-hosted instances.** Its only
+  action — workspace deletion — signals a managed backend to deprovision,
+  which does nothing without one. It now appears only when an
+  account-portal URL is configured (the same managed-instance signal as
+  Manage account). Webhooks stays visible for self-hosters: posting
+  allocation events to an endpoint you control is a genuine integration
+  feature.
+
+---
+
+## [1.0.0aa] — 2026-06-18
+
+### Added
+
+- **Optional "Manage account" link in the admin sidebar.** When the
+  deployment is given an account-portal URL (the `ACCOUNT_URL` setting,
+  surfaced via `GET /api/capabilities`), super-admins see a sidebar link to
+  that portal, opening in a new tab. Self-hosters who do not set it see no
+  change — the link is simply absent. Like `buy_credit_url`, this is a
+  configuration value, not a mode switch: CE renders a link if it is given
+  one. The bundled production compose template forwards `ACCOUNT_URL` to
+  the backend container.
+
+---
+
 ## [1.0.0z] — 2026-06-14
 
 Completes the `event.over_cap` wiring introduced in v1.0.0y.

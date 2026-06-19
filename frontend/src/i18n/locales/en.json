@@ -591,6 +591,8 @@
   "nav.backup": "Backup",
   "nav.checkin": "Check-in",
   "nav.events": "Events",
+  "nav.manage": "Manage",
+  "nav.manage_account": "Manage account",
   "nav.marks": "Marks",
   "nav.more": "More",
   "nav.more.event_details": "Event details",

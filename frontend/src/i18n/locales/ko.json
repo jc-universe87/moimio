@@ -591,6 +591,8 @@
   "nav.backup": "백업",
   "nav.checkin": "체크인",
   "nav.events": "이벤트",
+  "nav.manage": "관리",
+  "nav.manage_account": "계정 관리",
   "nav.marks": "마크",
   "nav.more": "더보기",
   "nav.more.event_details": "이벤트 정보",

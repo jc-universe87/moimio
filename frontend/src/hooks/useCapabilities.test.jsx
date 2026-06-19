@@ -158,6 +158,62 @@ describe('useCapabilities', () => {
     });
   });
 
+  // ── v1.0.0aa: account_url (SaaS account-portal link) ──
+  it('exposes account_url when the API returns a string', async () => {
+    capabilitiesApi.get.mockResolvedValue({
+      allocation: true,
+      outbound_webhooks: true,
+      create_event_confirmation: false,
+      account_url: 'https://saas.moimio.app/account',
+    });
+    render(
+      <CapabilitiesProvider>
+        <HookProbe />
+      </CapabilitiesProvider>,
+    );
+    await waitFor(() => {
+      const caps = JSON.parse(screen.getByTestId('caps').textContent);
+      expect(caps.account_url).toBe('https://saas.moimio.app/account');
+    });
+  });
+
+  it('defaults account_url to empty string when the API omits it', async () => {
+    // A self-hoster's backend never sets ACCOUNT_URL, so the field is
+    // absent. The hook MUST treat that as empty so the "Manage account"
+    // link stays hidden — never surface a hosted-only link by accident.
+    capabilitiesApi.get.mockResolvedValue({
+      allocation: true,
+      outbound_webhooks: true,
+      create_event_confirmation: false,
+      // account_url intentionally absent
+    });
+    render(
+      <CapabilitiesProvider>
+        <HookProbe />
+      </CapabilitiesProvider>,
+    );
+    await waitFor(() => {
+      const caps = JSON.parse(screen.getByTestId('caps').textContent);
+      expect(caps.account_url).toBe('');
+    });
+  });
+
+  it('defaults account_url to empty string when the API fetch fails', async () => {
+    // Fail-closed: a transient capabilities failure must not render the
+    // link (better to hide it until the next load than to show it wrongly).
+    capabilitiesApi.get.mockRejectedValue(new Error('network'));
+    render(
+      <CapabilitiesProvider>
+        <HookProbe />
+      </CapabilitiesProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('loading').textContent).toBe('false');
+    });
+    const caps = JSON.parse(screen.getByTestId('caps').textContent);
+    expect(caps.account_url).toBe('');
+  });
+
   it('uses optimistic defaults during the initial fetch', () => {
     // Before the API responds, the consumer sees the defaults — which
     // are deliberately tuned: optimistic-on for capabilities that

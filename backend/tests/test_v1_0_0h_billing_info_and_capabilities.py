@@ -76,6 +76,31 @@ async def test_capabilities_remains_unauthenticated(client, monkeypatch):
     assert resp.status_code == 200
 
 
+# ─── /api/capabilities — v1.0.0aa account_url (SaaS portal link) ─────────
+
+
+async def test_capabilities_account_url_empty_by_default(client, monkeypatch):
+    """No ACCOUNT_URL set → empty string. CE hides the Manage-account link."""
+    monkeypatch.delenv("ACCOUNT_URL", raising=False)
+    get_settings.cache_clear()
+
+    resp = await client.get("/api/capabilities")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "account_url" in body
+    assert body["account_url"] == ""
+
+
+async def test_capabilities_account_url_reflects_env(client, monkeypatch):
+    """ACCOUNT_URL set → comes through as-is for CE to render the link."""
+    monkeypatch.setenv("ACCOUNT_URL", "https://saas.moimio.app/account")
+    get_settings.cache_clear()
+
+    resp = await client.get("/api/capabilities")
+    assert resp.status_code == 200
+    assert resp.json()["account_url"] == "https://saas.moimio.app/account"
+
+
 # ─── /api/billing-info — auth-gated, returns the buy-credit link ─────────
 
 

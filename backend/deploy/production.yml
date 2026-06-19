@@ -48,7 +48,7 @@ services:
       retries: 5
 
   backend:
-    image: ghcr.io/jc-universe87/moimio-backend:v1.0.0z
+    image: ghcr.io/jc-universe87/moimio-backend:v1.0.1
     restart: unless-stopped
     environment:
       PYTHONDONTWRITEBYTECODE: "1"
@@ -84,6 +84,11 @@ services:
       # blocks registration. Self-hosters who don't set it get the empty
       # default, i.e. no cap.
       MOIMIO_PARTICIPANT_CAP: ${MOIMIO_PARTICIPANT_CAP:-}
+      # v1.0.0aa: SaaS account-portal URL. Optional; blank/unset means no
+      # "Manage account" sidebar link (self-hosters get the empty default).
+      # The SaaS injects its portal URL here per tenant. Surfaced to the
+      # frontend via GET /api/capabilities.
+      ACCOUNT_URL: ${ACCOUNT_URL:-}
     networks:
       - internal
     depends_on:
@@ -97,7 +102,7 @@ services:
       start_period: 30s
 
   frontend:
-    image: ghcr.io/jc-universe87/moimio-frontend:v1.0.0z
+    image: ghcr.io/jc-universe87/moimio-frontend:v1.0.1
     restart: unless-stopped
     networks:
       - internal

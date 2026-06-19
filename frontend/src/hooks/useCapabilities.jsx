@@ -32,6 +32,12 @@ const DEFAULT_CAPABILITIES = {
   // SaaS tenant just doesn't see the dialog on a flicker, which is
   // recoverable; a self-hoster never sees it spuriously.
   create_event_confirmation: false,
+  // v1.0.0aa: SaaS account-portal URL. Empty by default — like
+  // create_event_confirmation, a missing/failed fetch must NOT surface a
+  // hosted-only link. A self-hoster (or a transient capabilities failure)
+  // keeps the empty default and the "Manage account" link stays hidden; a
+  // real tenant just doesn't see it until the next load. Fail-closed.
+  account_url: '',
 };
 
 const CapabilitiesContext = createContext({
@@ -57,6 +63,10 @@ export function CapabilitiesProvider({ children }) {
             // than "off" — and missing-means-off is the right default
             // for a flag added in a later version.
             create_event_confirmation: data.create_event_confirmation === true,
+            // v1.0.0aa: string passthrough; anything non-string (missing,
+            // null) becomes '' so the link stays hidden. Same fail-closed
+            // intent as create_event_confirmation above.
+            account_url: typeof data.account_url === 'string' ? data.account_url : '',
           });
         }
       })

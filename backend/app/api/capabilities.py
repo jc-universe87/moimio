@@ -30,6 +30,11 @@ class CapabilitiesResponse(BaseModel):
     # before completing event creation and show a confirmation dialog
     # rendering the returned amount/currency/card-last-4.
     create_event_confirmation: bool
+    # v1.0.0aa: the SaaS account-portal URL. Empty for self-hosters; when
+    # set, CE shows a "Manage account" link in the admin sidebar. A value,
+    # not a mode flag — CE renders the link if given one. Non-sensitive
+    # (the portal itself is behind its own magic-link sign-in).
+    account_url: str = ""
 
 
 @router.get("/api/capabilities", response_model=CapabilitiesResponse)
@@ -39,4 +44,5 @@ async def get_capabilities() -> CapabilitiesResponse:
         allocation=settings.feature_allocation,
         outbound_webhooks=settings.feature_outbound_webhooks,
         create_event_confirmation=settings.feature_create_event_confirmation,
+        account_url=settings.account_url,
     )

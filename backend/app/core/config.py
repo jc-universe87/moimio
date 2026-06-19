@@ -68,6 +68,14 @@ class Settings(BaseSettings):
     # never set it.
     buy_credit_url: str = ""
 
+    # v1.0.0aa: where CE's "Manage account" sidebar link points. The SaaS
+    # injects its account-portal URL here; CE reads it via GET
+    # /api/capabilities and shows the link only when it's non-empty. Empty
+    # = no link, and CE omits it (self-hosters never set it). Like
+    # buy_credit_url this is a SaaS-managed *value*, not a mode flag — CE
+    # stays mode-agnostic and simply renders a link if it's given one.
+    account_url: str = ""
+
     # DEPRECATED (pre-v1.0.0w charge-on-creation model, superseded by the
     # prepaid-credit model in product policy v1). No longer read by the
     # billing-info endpoint. Retained as recognised settings so existing
