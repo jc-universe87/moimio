@@ -10,7 +10,15 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ## [Unreleased]
 
-Nothing yet. Open issues at <https://github.com/jc-universe87/moimio/issues> for things you'd like to see.
+### Changed
+
+- **Imported CSV columns now show up automatically in the People table.**
+  When a CSV import adds new custom fields (any column the importer
+  doesn't recognise), those columns are now switched on in the People
+  table straight away, so the imported data is visible without opening
+  the column picker. They remain hidden from the public registration
+  form by default, as before — this only affects what you see in the
+  People view.
 
 ---
 

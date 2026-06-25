@@ -10,7 +10,10 @@ import TranslatedError from './TranslatedError';
  * Props:
  *   eventId  — UUID string
  *   onClose  — () => void
- *   onDone   — () => void  called after a successful commit so PeopleTable refreshes
+ *   onDone   — (createdFields) => void  called after a successful commit so
+ *              PeopleTable refreshes. createdFields is the list of custom
+ *              fields the import auto-created (each {id, label, ...}); empty
+ *              when none were made.
  */
 export default function BatchRegisterModal({ eventId, onClose, onDone }) {
   const { t, lang } = useI18n();
@@ -179,7 +182,11 @@ export default function BatchRegisterModal({ eventId, onClose, onDone }) {
       if (json.created > 0) {
         showToast(t('batch.import_complete', { n: json.created }), 'success');
       }
-      onDone();
+      // Hand the fields the import just created back to the parent so it
+      // can switch their columns on automatically (otherwise imported
+      // data sits hidden behind the column picker, which reads as "the
+      // import did nothing"). Empty array when no new fields were made.
+      onDone(json.created_custom_fields || []);
     } catch (err) {
       setError(err);
       setStage('preview_ready');

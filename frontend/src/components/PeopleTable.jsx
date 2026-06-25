@@ -1625,7 +1625,26 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
         <BatchRegisterModal
           eventId={eventId}
           onClose={() => setShowBatch(false)}
-          onDone={() => { setShowBatch(false); if (onDataChange) onDataChange(); }}
+          onDone={(createdFields) => {
+            setShowBatch(false);
+            // Refresh the custom-field definitions so any fields the
+            // import just created become available columns, then switch
+            // those columns on so the imported data is visible right
+            // away — no hunting in the column picker. Persist to the same
+            // per-user key the picker writes, so the choice sticks.
+            if (eventId) {
+              cfApi.list(eventId).then(setCustomFieldDefs).catch(() => {});
+            }
+            if (createdFields && createdFields.length) {
+              const next = new Set(visibleCols);
+              createdFields.forEach(cf => next.add(`cf_${cf.id}`));
+              setVisibleCols(next);
+              if (colsStorageKey) {
+                try { localStorage.setItem(colsStorageKey, JSON.stringify([...next])); } catch {}
+              }
+            }
+            if (onDataChange) onDataChange();
+          }}
         />
       )}
 
