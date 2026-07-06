@@ -4,6 +4,7 @@ import { useConfirmOverlay } from './ConfirmOverlay';
 import StrongDeleteConfirm from './StrongDeleteConfirm';
 import { useI18n } from '../hooks/useI18n';
 import EmptyState from './EmptyState';
+import { formatNamesList } from '../utils/formatNamesList';
 
 import TranslatedError from './TranslatedError';
 const PALETTE = [
@@ -33,6 +34,55 @@ const rgbToHex = (r, g, b) => {
 };
 
 const isValidHex = (s) => /^#[0-9A-Fa-f]{6}$/.test(s);
+
+// v1.0.1c: small hover badge for the mark list — shows how many people
+// carry a mark, and the actual names on hover. Deliberately simpler than
+// GroupCodeTooltip (hover only, no long-press/mobile-sheet): this lives
+// on an admin settings screen, not a live-event-day surface, so the
+// extra touch machinery isn't worth the complexity here.
+function MarkCountBadge({ count, names, lang, t }) {
+  const [open, setOpen] = useState(false);
+  if (!count) {
+    return (
+      <span className="text-[10px] px-2 py-0.5 rounded-full shrink-0"
+        style={{ color: 'var(--text-subtle)', background: 'var(--card-border)' }}>
+        {t('marks.people_count', { count: 0 })}
+      </span>
+    );
+  }
+  return (
+    <span className="relative inline-block shrink-0"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}>
+      <span
+        tabIndex={0}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        className="text-[10px] px-2 py-0.5 rounded-full cursor-default"
+        style={{ color: 'var(--io-accent)', background: 'var(--card-border)' }}>
+        {t('marks.people_count', { count })}
+      </span>
+      {open && (
+        <div
+          role="tooltip"
+          className="absolute right-0 top-full mt-1 z-30 rounded-card shadow-lg p-2.5 max-w-xs"
+          style={{
+            background: 'var(--card-bg-solid)',
+            border: '1px solid var(--card-border)',
+            color: 'var(--text-primary)',
+            whiteSpace: 'normal',
+          }}
+        >
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            {names.length > 12
+              ? `${formatNamesList(names.slice(0, 12), lang)} ${t('strong_delete.and_n_more', { n: names.length - 12 })}`
+              : formatNamesList(names, lang)}
+          </p>
+        </div>
+      )}
+    </span>
+  );
+}
 
 const VIEW_OPTION_KEYS = [
   { id: 'people', labelKey: 'marks.views.people' },
@@ -83,7 +133,7 @@ export default function MarksPanel({ eventId, isAdmin, currentUserId, marksPerm,
   const [deleteTarget, setDeleteTarget] = useState(null); // { id, name, colour }
 
   const { ConfirmOverlay } = useConfirmOverlay();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const VIEW_OPTIONS = VIEW_OPTION_KEYS.map(v => ({ id: v.id, label: t(v.labelKey) }));
 
   // Can the current user modify a specific mark?
@@ -493,6 +543,10 @@ export default function MarksPanel({ eventId, isAdmin, currentUserId, marksPerm,
                             : t('marks.created_by_system'))}
                     </p>
                   </div>
+                  {(() => {
+                    const { names, total } = assigneesFor(def.id);
+                    return <MarkCountBadge count={total} names={names} lang={lang} t={t} />;
+                  })()}
                   {canModify(def) && (
                     <div className="flex gap-3 shrink-0">
                       <button onClick={() => startEdit(def)}

@@ -568,6 +568,7 @@
   "marks.empty.hint": "Markierungen helfen, Teilnehmer zu kennzeichnen — z. B. Ernährung, Minderjährige, Barrierefreiheit oder interne Hinweise.",
   "marks.empty.title": "Noch keine Markierungen vorhanden.",
   "marks.hidden_everywhere": "Überall ausgeblendet",
+  "marks.people_count": "{count} Personen",
   "marks.import": "Aus Event importieren",
   "marks.import.hint": "Markierungsdefinitionen (nicht die Zuweisungen) aus einem anderen Event übernehmen:",
   "marks.import.submit": "Importieren",

@@ -568,6 +568,7 @@
   "marks.empty.hint": "Marks flag participants for review — dietary needs, minors, accessibility, anything the organising team needs to remember.",
   "marks.empty.title": "No marks defined yet.",
   "marks.hidden_everywhere": "Hidden everywhere",
+  "marks.people_count": "{count} people",
   "marks.import": "Import from event",
   "marks.import.hint": "Copy mark definitions (not assignments) from a previous event:",
   "marks.import.submit": "Import",

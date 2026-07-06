@@ -568,6 +568,7 @@
   "marks.empty.hint": "Las marcas resaltan participantes — dieta, menores, accesibilidad u otra información relevante.",
   "marks.empty.title": "Aún no hay marcas definidas.",
   "marks.hidden_everywhere": "Oculto en todas partes",
+  "marks.people_count": "{count} personas",
   "marks.import": "Importar de evento",
   "marks.import.hint": "Copia definiciones de marcas (no asignaciones) de otro evento:",
   "marks.import.submit": "Importar",

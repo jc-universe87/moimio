@@ -568,6 +568,7 @@
   "marks.empty.hint": "Marcações destacam participantes para atenção — dieta, menores de idade, acessibilidade ou qualquer detalhe importante para a equipe.",
   "marks.empty.title": "Ainda não há marcações definidas.",
   "marks.hidden_everywhere": "Oculto em todos os lugares",
+  "marks.people_count": "{count} pessoas",
   "marks.import": "Importar de outro evento",
   "marks.import.hint": "Copie as definições de marcações (não as atribuições) de um evento anterior:",
   "marks.import.submit": "Importar",

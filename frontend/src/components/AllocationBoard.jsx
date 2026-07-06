@@ -516,8 +516,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     : !!category?.exclusive_group_codes;
 
   const handleExclusiveGroupCodesToggle = async (value) => {
-    const previousValue = !!category?.exclusive_group_codes;
-    if (previousValue === !!value) return;
+    if (exclusiveGroupCodesValue === !!value) return;
     setExclusiveGroupCodesOverride(!!value);
     try {
       await catApi.update(eventId, category.id, { exclusive_group_codes: !!value });

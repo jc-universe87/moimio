@@ -99,6 +99,7 @@ async def list_categories(db: AsyncSession, event_id: uuid.UUID) -> list[dict]:
             "item_label": cat.item_label,
             "description": cat.description, "rule_type": cat.rule_type,
             "has_capacity": cat.has_capacity, "has_gender_restriction": cat.has_gender_restriction,
+            "exclusive_group_codes": cat.exclusive_group_codes,
             "sort_order": cat.sort_order, "is_default": cat.is_default,
             "confirmed": cat.confirmed,
             "unit_count": unit_count, "allocated_count": allocated,

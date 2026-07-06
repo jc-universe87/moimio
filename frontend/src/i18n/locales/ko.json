@@ -568,6 +568,7 @@
   "marks.empty.hint": "마크는 특별한 주의가 필요한 참가자를 표시합니다 — 식단 요구, 미성년자, 접근성 등 운영팀이 기억해야 할 사항입니다.",
   "marks.empty.title": "아직 마크가 정의되지 않았습니다.",
   "marks.hidden_everywhere": "모든 곳에서 숨김",
+  "marks.people_count": "{count}명",
   "marks.import": "이벤트에서 가져오기",
   "marks.import.hint": "이전 이벤트에서 마크 정의(할당 제외)를 복사합니다:",
   "marks.import.submit": "가져오기",

@@ -568,6 +568,7 @@
   "marks.empty.hint": "Les marques signalent les participants nécessitant une attention particulière — régime, mineurs, accessibilité, etc.",
   "marks.empty.title": "Aucune marque définie pour le moment.",
   "marks.hidden_everywhere": "Masquée partout",
+  "marks.people_count": "{count} personnes",
   "marks.import": "Importer depuis un événement",
   "marks.import.hint": "Copiez les définitions de marques (sans les affectations) depuis un événement précédent :",
   "marks.import.submit": "Importer",

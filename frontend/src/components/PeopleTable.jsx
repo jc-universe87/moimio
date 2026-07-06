@@ -383,7 +383,10 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
         if (p.church_organisation && p.church_organisation.toLowerCase().includes(q)) return true;
         // Search by mark name
         if (matchingMarkIds.size > 0) {
-          const pMarkIds = new Set((markAssignments[String(p.id)] || []).map(a => String(a.mark_id)));
+          const pid = String(p.id);
+          const pMarkIds = new Set(
+            markAssignments.filter(a => String(a.participant_id) === pid).map(a => String(a.mark_id))
+          );
           if ([...matchingMarkIds].some(id => pMarkIds.has(id))) return true;
         }
         return false;
@@ -404,7 +407,32 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
         if (aCancelled !== bCancelled) return aCancelled ? 1 : -1;
       }
       let va, vb;
-      switch (sortCol) {
+      if (sortCol.startsWith('cf:')) {
+        const cfId = sortCol.slice(3);
+        const cfDef = customFieldDefs.find(cf => String(cf.id) === cfId);
+        const rawA = a.custom_fields?.[cfId];
+        const rawB = b.custom_fields?.[cfId];
+        if (cfDef?.field_type === 'select' && cfDef.options?.choices) {
+          const idx = (v) => {
+            const i = cfDef.options.choices.indexOf(v);
+            return i === -1 ? -1 : i; // unset/unknown values sort first, ascending
+          };
+          va = idx(rawA); vb = idx(rawB);
+        } else if (cfDef?.field_type === 'number') {
+          va = rawA === undefined || rawA === null || rawA === '' ? -Infinity : parseFloat(rawA);
+          vb = rawB === undefined || rawB === null || rawB === '' ? -Infinity : parseFloat(rawB);
+          if (Number.isNaN(va)) va = -Infinity;
+          if (Number.isNaN(vb)) vb = -Infinity;
+        } else if (cfDef?.field_type === 'boolean') {
+          const truthy = (v) => String(v).toLowerCase() === 'true' || v === '1' ? 1 : 0;
+          va = rawA ? truthy(rawA) : -1; // unset sorts before both false and true
+          vb = rawB ? truthy(rawB) : -1;
+        } else {
+          // text, date (ISO strings sort correctly as text), and unknown types
+          va = rawA || ''; vb = rawB || '';
+        }
+      } else {
+        switch (sortCol) {
         case 'participant_number': va = a.participant_number || 0; vb = b.participant_number || 0; break;
       case 'name': va = `${a.first_name} ${a.last_name}`; vb = `${b.first_name} ${b.last_name}`; break;
         case 'email': va = a.email; vb = b.email; break;
@@ -417,6 +445,7 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
         case 'country': va = a.country || ''; vb = b.country || ''; break;
         case 'church_organisation': va = a.church_organisation || ''; vb = b.church_organisation || ''; break;
         default: va = ''; vb = '';
+        }
       }
       if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
       if (va < vb) return sortDir === 'asc' ? -1 : 1;
