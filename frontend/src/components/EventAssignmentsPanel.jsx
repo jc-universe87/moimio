@@ -182,7 +182,7 @@ export default function EventAssignmentsPanel({ eventId, isAdmin, onChange }) {
     if (role === 'event_admin') return t('staff.role.event_admin_full');
     if (!perms || Object.keys(perms).length === 0) return t('common.no_access');
     const parts = [];
-    if (perms.people) parts.push(`${t('marks.views.people')}: ${perms.people}`);
+    if (perms.people) parts.push(`${t('nav.people')}: ${perms.people}`);
     if (perms.organise) parts.push(`${t('nav.organise')}: ${perms.organise}`);
     if (perms.checkin && (typeof perms.checkin === 'object' ? perms.checkin.access : perms.checkin)) {
       parts.push(`${t('nav.checkin')}: ${t('common.enabled')}`);
@@ -306,7 +306,7 @@ export default function EventAssignmentsPanel({ eventId, isAdmin, onChange }) {
               {/* People — read / write / none */}
               <div className="flex items-center gap-3">
                 <span className="text-xs w-32 shrink-0" style={{ color: 'var(--text-muted)' }}>
-                  {t('marks.views.people')}
+                  {t('staff.roles.perm.people_label')}
                 </span>
                 <select value={assignForm.permissions.people || ''}
                   onChange={e => setAssignForm(p => ({ ...p, permissions: { ...p.permissions, people: e.target.value } }))}
@@ -318,7 +318,7 @@ export default function EventAssignmentsPanel({ eventId, isAdmin, onChange }) {
               {/* Allocation board — read / write / none */}
               <div className="flex items-center gap-3">
                 <span className="text-xs w-32 shrink-0" style={{ color: 'var(--text-muted)' }}>
-                  {t('nav.organise')}
+                  {t('staff.roles.perm.organise_label')}
                 </span>
                 <select value={assignForm.permissions.organise || ''}
                   onChange={e => setAssignForm(p => ({ ...p, permissions: { ...p.permissions, organise: e.target.value } }))}

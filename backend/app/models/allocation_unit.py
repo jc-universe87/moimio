@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Integer, ForeignKey, DateTime, func
+from sqlalchemy import String, Integer, Boolean, ForeignKey, DateTime, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -19,6 +19,19 @@ class AllocationUnit(Base):
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     capacity: Mapped[int] = mapped_column(Integer, nullable=False)  # v0.74: required; "uncapped" concept removed
     gender_restriction: Mapped[str | None] = mapped_column(String(10), nullable=True)  # "male", "female", or null
+    # v1.0.1e: optional single-mark restriction. When set, only participants
+    # carrying this mark may be placed in the unit (the mark twin of
+    # gender_restriction). FK SET NULL so deleting the mark quietly lifts the
+    # restriction rather than orphaning it.
+    mark_restriction: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("mark_definitions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # v1.0.1e: "keep as-is" flag. When true the unit is frozen on re-allocate —
+    # its occupants stay, it receives no new placements, and clear/commit skip
+    # it. Defaults false so existing units are untouched.
+    is_kept: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

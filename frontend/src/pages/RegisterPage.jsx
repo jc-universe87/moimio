@@ -4,6 +4,17 @@ import { participants } from '../services/api';
 import { I18nProvider, useI18n, SUPPORTED_LANGS } from '../hooks/useI18n';
 import TranslatedError from '../components/TranslatedError';
 
+// v1.0.1d grouping v2: mirror the backend group-code rules so the live
+// preview matches exactly what the server will store.
+//   stemFromName    → backend _stem_from: uppercase, A-Z/0-9 only, max 8,
+//                     fallback "GROUP" (e.g. a Hangul-only surname → GROUP).
+//   isCompleteGroupCode → backend _is_complete_code: STEM-NNN shape.
+const stemFromName = (text) => {
+  const cleaned = (text || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return cleaned.slice(0, 8) || 'GROUP';
+};
+const isCompleteGroupCode = (code) => /^[A-Z0-9]+-\d+$/.test((code || '').trim().toUpperCase());
+
 // Inner component — uses i18n context
 function RegisterForm() {
   const { eventId } = useParams();
@@ -29,6 +40,9 @@ function RegisterForm() {
   ]);
   // Grouping mode: 'none' (default) | 'code' (have a group code) | 'request' (have name only)
   const [groupingMode, setGroupingMode] = useState('none');
+  // v1.0.1d grouping v2: "start a group" custom-name field.
+  const [startCustomName, setStartCustomName] = useState('');
+  const [showCustomName, setShowCustomName] = useState(false);
   const [extraPersons, setExtraPersons] = useState([]); // multi-person registration
   // v0.70d-3c-8a: per-extra-person validation errors. Same shape as
   // extraPersons but values are error-flag objects:
@@ -78,7 +92,7 @@ function RegisterForm() {
             if (d.formData) setFormData(fd => ({ ...fd, ...d.formData }));
             if (d.customValues) setCustomValues(d.customValues);
             if (d.extraPersons) setExtraPersons(d.extraPersons);
-            if (d.groupingMode) setGroupingMode(d.groupingMode);
+            if (d.groupingMode) setGroupingMode(d.groupingMode === 'code' ? 'join' : d.groupingMode);
           }
         } catch {}
       }
@@ -201,10 +215,16 @@ function RegisterForm() {
         if (isFieldEnabled(f) && formData[f]) submission[f] = formData[f];
       }
       if (formData.message) submission.message = formData.message;
-      // Send group_code only if user picked 'code' mode
-      if (groupingMode === 'code' && formData.group_code.trim()) {
+      // v1.0.1d grouping v2. 'join' sends the code the registrant was
+      // given. 'start' sends a custom group name only if the registrant
+      // opened the customise field and typed one; otherwise nothing is
+      // sent and the backend derives the code from the surname. 'none'
+      // and 'request' send no group_code here.
+      if (groupingMode === 'join' && formData.group_code.trim()) {
         submission.group_code = formData.group_code.trim();
         if (formData.group_code_categories) submission.group_code_categories = formData.group_code_categories;
+      } else if (groupingMode === 'start' && showCustomName && startCustomName.trim()) {
+        submission.group_code = startCustomName.trim();
       }
       const cfEntries = Object.entries(customValues).filter(([_, v]) => v);
       if (cfEntries.length > 0) submission.custom_fields = Object.fromEntries(cfEntries);
@@ -475,12 +495,26 @@ function RegisterForm() {
                     {cf.options.choices.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                   </select>
                 ) : cf.field_type === 'boolean' ? (
-                  <label className="flex items-center gap-2 text-sm text-gray-600">
-                    <input type="checkbox" checked={customValues[cf.id] === 'true'}
-                      onChange={e => handleCustomChange(cf.id, e.target.checked ? 'true' : 'false')}
-                      className="h-4 w-4 text-steel-blue border-gray-300 rounded focus:ring-steel-blue" />
-                    {t('common.yes')}
-                  </label>
+                  // v1.0.1d bug #1: a required yes/no was a single checkbox,
+                  // so "required" forced everyone to tick Yes. Now two radios,
+                  // neither selected by default; native radio-group `required`
+                  // makes required mean "pick Yes or No", not "must say Yes".
+                  <div className="flex items-center gap-5">
+                    <label className="flex items-center gap-2 text-sm text-gray-600">
+                      <input type="radio" name={`cf_${cf.id}`} checked={customValues[cf.id] === 'true'}
+                        onChange={() => handleCustomChange(cf.id, 'true')}
+                        required={cf.is_required}
+                        className="h-4 w-4 text-steel-blue border-gray-300 focus:ring-steel-blue" />
+                      {t('common.yes')}
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-gray-600">
+                      <input type="radio" name={`cf_${cf.id}`} checked={customValues[cf.id] === 'false'}
+                        onChange={() => handleCustomChange(cf.id, 'false')}
+                        required={cf.is_required}
+                        className="h-4 w-4 text-steel-blue border-gray-300 focus:ring-steel-blue" />
+                      {t('common.no')}
+                    </label>
+                  </div>
                 ) : (
                   <input type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : 'text'}
                     value={customValues[cf.id] || ''} onChange={e => handleCustomChange(cf.id, e.target.value)}
@@ -505,11 +539,19 @@ function RegisterForm() {
                 </label>
 
                 <label className="flex items-start gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-white/60 transition-colors">
-                  <input type="radio" name="grouping_mode" value="code"
-                    checked={groupingMode === 'code'}
-                    onChange={() => setGroupingMode('code')}
+                  <input type="radio" name="grouping_mode" value="join"
+                    checked={groupingMode === 'join'}
+                    onChange={() => setGroupingMode('join')}
                     className="mt-0.5 h-4 w-4 text-steel-blue focus:ring-steel-blue" />
-                  <span className="text-xs text-gray-700">{t('grouping.option_code')}</span>
+                  <span className="text-xs text-gray-700">{t('grouping.option_join')}</span>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-white/60 transition-colors">
+                  <input type="radio" name="grouping_mode" value="start"
+                    checked={groupingMode === 'start'}
+                    onChange={() => setGroupingMode('start')}
+                    className="mt-0.5 h-4 w-4 text-steel-blue focus:ring-steel-blue" />
+                  <span className="text-xs text-gray-700">{t('grouping.option_start')}</span>
                 </label>
 
                 {prefEnabled && (
@@ -523,20 +565,41 @@ function RegisterForm() {
                 )}
               </div>
 
-              {/* Conditional content: code mode */}
-              {groupingMode === 'code' && (
+              {/* Conditional content: join mode — enter a code you were given */}
+              {groupingMode === 'join' && (
                 <div className="bg-white rounded-lg p-3 space-y-2">
-                  <p className="text-[11px] text-gray-500 leading-relaxed">{t('grouping.code_explainer')}</p>
-                  {/* Family / multi-person hint */}
-                  {extraPersons.length > 0 && (
-                    <div className="bg-neutral-tint rounded-lg px-3 py-2 text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)', border: '1px solid var(--card-border)' }}>
-                      <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>👨‍👩‍👧 {t('grouping.family_hint_title')}</span>
-                      <span className="block mt-0.5">{t('grouping.family_hint_body')}</span>
-                    </div>
-                  )}
+                  <p className="text-[11px] text-gray-500 leading-relaxed">{t('grouping.join_hint')}</p>
                   <input type="text" name="group_code" value={formData.group_code} onChange={handleChange}
-                    placeholder={t('register.group_code.placeholder')}
+                    placeholder={t('grouping.join_placeholder')}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-steel-blue" />
+                  {formData.group_code.trim() && (
+                    <p className="text-[11px] leading-relaxed"
+                      style={{ color: isCompleteGroupCode(formData.group_code) ? 'var(--success-green, #15803d)' : 'var(--text-muted)' }}>
+                      {isCompleteGroupCode(formData.group_code) ? t('grouping.live_join') : t('grouping.live_incomplete')}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Conditional content: start mode — first of a new group.
+                  No code to type: the preview shows what the code will look
+                  like, derived live from the surname (or a custom name). */}
+              {groupingMode === 'start' && (
+                <div className="bg-white rounded-lg p-3 space-y-2">
+                  <p className="text-[11px] text-gray-500 leading-relaxed">
+                    {t('grouping.start_info', { stem: stemFromName(showCustomName && startCustomName ? startCustomName : formData.last_name) })}
+                  </p>
+                  {showCustomName ? (
+                    <input type="text" value={startCustomName}
+                      onChange={e => setStartCustomName(e.target.value)}
+                      placeholder={t('grouping.custom_placeholder')}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-steel-blue" />
+                  ) : (
+                    <button type="button" onClick={() => setShowCustomName(true)}
+                      className="text-[11px] font-semibold text-steel-blue hover:opacity-80">
+                      {t('grouping.start_customise')}
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -791,14 +854,22 @@ function RegisterForm() {
                               {cf.options.choices.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                             </select>
                           ) : cf.field_type === 'boolean' ? (
-                            <label className="flex items-center gap-2 text-xs text-gray-600">
-                              <input type="checkbox" checked={value === 'true'}
-                                onChange={e => updateEp({ customValues: { ...(ep.customValues || {}), [cf.id]: e.target.checked ? 'true' : 'false' } })}
-                                className={extraPersonErrors[idx]?.[errKey]
-                                  ? "h-4 w-4 text-steel-blue rounded border-2 border-burgundy ring-1 ring-burgundy/40"
-                                  : "h-4 w-4 text-steel-blue border-gray-300 rounded"} />
-                              {t('common.yes')}
-                            </label>
+                            // v1.0.1d bug #1: Ja/Nein radios (was a lone Yes
+                            // checkbox). The existing pre-flight already treats
+                            // a required boolean as unfilled until it's 'true'
+                            // or 'false', so leaving both unselected is caught.
+                            <div className="flex items-center gap-4">
+                              {['true', 'false'].map(rv => (
+                                <label key={rv} className="flex items-center gap-2 text-xs text-gray-600">
+                                  <input type="radio" name={`ep_${idx}_cf_${cf.id}`} checked={value === rv}
+                                    onChange={() => updateEp({ customValues: { ...(ep.customValues || {}), [cf.id]: rv } })}
+                                    className={extraPersonErrors[idx]?.[errKey]
+                                      ? "h-4 w-4 text-steel-blue border-2 border-burgundy ring-1 ring-burgundy/40"
+                                      : "h-4 w-4 text-steel-blue border-gray-300"} />
+                                  {rv === 'true' ? t('common.yes') : t('common.no')}
+                                </label>
+                              ))}
+                            </div>
                           ) : (
                             <input type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : 'text'}
                               value={value}

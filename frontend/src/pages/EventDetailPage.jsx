@@ -441,9 +441,9 @@ export default function EventDetailPage() {
 
   const handleDelete = async (participantId, name) => {
     const ok = await confirm({
-      title: `Remove ${name}?`,
-      message: 'This participant will be removed from all active lists, allocations, and counts. Their data is preserved for record-keeping purposes but they will no longer be visible in the event. This action can be reversed by an administrator.',
-      confirmLabel: 'Remove Participant',
+      title: t('people.remove_confirm.title', { name }),
+      message: t('people.remove_confirm.body'),
+      confirmLabel: t('people.remove_confirm.confirm'),
       danger: true,
     });
     if (!ok) return;
@@ -688,8 +688,12 @@ export default function EventDetailPage() {
       )}
 
       {/* Phase strip (§7.2) — visible across all phases except Setup
-          (Setup gets the hub layout which has its own PhaseStrip). */}
-      {!isStaff && (
+          (Setup gets the hub layout which has its own PhaseStrip).
+          v1.0.1d: previously gated on `!isStaff`, which hid the strip
+          from event-admin staff (role === 'staff' but event_admin for
+          this event). Now shows for anyone with admin rights (isAdmin =
+          super_admin OR event_admin). Pure staff remain excluded. */}
+      {(!isStaff || isAdmin) && (
         <div className="mb-4">
           <PhaseStrip currentPhase={phase} />
         </div>

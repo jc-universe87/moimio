@@ -618,11 +618,21 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
         // v0.74: capacity required-everywhere. Fall back to 1 if cleared.
         capacity: editingUnit.capacity ? parseInt(editingUnit.capacity) : 1,
         gender_restriction: editingUnit.gender_restriction || null,
+        mark_restriction: editingUnit.mark_restriction || null,
       });
       setEditingUnit(null);
       await loadAll();
       if (onDataChange) onDataChange();
       showToast(`${itemLabel} updated`);
+    } catch (err) { setError(err); }
+  };
+
+  // v1.0.1e: toggle "keep as-is" straight from the room row (the padlock).
+  const handleToggleKeep = async (unit) => {
+    try {
+      await allocationUnits.update(eventId, category.id, unit.id, { is_kept: !unit.is_kept });
+      await loadAll();
+      if (onDataChange) onDataChange();
     } catch (err) { setError(err); }
   };
 
@@ -662,9 +672,9 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
 
   const handleDeleteUnit = async (unitId) => {
     const ok = await confirm({
-      title: `Delete ${itemLabel}?`,
-      message: `This will permanently remove this ${itemLabel.toLowerCase()} and all its participant assignments. This cannot be undone.`,
-      confirmLabel: 'Delete',
+      title: t('organise.unit_delete.title', { label: itemLabel }),
+      message: t('organise.unit_delete.body', { label: itemLabel }),
+      confirmLabel: t('organise.unit_delete.confirm'),
       danger: true,
     });
     if (!ok) return;
@@ -902,9 +912,9 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     if (selectedPeople.size === 0) return;
     const n = selectedPeople.size;
     const ok = await confirm({
-      title: `Assign ${n} participant${n !== 1 ? 's' : ''} to ${unit.name}?`,
-      message: `This will place the selected participant${n !== 1 ? 's' : ''} into "${unit.name}".`,
-      confirmLabel: 'Assign',
+      title: t('organise.assign_confirm.title', { count: n, unit: unit.name }),
+      message: t('organise.assign_confirm.body', { unit: unit.name }),
+      confirmLabel: t('organise.assign_confirm.confirm'),
     });
     if (!ok) return;
     await handleBulkAssign(unit.id);
@@ -1772,6 +1782,13 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                               <option value="female">{t('common.female_only')}</option>
                             </select>
                           )}
+                          {markDefs.length > 0 && (
+                            <select value={editingUnit.mark_restriction || ''} onChange={e => setEditingUnit(p => ({ ...p, mark_restriction: e.target.value || null }))}
+                              className="rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]">
+                              <option value="">{t('organise.mark_restriction.none')}</option>
+                              {markDefs.map(m => <option key={m.id} value={m.id}>{t('organise.mark_restriction.only', { mark: m.name })}</option>)}
+                            </select>
+                          )}
                           <button type="submit"
                             className="text-xs font-semibold px-4 py-1.5 rounded-card bg-steel-blue text-white hover:bg-steel-blue-700 dark:bg-gold dark:text-deep-navy dark:hover:bg-gold/80">
                             {t('common.save')}
@@ -1787,6 +1804,8 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                         <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{unit.name}</span>
                         {unit.capacity && <span className="text-[10px] ml-2" style={{ color: 'var(--text-subtle)' }}>cap {unit.capacity}</span>}
                         {unit.gender_restriction && <span className="text-[10px] ml-1" style={{ color: 'var(--text-subtle)' }}>{unit.gender_restriction}</span>}
+                        {unit.mark_restriction && markDefs.some(m => m.id === unit.mark_restriction) && <span className="text-[10px] ml-1" style={{ color: 'var(--text-subtle)' }}>{markDefs.find(m => m.id === unit.mark_restriction).name}</span>}
+                        {unit.is_kept && <span className="text-[10px] ml-1 font-semibold" style={{ color: 'var(--io-accent)' }}>{t('organise.room.kept')}</span>}
                       </div>
                       <div className="flex gap-2 items-center shrink-0">
                         {/* v0.58e-1: reorder arrows — universal on mobile + desktop */}
@@ -1813,6 +1832,21 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                           className="text-sm leading-none px-1 disabled:opacity-20 hover:opacity-70"
                           style={{ color: 'var(--text-subtle)' }}>
                           ▼
+                        </button>
+                        <button onClick={() => handleToggleKeep(unit)}
+                          aria-label={unit.is_kept ? t('organise.room.kept') : t('organise.room.keep')}
+                          title={t('organise.room.kept_hint')}
+                          className="px-1 leading-none hover:opacity-70"
+                          style={{ color: unit.is_kept ? 'var(--io-accent)' : 'var(--text-subtle)' }}>
+                          {unit.is_kept ? (
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline', verticalAlign: 'middle' }}>
+                              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                          ) : (
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline', verticalAlign: 'middle' }}>
+                              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                            </svg>
+                          )}
                         </button>
                         <button onClick={() => setEditingUnit({ ...unit })}
                           className="text-[10px] font-semibold hover:underline ml-1"

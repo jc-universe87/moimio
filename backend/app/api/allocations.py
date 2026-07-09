@@ -72,6 +72,8 @@ class UnitCreate(BaseModel):
     description: str | None = None
     capacity: int  # v0.74: required (was Optional)
     gender_restriction: str | None = None
+    mark_restriction: uuid.UUID | None = None  # v1.0.1e: single-mark room restriction
+    is_kept: bool = False  # v1.0.1e: freeze unit on re-allocate
     sort_order: int = 0
 
 class UnitUpdate(BaseModel):
@@ -79,6 +81,8 @@ class UnitUpdate(BaseModel):
     description: str | None = None
     capacity: int | None = None  # optional on update (no change implies same)
     gender_restriction: str | None = None
+    mark_restriction: uuid.UUID | None = None  # v1.0.1e: single-mark room restriction
+    is_kept: bool | None = None  # v1.0.1e: freeze unit on re-allocate
     sort_order: int | None = None
 
 class AssignRequest(BaseModel):

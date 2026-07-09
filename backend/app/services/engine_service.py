@@ -331,6 +331,30 @@ async def run_engine(
         if not participants:
             return _everyone_already_allocated_return(unit_slots, already_allocated_pids, mode, run_id)
 
+    # v1.0.1e: kept ("keep as-is") units are frozen. Regardless of mode, seed
+    # their existing occupants, take those occupants out of the pool so they
+    # are never re-placed, and exclude the unit from receiving anyone new by
+    # reusing the exclusive-claim set. In top_up the occupants are already
+    # seeded above; the guards below make the re-seed idempotent. The result:
+    # a re-allocate fills only the non-kept units, leaving kept units exactly
+    # as they were. commit_proposal leaves their DB rows untouched (see there).
+    kept_unit_ids = {str(u.id) for u in units if getattr(u, "is_kept", False)}
+    if kept_unit_ids:
+        kept_existing_q = await db.execute(
+            select(Allocation).where(
+                Allocation.event_id == event_id,
+                Allocation.unit_id.in_([uuid.UUID(uid) for uid in kept_unit_ids]),
+            )
+        )
+        for existing in kept_existing_q.scalars().all():
+            uid = str(existing.unit_id)
+            pid = str(existing.participant_id)
+            if uid in unit_slots and pid not in unit_slots[uid]:
+                unit_slots[uid].append(pid)
+            already_allocated_pids.add(pid)
+        participants = [p for p in participants if str(p.id) not in already_allocated_pids]
+        exclusive_units.update(kept_unit_ids)
+
     # Helpers used across passes ─────────────────────────────────────
 
     def remaining_cap(unit_id: str) -> int:
@@ -352,6 +376,35 @@ async def run_engine(
     def cluster_gender_eligible(unit: AllocationUnit, cluster_genders: list[str | None]) -> bool:
         """A cluster fits a unit only if every member can enter it."""
         return all(gender_eligible(unit, g) for g in cluster_genders)
+
+    # v1.0.1e: mark-restriction — the mark twin of gender_restriction. A unit
+    # that carries a mark restriction admits only participants holding that
+    # mark, enforced strictly (like gender). Load which participants hold each
+    # restriction mark once, then expose the same predicate shape the gender
+    # checks use so every pass can combine them.
+    restriction_mark_ids = {str(u.mark_restriction) for u in units if u.mark_restriction}
+    participants_with_mark: dict[str, set[str]] = defaultdict(set)
+    if restriction_mark_ids:
+        rest_marks_q = await db.execute(
+            select(MarkAssignment).where(
+                MarkAssignment.event_id == event_id,
+                MarkAssignment.mark_id.in_([uuid.UUID(m) for m in restriction_mark_ids]),
+            )
+        )
+        for ma in rest_marks_q.scalars().all():
+            participants_with_mark[str(ma.mark_id)].add(str(ma.participant_id))
+
+    def mark_eligible(unit: AllocationUnit, participant_id: str) -> bool:
+        """A mark-restricted unit admits only holders of that mark; an
+        unrestricted unit admits anyone."""
+        if not unit.mark_restriction:
+            return True
+        return participant_id in participants_with_mark.get(str(unit.mark_restriction), set())
+
+    def cluster_mark_eligible(unit: AllocationUnit, cluster_pids: list[str]) -> bool:
+        """A cluster fits a mark-restricted unit only if every member holds the
+        mark (all-or-nothing, matching cluster_gender_eligible)."""
+        return all(mark_eligible(unit, pid) for pid in cluster_pids)
 
     # ── PASS 1: group_code clusters ──
     clusters_total = 0
@@ -405,6 +458,8 @@ async def run_engine(
                 held_back=held_back,
                 gender_eligible=gender_eligible,
                 cluster_gender_eligible=cluster_gender_eligible,
+                mark_eligible=mark_eligible,
+                cluster_mark_eligible=cluster_mark_eligible,
                 remaining_cap=remaining_cap,
                 units_by_id={str(u.id): u for u in units},
             )
@@ -460,6 +515,8 @@ async def run_engine(
             held_back=held_back,
             gender_eligible=gender_eligible,
             cluster_gender_eligible=cluster_gender_eligible,
+            mark_eligible=mark_eligible,
+            cluster_mark_eligible=cluster_mark_eligible,
             remaining_cap=remaining_cap,
             units_by_id={str(u.id): u for u in units},
         )
@@ -492,7 +549,7 @@ async def run_engine(
             for _ in range(len(eligible_units)):
                 u = eligible_units[unit_cursor % len(eligible_units)]
                 unit_cursor += 1
-                if remaining_cap(str(u.id)) > 0 and gender_eligible(u, participant.gender):
+                if remaining_cap(str(u.id)) > 0 and gender_eligible(u, participant.gender) and mark_eligible(u, str(participant.id)):
                     unit_slots[str(u.id)].append(str(participant.id))
                     placed_ids.add(str(participant.id))
                     placement_reasons[str(participant.id)] = {
@@ -507,12 +564,18 @@ async def run_engine(
                 # OR end up unplaced with no_capacity_remaining.
                 pass
 
-    # ── PASS 4a: drain gender-restricted units ──
-    # For each restricted unit (cap ASC), pull eligible-gender participants
-    # from the remaining pool until the unit is full or the gender pool
-    # is exhausted.
+    # ── PASS 4a: drain restricted units (gender and/or mark) ──
+    # For each unit that restricts by gender and/or mark (cap ASC), pull
+    # participants who satisfy ALL of its restrictions from the remaining pool
+    # until the unit is full or the eligible pool is exhausted. This is what
+    # makes a "Leaders only" room actually fill with leaders rather than
+    # letting them scatter into general rooms — the same reason gender-
+    # restricted rooms are drained here. v1.0.1e generalises the former
+    # gender-only drain; gender-only units behave exactly as before.
     restricted_units = sorted(
-        [u for u in units if u.gender_restriction and str(u.id) not in exclusive_units],
+        [u for u in units
+         if (u.gender_restriction or u.mark_restriction)
+         and str(u.id) not in exclusive_units],
         key=lambda u: (u.capacity, u.sort_order, u.created_at),
     )
     remaining = [
@@ -521,22 +584,30 @@ async def run_engine(
         and str(p.id) not in held_back  # v1.0.0o: cluster rejected → keep out
     ]
     for u in restricted_units:
-        rest = u.gender_restriction.lower()
         free = remaining_cap(str(u.id))
         if free <= 0:
             continue
-        # Eligible: participant gender matches the unit's restriction
-        eligible = [p for p in remaining if p.gender and p.gender.lower() == rest]
-        # Take up to `free` of them
+        # Eligible: satisfies the unit's gender restriction (if any) AND its
+        # mark restriction (if any). Both predicates return True when the
+        # corresponding restriction is absent, so a gender-only unit filters
+        # exactly as it did pre-v1.0.1e.
+        eligible = [
+            p for p in remaining
+            if gender_eligible(u, p.gender) and mark_eligible(u, str(p.id))
+        ]
         take = eligible[:free]
         for p in take:
             unit_slots[str(u.id)].append(str(p.id))
             placed_ids.add(str(p.id))
+            # Keep the "gender_drain" reason for any gender-restricted unit
+            # (unchanged audit semantics); mark-only units get "mark_drain".
+            # Both carry the full restriction snapshot.
             placement_reasons[str(p.id)] = {
-                "reason": "gender_drain",
+                "reason": "gender_drain" if u.gender_restriction else "mark_drain",
                 "unit_id": str(u.id),
                 "unit_name": u.name,
-                "gender_restriction": rest,
+                "gender_restriction": (u.gender_restriction or "").lower() or None,
+                "mark_restriction": str(u.mark_restriction) if u.mark_restriction else None,
             }
         # Remove placed from `remaining`
         remaining = [p for p in remaining if str(p.id) not in placed_ids]
@@ -548,7 +619,9 @@ async def run_engine(
     # set of eligible units is the same for all because we're past restricted
     # units now.)
     unrestricted_units = sorted(
-        [u for u in units if not u.gender_restriction and str(u.id) not in exclusive_units],
+        [u for u in units
+         if not u.gender_restriction and not u.mark_restriction
+         and str(u.id) not in exclusive_units],
         key=lambda u: (u.capacity, u.sort_order, u.created_at),
     )
 
@@ -639,6 +712,7 @@ async def run_engine(
             participants=participants,
             gender_eligible=gender_eligible,
             cluster_gender_eligible=cluster_gender_eligible,
+            cluster_mark_eligible=cluster_mark_eligible,
         )
 
     # ── PASS 5: classify unplaced ──
@@ -771,6 +845,8 @@ def _place_cluster(
     held_back,  # v1.0.0o: members tagged here are kept out of PASS 4
     gender_eligible,
     cluster_gender_eligible,
+    mark_eligible,
+    cluster_mark_eligible,
     remaining_cap,
     units_by_id=None,  # v1.0.0o: lookup for restriction inventory in error meta
 ):
@@ -791,6 +867,7 @@ def _place_cluster(
     """
     cluster_size = len(cluster_members)
     cluster_genders = [p.gender for p in cluster_members]
+    cluster_pids = [str(p.id) for p in cluster_members]
     # v1.0.0e: pre-compute the cluster member snapshot ONCE per cluster
     # call. Carried into every placement_reasons entry below so the
     # frontend can render "with X, Y, Z" on hover/tap (live surfaces)
@@ -815,6 +892,7 @@ def _place_cluster(
         u for u in units
         if str(u.id) not in exclusive_units
         and cluster_gender_eligible(u, cluster_genders)
+        and cluster_mark_eligible(u, cluster_pids)
     ]
     if not candidate_units:
         # No unit can hold this cluster. Tag and return.
@@ -1020,6 +1098,7 @@ def _equalise_sweep(
     participants,
     gender_eligible,
     cluster_gender_eligible,
+    cluster_mark_eligible,
 ):
     """v1.0.0e PASS 4c — even out unit occupancies by moving whole
     movable clusters from over-target to under-target units.
@@ -1157,6 +1236,13 @@ def _equalise_sweep(
             src_clusters = [
                 (key, info) for key, info in clusters.items()
                 if info["unit_id"] == src_uid
+                # v1.0.1e: never move a cluster out of a unit it claimed
+                # exclusively. The exclusive claim means "this group keeps this
+                # room" — equalise must honour that as a source, just as it
+                # already refuses exclusive units as destinations. Without this,
+                # a group-coded family that exclusively claimed a (e.g. mark-
+                # restricted) room could be emptied out again just to even sizes.
+                and info["unit_id"] not in exclusive_units
             ]
             src_clusters.sort(key=lambda kv: len(kv[1]["pids"]))
 
@@ -1171,6 +1257,8 @@ def _equalise_sweep(
                     if dst_uid in exclusive_units:
                         continue
                     if not cluster_gender_eligible(dst_unit, cl_genders):
+                        continue
+                    if not cluster_mark_eligible(dst_unit, cluster_info["pids"]):
                         continue
                     dst_count = len(unit_slots[dst_uid])
                     if not fits_capacity(dst_unit, dst_count, cl_size):
@@ -1236,6 +1324,7 @@ async def clear_category_allocations(
     *,
     actor_user_id: uuid.UUID | None = None,
     source: str = AllocationEventSource.CLEAR_CATEGORY,
+    skip_kept: bool = False,
 ) -> int:
     """Delete all allocations in a category. Returns count deleted.
 
@@ -1269,6 +1358,11 @@ async def clear_category_allocations(
         .where(
             AllocationUnit.category_id == category_id,
             Allocation.event_id == event_id,
+            # v1.0.1e: the engine-commit path passes skip_kept=True so kept
+            # ("keep as-is") units are left frozen — their allocations are not
+            # cleared. Manual clear-all (default skip_kept=False) still wipes
+            # everything: the lock governs re-allocate, not an explicit wipe.
+            *([AllocationUnit.is_kept.is_(False)] if skip_kept else []),
         )
     )
     rows = result.all()
@@ -1348,6 +1442,7 @@ async def commit_proposal(
         category_id,
         actor_user_id=actor_user_id,
         source=AllocationEventSource.ENGINE_COMMIT,
+        skip_kept=True,
     )
 
     reasons = placement_reasons or {}
@@ -1356,6 +1451,12 @@ async def commit_proposal(
     for unit_id_str, participant_ids in proposed.items():
         unit_id = uuid.UUID(unit_id_str)
         unit = unit_map.get(unit_id_str)
+        # v1.0.1e: kept units were not cleared (skip_kept above) and must not
+        # be re-written, or every occupant would be duplicated. The proposal
+        # carries them only so the review shows them as-is; commit leaves the
+        # DB rows exactly as they were.
+        if unit is not None and getattr(unit, "is_kept", False):
+            continue
         unit_name = unit.name if unit else "[unknown unit]"
         for pid_str in participant_ids:
             pid = uuid.UUID(pid_str)

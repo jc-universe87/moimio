@@ -6,7 +6,7 @@ import secrets
 import random
 from datetime import datetime, timezone
 
-from sqlalchemy import select, func as sa_func
+from sqlalchemy import select, func as sa_func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.participant import Participant, RegistrationStatus
@@ -56,6 +56,24 @@ async def _allocate_unique_group_code(
     a handful of times; if all happen to collide, falls back to a
     4-digit suffix (1000–9999) and ultimately a 5-digit one. The
     fallback ladder makes total exhaustion practically impossible."""
+    # v1.0.1d-1: close the new-code allocation race. Two registrants who
+    # are each STARTING a group with the same surname could, within the
+    # same millisecond, both check "is KIM-742 free?" (yes for both, since
+    # neither row is committed yet) and both save it — silently grouping
+    # two unrelated families. A Postgres transaction-level advisory lock,
+    # scoped to this event, serialises only the new-code path: the second
+    # registrant blocks until the first request's transaction commits (see
+    # get_db — one commit at end of request), by which point the first
+    # code is visible, so the SELECT below sees it and picks another.
+    #
+    # Verbatim joins and additional family members share a code on purpose
+    # and never reach this function, so they are unaffected. The lock is
+    # re-entrant (batch registration may call this many times in one
+    # transaction) and releases automatically when the transaction ends.
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext('moimio_group_code'), hashtext(:ev))"),
+        {"ev": str(event_id)},
+    )
     for digits in (3, 4, 5):
         lo, hi = 10 ** (digits - 1), 10 ** digits - 1
         # 8 attempts at 3-digit gives < 1% collision chance for an event

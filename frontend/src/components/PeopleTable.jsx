@@ -459,9 +459,9 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
     if (!isAdmin) return;
     if (field === 'name' || field === 'email') {
       const ok = await confirm({
-        title: `Edit ${field === 'name' ? 'name' : 'email address'}?`,
-        message: 'You are about to edit personal data. If a confirmation email was already sent, the participant may have received it at a different address. Please ensure this change is intentional.',
-        confirmLabel: 'Edit',
+        title: field === 'name' ? t('people.edit_confirm.title_name') : t('people.edit_confirm.title_email'),
+        message: t('people.edit_confirm.body'),
+        confirmLabel: t('people.edit_confirm.confirm'),
       });
       if (!ok) return;
     }
