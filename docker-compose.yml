@@ -51,6 +51,9 @@ services:
       FEATURE_ALLOCATION: ${FEATURE_ALLOCATION:-true}
       FEATURE_OUTBOUND_WEBHOOKS: ${FEATURE_OUTBOUND_WEBHOOKS:-true}
       FEATURE_CREATE_EVENT_CONFIRMATION: ${FEATURE_CREATE_EVENT_CONFIRMATION:-false}
+      # v1.0.2b: was missing since v1.0.1e-6 — the setting existed in
+      # config/capabilities/frontend but never reached the container.
+      FEATURE_ACCOUNT_PORTAL: ${FEATURE_ACCOUNT_PORTAL:-false}
       EVENT_CHARGE_AMOUNT: ${EVENT_CHARGE_AMOUNT:-}
       EVENT_CHARGE_CURRENCY: ${EVENT_CHARGE_CURRENCY:-}
       BILLING_CARD_LAST4: ${BILLING_CARD_LAST4:-}

@@ -518,8 +518,14 @@ export default function AdminLayout() {
                       capability on (when off, the backend router isn't
                       registered, so clicking would 404). Kept visible for
                       self-hosters — posting allocation events to an endpoint
-                      you control is a genuine integration feature. */}
-                  {isSuperAdmin && capabilities.outbound_webhooks && (
+                      you control is a genuine integration feature.
+                      v1.0.2a: HIDDEN on managed instances (account_portal):
+                      the SaaS control-plane's own phone-home endpoint lives
+                      in this list and a tenant admin could pause or delete
+                      it. The capability flag and the delivery pipeline stay
+                      ON for hosted tenants — the CE→SaaS signals ride them —
+                      only this configuration surface is hidden. */}
+                  {isSuperAdmin && capabilities.outbound_webhooks && !capabilities.account_portal && (
                     <button onClick={() => { navigate('/admin/webhooks'); closeSidebar(); }}
                       className="flex items-center gap-2.5 w-full text-left px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">
                       <IconWebhook className="shrink-0" />

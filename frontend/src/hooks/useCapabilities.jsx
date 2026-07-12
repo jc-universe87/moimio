@@ -38,6 +38,12 @@ const DEFAULT_CAPABILITIES = {
   // keeps the empty default and the "Manage account" link stays hidden; a
   // real tenant just doesn't see it until the next load. Fail-closed.
   account_url: '',
+  // v1.0.2c: the managed-instance signal (v1.0.1e-6 added the backend
+  // field and the AdminLayout gates, but this provider never mapped it —
+  // so capabilities.account_portal was undefined forever and the gates
+  // were dead). Fail-closed like the two flags above: hosted-only UI
+  // must never flash for a self-hoster on a fetch flicker.
+  account_portal: false,
 };
 
 const CapabilitiesContext = createContext({
@@ -67,6 +73,10 @@ export function CapabilitiesProvider({ children }) {
             // null) becomes '' so the link stays hidden. Same fail-closed
             // intent as create_event_confirmation above.
             account_url: typeof data.account_url === 'string' ? data.account_url : '',
+            // v1.0.2c: same missing-means-off pattern as
+            // create_event_confirmation — this line was the missing half
+            // of the e-6 feature (see DEFAULT_CAPABILITIES note).
+            account_portal: data.account_portal === true,
           });
         }
       })

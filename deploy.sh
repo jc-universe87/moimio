@@ -68,12 +68,18 @@ on_err() {
 trap 'on_err $LINENO' ERR
 
 STEP="argument check"
-if [[ $# -lt 1 ]]; then
-  echo "ERROR: missing version tag." >&2
-  echo "Usage: $0 <version-tag>     e.g. $0 v1.0.0" >&2
-  exit 2
+if [[ $# -lt 1 || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  echo "Usage: $0 <version-tag>     e.g. $0 v1.0.2"
+  echo "Expects ../moimio-ce-<version-tag>.zip next to this site directory."
+  [[ $# -lt 1 ]] && exit 2 || exit 0
 fi
 TAG="$1"
+# v1.0.2: accept the tag with or without the leading v (public users
+# type both). Normalised to the canonical vX.Y.Z form.
+if [[ "$TAG" != v* ]]; then
+  TAG="v${TAG}"
+  echo "Note: version normalised to ${TAG}."
+fi
 ZIP="../moimio-ce-${TAG}.zip"
 STAGE="../moimio-ce-staging-${TAG}"
 
@@ -225,12 +231,28 @@ STEP="docker compose up -d --force-recreate"
 sudo docker compose up -d --force-recreate
 
 # ──────────────────────────────────────────────────────────────────────
-# 4. Tail logs so the operator sees startup
+# 4. Deploy is COMPLETE at this point. Report success, THEN tail logs.
+#
+# v1.0.2: the tail used to run with `set -e` and the ERR trap still
+# armed, so detaching with Ctrl-C made `docker compose logs` exit 130
+# and fired the DEPLOY FAILED banner on a deploy that had already
+# succeeded. Success is now declared first, the ERR trap is disarmed
+# for the log phase, and Ctrl-C is a clean, friendly detach (exit 0).
 # ──────────────────────────────────────────────────────────────────────
 STEP="tail logs"
 echo
-echo "─── Deploy of ${TAG} complete. Tailing backend logs. ───"
-echo "    Watch for: Application startup complete."
-echo "    Detach:    Ctrl-C  (containers keep running)"
+echo "╔══════════════════════════════════════════════════════════════════╗"
+printf  "║  DEPLOY SUCCEEDED: %-46s║\n" "${TAG}"
+echo "╠══════════════════════════════════════════════════════════════════╣"
+echo "║  Containers are up (build + up -d completed).                    ║"
+echo "║  Check anytime:  sudo docker compose ps                          ║"
+printf  "║  DB snapshot  :  %-48s║\n" "$DB_BACKUP"
+printf  "║  .env backup  :  %-48s║\n" "$BACKUP"
+echo "╚══════════════════════════════════════════════════════════════════╝"
 echo
-sudo docker compose logs -f --tail=50 backend
+echo "Tailing backend logs. Watch for: Application startup complete."
+echo "Detach with Ctrl-C (containers keep running)."
+echo
+trap - ERR
+trap 'echo; echo "Detached from logs. Containers keep running (${TAG} stays deployed)."; exit 0' INT
+sudo docker compose logs -f --tail=50 backend || true

@@ -8,68 +8,129 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [Unreleased]
+
+## [1.0.2c] — 2026-07-12
+
+Small follow-up release to 1.0.2: managed-instance behaviour now works
+end to end, and one interface change for hosted deployments.
+
+### Fixed
+
+- **Managed-instance detection works end to end.** An instance run by a
+  hosting control plane can signal it with `FEATURE_ACCOUNT_PORTAL=true`.
+  Two defects prevented this from ever taking effect: the flag was
+  missing from the compose environment passthrough (in both the
+  development and the production compose files), and the interface
+  dropped the field when reading capabilities. Both are fixed; as a
+  result, the Manage account and Workspace entries now appear in the
+  sidebar on managed instances. Self-hosted installations are
+  unaffected — the flag defaults to false, and setting an account URL
+  alone never surfaces hosted-only links.
+
+### Changed
+
+- **Webhooks configuration is hidden on managed instances.** Outbound
+  webhook delivery keeps running there (the hosting platform's own
+  integrations depend on it), but the configuration page is no longer
+  shown to workspace admins. Self-hosters see and use Webhooks exactly
+  as before.
+
 ## [1.0.2] — 2026-07-12
+
+The consolidation release: everything built and hardened since 1.0.1 in
+one update. The headline features are portable configuration (copy from
+a past event, or export and import as files), live registration
+updates, and a substantially more reliable allocation engine.
 
 ### Added
 
-- **Live registration list.** New registrations appear in the event views
-  as they happen — no page refresh needed.
-- **Registration tab redesign.** A clearer registrations chart (rendering
-  glitch fixed), a range toggle (last 7 days / last 30 days / since
-  opening), and a summary for the selected period.
+- **Live registration list.** New registrations appear in the event
+  views the moment they happen. No page refresh, no polling: the list
+  quietly updates itself while you keep working, and the view no longer
+  flashes white when data refreshes.
+- **Registration tab redesign.** The registrations chart now renders
+  correctly at every screen width (the squashed-dots glitch is gone),
+  a range toggle switches between the last 7 days, the last 30 days,
+  and everything since registration opened, and a summary shows the
+  totals for whichever period is selected.
 - **Copy configuration from a previous event.** When creating an event,
-  pick a past event and choose exactly which sections to carry over:
-  marks, registration form, custom fields, group types with their rooms,
-  and team members.
-- **Export and import group types as a file.** Save a room layout (group
-  types, units, and mark restrictions, matched by name) to a file and
-  import it into another event — or another Moimio installation.
-- **Export and import the registration form as a file.** Field settings
-  are updated by field name on import; custom fields are added, and
-  duplicates by label are skipped.
+  pick any past event and choose exactly which parts to carry over,
+  each with its own checkbox: marks, the registration form, custom
+  fields, group types with their rooms, and team members. Copied room
+  restrictions are rewired to the new event's own marks automatically.
+- **Export and import group types as a file.** Save a complete room
+  layout (group types, units, capacities, gender rules, and mark
+  restrictions) to a JSON file and import it into another event, or
+  into another Moimio installation entirely. The file contains
+  configuration only, never participant data. Mark restrictions travel
+  by mark name: if the target event has a mark with the same name they
+  re-link, and if not they are dropped cleanly. Importing is additive
+  and never overwrites what is already there.
+- **Export and import the registration form as a file.** The same
+  portability for the registration form: standard field settings are
+  applied by field name, custom fields are added, and fields whose
+  label already exists are skipped, so importing the same file twice
+  never creates duplicates.
 - **Floating unassigned panel.** While allocating, the unassigned list
-  stays pinned by default and can pop out into a floating window you can
-  drag and resize.
-- **Marks show who holds them.** Each mark in the list shows how many
-  participants carry it, with the names revealed on hover.
+  stays pinned by default and can pop out into a floating window you
+  can drag and resize anywhere on screen.
+- **Marks show who holds them.** Every mark in the list shows how many
+  participants carry it; hover to see the names.
 
 ### Changed
 
 - **Smarter search.** Searching in People, Check-in, and the allocation
   board now matches names regardless of hyphens, spaces, apostrophe
-  variants, accents, German umlauts (ä/ö/ü/ß written as ae/oe/ue/ss), and
-  special Latin letters such as ı, ł, đ, þ, ð, and œ.
-- **Consistent row actions.** Every list in the app now uses the same
-  pen (edit) and trash (delete) icons, with the same confirmation
-  behaviour throughout.
-- **Duplicate event replaced by Copy configuration.** Reusing a past
-  event's setup now always goes through the standard Create event flow.
-- **Imported CSV columns now show up automatically in the People table.**
-  When a CSV import adds new custom fields (any column the importer
-  doesn't recognise), those columns are now switched on in the People
-  table straight away, so the imported data is visible without opening
-  the column picker. They remain hidden from the public registration
-  form by default, as before — this only affects what you see in the
-  People view.
+  variants, accents, German umlaut spellings (Müller finds Mueller and
+  the other way round), and special Latin letters such as ı, ł, đ, þ,
+  ð, and œ.
+- **Consistent actions everywhere.** Every list in the app uses the
+  same grey pen to edit and red trash to delete, with the same
+  confirmation before anything destructive. Add buttons and their ⋯
+  menus now sit together on the right on every screen, and the action
+  strips on cards are right-aligned on touch devices and desktop alike.
+- **Duplicate event replaced by Copy configuration.** There is now one
+  consistent way to reuse a past event's setup, through the standard
+  Create event flow.
+- **Imported CSV columns now show up automatically in the People
+  table.** When a CSV import adds new custom fields (any column the
+  importer doesn't recognise), those columns are switched on in the
+  People table straight away, so the imported data is visible without
+  opening the column picker. They remain hidden from the public
+  registration form by default, as before.
 
 ### Fixed
 
 - **Allocation runs are deterministic.** The same participants and the
-  same settings now always produce the same result.
+  same settings now always produce the same result, every run. This
+  matters when you re-run the engine and compare outcomes.
 - **Remaining seats are used better.** A final pass fills capacity left
-  open after clusters are placed.
-- **Mark rooms are preferred for their holders.** Groups carrying a mark
-  now go to their designated mark-restricted room rather than a
+  open after groups are placed, so fewer people end up unassigned in
+  tightly booked events.
+- **Mark rooms are preferred for their holders.** Groups carrying a
+  mark now go to their designated mark-restricted room rather than a
   tighter-fitting general room.
 - **Copied configurations rewire mark restrictions correctly.** Rooms
-  restricted to a mark now point at the new event's matching mark after
-  a copy.
+  restricted to a mark point at the new event's matching mark after a
+  copy, not at the source event's.
+- **File-import errors name the right thing.** Feeding the wrong kind
+  of file to an import (for example a group-types export into the
+  registration-form import) now produces an error naming exactly what
+  that importer expected, in all six languages.
 - **Custom-field columns sort properly** in the People table; select
   fields sort by their defined option order.
 - **Searching by mark name works** in the People view.
-- **The "exclusive group codes" checkbox no longer sticks** after saving.
+- **The "exclusive group codes" checkbox no longer sticks** after
+  saving.
 
----
+### Deployment
+
+- **deploy.sh reworked.** Detaching from the post-deploy log stream
+  with Ctrl-C no longer prints a false DEPLOY FAILED banner: the script
+  reports success before tailing and treats Ctrl-C as a clean detach.
+  The version argument is accepted with or without the leading v, and
+  --help prints usage.
 
 ## [1.0.1] — 2026-06-19
 
