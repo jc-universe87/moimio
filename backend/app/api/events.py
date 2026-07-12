@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -410,6 +410,45 @@ async def set_event_fields(
     updated = await update_field_configs(db, event_id, configs)
     logger.info("field_configs_updated", event_id=str(event_id), updated_by=str(current_user.id))
     return updated
+
+
+@router.get("/{event_id}/registration-form/export")
+async def api_export_registration_form(
+    event_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_event_admin_dep()),
+):
+    """Export the registration form (field toggles + custom fields) as a
+    portable JSON document. Admin only. GDPR-safe — configuration only."""
+    from app.services.registration_form_io import export_registration_form
+    return await export_registration_form(db, event_id)
+
+
+@router.post("/{event_id}/registration-form/import")
+async def api_import_registration_form(
+    event_id: uuid.UUID,
+    payload: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_event_admin_dep()),
+):
+    """Import a registration form exported from another event. Standard field
+    toggles are updated in place; custom fields are added, skipping labels that
+    already exist here."""
+    event = await get_event_by_id(db, event_id)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"key": "errors.event.not_found"})
+    await ensure_event_writable(db, event_id, current_user)
+    from app.services.registration_form_io import import_registration_form
+    try:
+        result = await import_registration_form(db, event_id, payload)
+    except ValueError:
+        # v1.0.2: form-specific key — this endpoint's rejection (wrong
+        # "kind", e.g. a group-types export fed to the form import) must
+        # say "registration form", not "group-types". The layout import
+        # keeps errors.import.invalid_file.
+        raise HTTPException(status_code=422, detail={"key": "errors.import.invalid_form_file"})
+    await db.commit()
+    return result
 
 
 # ─── Email ───

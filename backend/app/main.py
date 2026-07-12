@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     setup_logging()
     logger.info(
         "moimio_starting",
-        version="0.2.0",
+        version="1.0.2",
         log_level=settings.log_level,
         feature_allocation=settings.feature_allocation,
         feature_outbound_webhooks=settings.feature_outbound_webhooks,
@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title="Moimio",
     description="Participant allocation platform — register, organise, allocate.",
-    version="0.2.0",
+    version="1.0.2",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",

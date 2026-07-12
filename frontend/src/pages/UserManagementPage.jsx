@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { users as usersApi, events as eventsApi } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { useConfirmOverlay } from '../components/ConfirmOverlay';
+import { EditIconButton, DeleteIconButton } from '../components/RowActions';
 import { useI18n } from '../hooks/useI18n';
 import EmptyState from '../components/EmptyState';
 
@@ -427,11 +428,7 @@ export default function UserManagementPage() {
                           <div className="flex items-center justify-end gap-3">
                             {u.id !== currentUser?.id && (
                               <>
-                                <button onClick={() => startEdit(u)}
-                                  className="text-xs font-semibold hover:underline"
-                                  style={{ color: 'var(--io-accent)' }}>
-                                  {t('common.edit')}
-                                </button>
+                                <EditIconButton onClick={() => startEdit(u)} title={t('common.edit')} />
                                 <button onClick={() => handleDeactivate(u)}
                                   className="text-xs font-semibold hover:underline"
                                   style={{ color: u.is_active ? 'var(--alert-burgundy)' : 'var(--io-accent)' }}>
@@ -440,11 +437,7 @@ export default function UserManagementPage() {
                               </>
                             )}
                             {u.id !== currentUser?.id && (isSuperAdmin || u.role !== 'super_admin') && (
-                              <button onClick={() => handleDelete(u)}
-                                className="text-xs font-semibold hover:underline"
-                                style={{ color: 'var(--alert-burgundy)' }}>
-                                {t('users.delete')}
-                              </button>
+                              <DeleteIconButton onClick={() => handleDelete(u)} title={t('users.delete')} />
                             )}
                           </div>
                         </td>

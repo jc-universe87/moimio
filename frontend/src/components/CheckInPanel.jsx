@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { cfSortValue } from '../utils/customFieldSort';
+import { normalizeSearch as norm } from '../services/searchNormalize';
 import { participants as participantsApi, checkin as checkinApi, customFields as cfApi } from '../services/api';
 import { useDateFormat } from '../hooks/useDateFormat';
 import { useConfirmOverlay } from './ConfirmOverlay';
@@ -371,20 +373,32 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
     [participantList]
   );
 
+  // v1.0.1e-5: these derived lists must be declared BEFORE the sort useMemo
+  // below, which reads visibleCfList. They previously sat ~65 lines lower, so
+  // the sort referenced a const in its temporal dead zone → ReferenceError at
+  // render → the whole check-in panel went blank. (Regression from the e-2
+  // typed-sort work.)
+  const visibleTickList = tickFields.filter(f => visibleTickCols.has(f.id));
+  const visibleRegList = availableRegCols.filter(c => visibleRegCols.has(c.id));
+  const visibleCfList = availableCfCols.filter(cf => visibleCfCols.has(cf.id));
+
   const filtered = useMemo(() => {
     let list = [...activeParticipantList];
     if (checkinFilter === 'checked_in') list = list.filter(p => p.checked_in);
     else if (checkinFilter === 'not_checked_in') list = list.filter(p => !p.checked_in);
     if (search.trim()) {
-      const q = search.toLowerCase();
+      // v1.0.1e-20: normalise punctuation, accents and umlauts (shared helper)
+      // so names match however they're typed — eun-hye=eunhye, O'Brien=OBrien,
+      // Müller=Mueller. Applies to both sides of every comparison.
+      const q = norm(search);
       const matchingMarkIds = new Set(
-        markDefs.filter(m => m.name.toLowerCase().includes(q)).map(m => String(m.id))
+        markDefs.filter(m => norm(m.name).includes(q)).map(m => String(m.id))
       );
       list = list.filter(p => {
-        if (`${p.first_name} ${p.last_name}`.toLowerCase().includes(q)) return true;
-        if (p.email?.toLowerCase().includes(q)) return true;
-        if (p.group_code?.toLowerCase().includes(q)) return true;
-        if (String(p.participant_number || '').includes(q)) return true;
+        if (norm(`${p.first_name} ${p.last_name}`).includes(q)) return true;
+        if (norm(p.email).includes(q)) return true;
+        if (norm(p.group_code).includes(q)) return true;
+        if (norm(String(p.participant_number || '')).includes(q)) return true;
         if (matchingMarkIds.size > 0) {
           const pMarkIds = new Set((markAssignments[String(p.id)] || []).map(a => String(a.mark_id)));
           if ([...matchingMarkIds].some(id => pMarkIds.has(id))) return true;
@@ -394,7 +408,24 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
     }
     list.sort((a, b) => {
       let va, vb;
-      switch (sortCol) {
+      // v1.0.1e-1: the extra columns (tick fields, registration columns,
+      // custom fields) previously had clickable sort headers but NO
+      // comparator branch — every click silently sorted by participant
+      // number. Now each column type sorts by its real, typed value.
+      if (sortCol.startsWith('tick_')) {
+        const fid = sortCol.slice(5);
+        va = values[`${a.id}:${fid}`] ? 1 : 0;
+        vb = values[`${b.id}:${fid}`] ? 1 : 0;
+      } else if (sortCol.startsWith('cf_')) {
+        const cfId = sortCol.slice(3);
+        const cfDef = visibleCfList.find(cf => String(cf.id) === cfId);
+        va = cfSortValue(cfDef, a.custom_fields?.[cfId]);
+        vb = cfSortValue(cfDef, b.custom_fields?.[cfId]);
+      } else if (sortCol.startsWith('reg_')) {
+        const key = sortCol.slice(4);
+        va = String(a[key] ?? '');
+        vb = String(b[key] ?? '');
+      } else switch (sortCol) {
         case 'participant_number': va = a.participant_number || 0; vb = b.participant_number || 0; break;
         case 'name': va = `${a.first_name} ${a.last_name}`; vb = `${b.first_name} ${b.last_name}`; break;
         case 'group_code': va = a.group_code || ''; vb = b.group_code || ''; break;
@@ -407,7 +438,7 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
       return 0;
     });
     return list;
-  }, [activeParticipantList, search, checkinFilter, sortCol, sortDir, markDefs, markAssignments]);
+  }, [activeParticipantList, search, checkinFilter, sortCol, sortDir, markDefs, markAssignments, values, visibleCfList]);
 
   if (loading) return <p className="text-gray-400 dark:text-gray-400 text-sm">{t('common.loading')}</p>;
 
@@ -421,9 +452,6 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
   // new top-progress made it a hero metric and the staleness landed.
   const checkedInCount = activeParticipantList.filter(isCheckedIn).length;
 
-  const visibleTickList = tickFields.filter(f => visibleTickCols.has(f.id));
-  const visibleRegList = availableRegCols.filter(c => visibleRegCols.has(c.id));
-  const visibleCfList = availableCfCols.filter(cf => visibleCfCols.has(cf.id));
   const hasColOptions = availableRegCols.length > 0 || tickFields.length > 0 || availableCfCols.length > 0;
 
   const renderRegCell = (p, col) => {
@@ -633,7 +661,7 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
           <table className="w-full min-w-max text-sm">
             <thead className="sticky top-0 z-20">
               <tr className="bg-gray-50 dark:bg-white/5 text-left text-xs text-muted uppercase tracking-wide">
-                <th onClick={() => handleSort('participant_number')} className="px-4 py-2 sticky left-0 bg-gray-50 dark:bg-white/5 z-30 cursor-pointer hover:text-mid-navy select-none whitespace-nowrap">{t('checkin.participant_number')}{sortArrow('participant_number')}</th>
+                <th onClick={() => handleSort('participant_number')} style={{ background: 'var(--app-bg)' }} className="px-4 py-2 sticky left-0 z-30 w-[4.5rem] min-w-[4.5rem] cursor-pointer hover:text-mid-navy select-none whitespace-nowrap">{t('checkin.participant_number')}{sortArrow('participant_number')}</th>
                 {/* Draggable columns — Name is draggable too.
                     v0.50e-1d: group_code moved to visibleRegList (toggleable). */}
                 {[
@@ -657,7 +685,8 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
                     onDrop={() => { if (dragColId) handleCiColDrop(dragColId, col.id); }}
                     onDragEnd={() => setDragColId(null)}
                     onClick={() => handleSort(col.id)}
-                    className={`px-4 py-2 cursor-move select-none transition-opacity ${col.center ? 'text-center' : ''} ${dragColId === col.id ? 'opacity-40' : ''}`}>
+                    style={col.id === 'name' ? { background: 'var(--app-bg)' } : undefined}
+                    className={`px-4 py-2 cursor-move select-none transition-opacity ${col.center ? 'text-center' : ''} ${col.id === 'name' ? 'sticky left-[4.5rem] z-30' : ''} ${dragColId === col.id ? 'opacity-40' : ''}`}>
                     <span className="text-subtle mr-1 text-[10px]">⠿</span>
                     {col.label}{sortArrow(col.id)}
                     {col.tickId && canCreateColumns && (
@@ -673,7 +702,7 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
                 const pending = !!checkinPending[p.id];
                 return (
                 <tr key={p.id} className={`border-t border-gray-50 dark:border-white/5 transition-colors ${ci ? 'bg-steel-blue/[0.12] dark:bg-gold/[0.18]' : ''}`} style={ci ? { boxShadow: 'inset 4px 0 0 0 var(--accent-checked)' } : undefined}>
-                  <td className={`px-4 py-2 font-mono text-xs text-gray-400 dark:text-gray-400 sticky left-0 z-10 ${ci ? 'bg-steel-blue/5 dark:bg-gold/10' : 'bg-white dark:bg-white/5'}`}>
+                  <td style={{ background: ci ? 'color-mix(in srgb, var(--accent-checked) 14%, var(--app-bg))' : 'var(--app-bg)' }} className="px-4 py-2 font-mono text-xs text-gray-400 dark:text-gray-400 sticky left-0 z-10 w-[4.5rem] min-w-[4.5rem]">
                     #{p.participant_number || '—'}
                   </td>
                   {[
@@ -691,7 +720,7 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
                     return ai - bi;
                   }).map(col => {
                     if (col.id === 'name') return (
-                      <td key="name" className={`px-4 py-2 font-medium whitespace-nowrap text-body`}>
+                      <td key="name" style={{ background: ci ? 'color-mix(in srgb, var(--accent-checked) 14%, var(--app-bg))' : 'var(--app-bg)' }} className={`px-4 py-2 font-medium whitespace-nowrap text-body sticky left-[4.5rem] z-10`}>
                         <span className="flex items-center gap-1">
                           {p.first_name} {p.last_name}
                           <MarkDots marksForParticipant={getParticipantMarks(p.id, 'checkin')}

@@ -499,7 +499,9 @@ export default function AdminLayout() {
                           ? 'bg-white/10 text-white'
                           : 'text-white/50 hover:text-white/80 hover:bg-white/5'
                       }`}>
-                      <IconStaff className="shrink-0" />
+                      <svg className="shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                      </svg>
                       <span>{t('nav.users')}</span>
                     </button>
                   )}
@@ -529,8 +531,9 @@ export default function AdminLayout() {
                       gated on capabilities.account_url, the "managed instance"
                       signal the SaaS injects (same gate as Manage account).
                       Self-hosters have no SaaS endpoint, so the delete action
-                      is a no-op for them — hide it. */}
-                  {isSuperAdmin && capabilities.account_url && (
+                      is a no-op for them — hide it. v1.0.1e-6: gated on
+                      account_portal (managed-instance), same as Manage account. */}
+                  {isSuperAdmin && capabilities.account_portal && (
                     <button onClick={() => { navigate('/admin/workspace'); closeSidebar(); }}
                       className="flex items-center gap-2.5 w-full text-left px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">
                       <IconWorkspace className="shrink-0" />
@@ -538,10 +541,12 @@ export default function AdminLayout() {
                     </button>
                   )}
                   {/* Manage account — external link to the SaaS account portal
-                      (billing, credits, workspace details). Super-admin only,
-                      and only when the SaaS injected an account URL. Opens in
-                      a new tab — a separate app, not in-app navigation. */}
-                  {isSuperAdmin && capabilities.account_url && (
+                      (billing, credits, workspace details). Super-admin only.
+                      v1.0.1e-6: gated on account_portal (managed-instance
+                      signal), NOT on account_url being set — a self-hoster who
+                      sets a URL for their own reasons must not see a link to
+                      OUR billing portal. CE defaults account_portal=false. */}
+                  {isSuperAdmin && capabilities.account_portal && (
                     <a href={capabilities.account_url} target="_blank" rel="noopener noreferrer"
                       onClick={closeSidebar}
                       className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">

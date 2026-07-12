@@ -8,10 +8,42 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
-## [Unreleased]
+## [1.0.2] — 2026-07-12
+
+### Added
+
+- **Live registration list.** New registrations appear in the event views
+  as they happen — no page refresh needed.
+- **Registration tab redesign.** A clearer registrations chart (rendering
+  glitch fixed), a range toggle (last 7 days / last 30 days / since
+  opening), and a summary for the selected period.
+- **Copy configuration from a previous event.** When creating an event,
+  pick a past event and choose exactly which sections to carry over:
+  marks, registration form, custom fields, group types with their rooms,
+  and team members.
+- **Export and import group types as a file.** Save a room layout (group
+  types, units, and mark restrictions, matched by name) to a file and
+  import it into another event — or another Moimio installation.
+- **Export and import the registration form as a file.** Field settings
+  are updated by field name on import; custom fields are added, and
+  duplicates by label are skipped.
+- **Floating unassigned panel.** While allocating, the unassigned list
+  stays pinned by default and can pop out into a floating window you can
+  drag and resize.
+- **Marks show who holds them.** Each mark in the list shows how many
+  participants carry it, with the names revealed on hover.
 
 ### Changed
 
+- **Smarter search.** Searching in People, Check-in, and the allocation
+  board now matches names regardless of hyphens, spaces, apostrophe
+  variants, accents, German umlauts (ä/ö/ü/ß written as ae/oe/ue/ss), and
+  special Latin letters such as ı, ł, đ, þ, ð, and œ.
+- **Consistent row actions.** Every list in the app now uses the same
+  pen (edit) and trash (delete) icons, with the same confirmation
+  behaviour throughout.
+- **Duplicate event replaced by Copy configuration.** Reusing a past
+  event's setup now always goes through the standard Create event flow.
 - **Imported CSV columns now show up automatically in the People table.**
   When a CSV import adds new custom fields (any column the importer
   doesn't recognise), those columns are now switched on in the People
@@ -19,6 +51,23 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
   the column picker. They remain hidden from the public registration
   form by default, as before — this only affects what you see in the
   People view.
+
+### Fixed
+
+- **Allocation runs are deterministic.** The same participants and the
+  same settings now always produce the same result.
+- **Remaining seats are used better.** A final pass fills capacity left
+  open after clusters are placed.
+- **Mark rooms are preferred for their holders.** Groups carrying a mark
+  now go to their designated mark-restricted room rather than a
+  tighter-fitting general room.
+- **Copied configurations rewire mark restrictions correctly.** Rooms
+  restricted to a mark now point at the new event's matching mark after
+  a copy.
+- **Custom-field columns sort properly** in the People table; select
+  fields sort by their defined option order.
+- **Searching by mark name works** in the People view.
+- **The "exclusive group codes" checkbox no longer sticks** after saving.
 
 ---
 

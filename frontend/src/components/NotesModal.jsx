@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { notes as notesApi } from '../services/api';
 import { useConfirmOverlay } from './ConfirmOverlay';
+import { EditIconButton, DeleteIconButton } from './RowActions';
 import { useI18n } from '../hooks/useI18n';
 import TranslatedError from './TranslatedError';
 
@@ -75,7 +76,7 @@ export default function NotesModal({ entityType, entityId, entityName, onClose }
                         <span className="text-[10px] text-subtle">{new Date(note.created_at).toLocaleString()}</span>
                       </div>
                     </div>
-                    <button onClick={() => handleDelete(note.id)} className="text-xs text-alert hover:text-alert shrink-0">✕</button>
+                    <DeleteIconButton onClick={() => handleDelete(note.id)} title={t('common.delete')} />
                   </div>
                 </div>
               ))}

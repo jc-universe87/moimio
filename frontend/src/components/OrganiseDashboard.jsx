@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { allocationCategories, formatErrorMessage } from '../services/api';
 import AllocationBoard from './AllocationBoard';
 import AllocStatusPill, { deriveAllocState, ALLOC_STATE } from './AllocStatusPill';
@@ -37,6 +37,11 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
   const [dragCatId, setDragCatId] = useState(null);
   const [dragOverCatId, setDragOverCatId] = useState(null);
   const [manageOpen, setManageOpen] = useState(false); // collapsible manage section
+  // v1.0.1e-31: room-layout export/import menu
+  const [ioMenuOpen, setIoMenuOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const ioMenuRef = useRef(null);
+  const fileInputRef = useRef(null);
   // v1.0.0p: per-column inline rename + kebab. State scoped to the
   // dashboard since both the title click and the kebab Rename action
   // need to drive the same input. editingCatRenameId = null when
@@ -71,6 +76,51 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
     } catch (err) { setError(err); }
     finally { setLoading(false); }
   }, [eventId]);
+
+  // ── v1.0.1e-31: room-layout export / import ──────────────────────────
+  useEffect(() => {
+    if (!ioMenuOpen) return undefined;
+    const onDoc = (e) => {
+      if (ioMenuRef.current && !ioMenuRef.current.contains(e.target)) setIoMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [ioMenuOpen]);
+
+  const handleExportLayout = async () => {
+    setIoMenuOpen(false);
+    try {
+      const payload = await allocationCategories.exportLayout(eventId);
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const safe = (eventName || 'event').replace(/[^\w.-]+/g, '_').slice(0, 40);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safe}_group-types.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) { setError(err); }
+  };
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ''; // let the same file be re-selected later
+    if (!file) return;
+    setImporting(true);
+    setError(null);
+    try {
+      const payload = JSON.parse(await file.text());
+      await allocationCategories.importLayout(eventId, payload);
+      await loadCategories();
+      onDataChange?.();
+    } catch (err) {
+      setError(err instanceof SyntaxError ? { i18nKey: 'errors.import.invalid_file' } : err);
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const handleReorderCats = async (fromId, toId) => {
     if (!fromId || !toId || fromId === toId) return;
@@ -311,39 +361,78 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
           {t('organise.title')}
         </h2>
         {isAdmin && (
-          <button onClick={() => {
-            // v1.0.0q: now a proper toggle (was set-only in v1.0.0p,
-            // which forced users to click outside to close). Also
-            // clears any kebab-Settings target so opening fresh
-            // from this button doesn't accidentally pre-load an
-            // edit form for some previously-clicked category.
-            setEditingCat(null);
-            setManageOpen(o => !o);
-          }}
-            className="text-xs font-semibold hover:underline flex items-center gap-1"
-            style={{ color: 'var(--io-accent)' }}>
-            <span style={{ display: 'inline-block', transform: manageOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>
-            {t('organise.add_group_type')}
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={() => {
+              // v1.0.0q: now a proper toggle (was set-only in v1.0.0p,
+              // which forced users to click outside to close). Also
+              // clears any kebab-Settings target so opening fresh
+              // from this button doesn't accidentally pre-load an
+              // edit form for some previously-clicked category.
+              setEditingCat(null);
+              setManageOpen(o => !o);
+            }}
+              className="text-xs font-semibold hover:underline flex items-center gap-1"
+              style={{ color: 'var(--io-accent)' }}>
+              <span className="text-sm leading-none">+</span>
+              {t('organise.add_group_type')}
+            </button>
+            {/* v1.0.1e-31 room-layout export/import menu; v1.0.2: the ⋯
+                now sits to the RIGHT of + Add group type — the app-wide
+                pattern is [+ Add {thing}] [⋯], right-bound. */}
+            <div className="relative" ref={ioMenuRef}>
+              <input ref={fileInputRef} type="file" accept="application/json,.json" onChange={handleImportFile} className="hidden" />
+              <button type="button" onClick={() => setIoMenuOpen(o => !o)} disabled={importing}
+                aria-label={t('organise.layout.menu')} aria-haspopup="true" aria-expanded={ioMenuOpen}
+                className="w-7 h-7 flex items-center justify-center rounded-card hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
+                style={{ color: 'var(--text-muted)' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" />
+                </svg>
+              </button>
+              {ioMenuOpen && (
+                <div className="absolute right-0 mt-1 w-48 rounded-card border shadow-lg z-30 py-1"
+                  style={{ background: 'var(--card-bg-solid, var(--app-bg))', borderColor: 'var(--card-border)' }}>
+                  <button type="button" onClick={handleExportLayout}
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+                    style={{ color: 'var(--text-primary)' }}>
+                    {t('organise.layout.export')}
+                  </button>
+                  <button type="button" onClick={() => { setIoMenuOpen(false); fileInputRef.current?.click(); }}
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+                    style={{ color: 'var(--text-primary)' }}>
+                    {t('organise.layout.import')}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
       {/* ── Collapsible: Manage Group Types (v0.58c: extracted to GroupTypesEditor) ── */}
       {isAdmin && manageOpen && (
-        <div
-          className="rounded-2xl p-4 mb-6"
-          style={{
-            background: 'var(--app-bg)',
-            border: '1px solid var(--card-border)',
-          }}
-        >
-          <GroupTypesEditor
-            eventId={eventId}
-            isAdmin={isAdmin}
-            initialEditCatId={editingCat?.id || null}
-            initialShowAddCat={!editingCat}
-            onChange={() => { loadCategories(); if (onDataChange) onDataChange(); }}
-          />
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto"
+          style={{ background: 'rgba(0,0,0,0.45)' }}
+          onClick={() => { setManageOpen(false); setEditingCat(null); }}>
+          <div className="rounded-2xl p-4 w-full max-w-2xl my-8"
+            style={{ background: 'var(--card-bg-solid, var(--app-bg))', border: '1px solid var(--card-border)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-heading font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
+                {editingCat ? t('common.edit') : t('organise.add_group_type')}
+              </h3>
+              <button onClick={() => { setManageOpen(false); setEditingCat(null); }}
+                className="text-lg leading-none hover:opacity-70" style={{ color: 'var(--text-subtle)' }}>×</button>
+            </div>
+            <GroupTypesEditor
+              eventId={eventId}
+              isAdmin={isAdmin}
+              initialEditCatId={editingCat?.id || null}
+              initialShowAddCat={!editingCat}
+              onChange={() => { loadCategories(); if (onDataChange) onDataChange(); }}
+              onDone={() => { setManageOpen(false); setEditingCat(null); }}
+            />
+          </div>
         </div>
       )}
 
@@ -361,7 +450,7 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
           <p className="text-xs mt-1">{t('organise.empty.hint')}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
+        <div className="grid gap-4 pb-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
           {categories.map((cat, idx) => {
             const allocated = cat.allocated_count || 0;
             const unassigned = totalParticipants - allocated;
@@ -380,13 +469,18 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
                 className={`card-surface-solid rounded-xl p-5 cursor-pointer hover:shadow-sm transition-all group select-none border-2 ${isDragOver ? 'border-steel-blue bg-steel-blue/5 scale-[1.01]' : 'border-transparent hover:border-steel-blue/40'}`}
                 id={`cat-${cat.id}`}>
                 {isAdmin && (
-                  <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center justify-end gap-2 -mx-5 -mt-5 mb-3 px-5 py-2 rounded-t-xl" style={{ background: 'rgba(128,128,128,0.06)' }}>
                     {/* Drag handle — pointer-fine devices only; hidden
                         visually until hover. v0.61c-2: gated on
                         HAS_FINE_POINTER so it doesn't surface on touch
-                        devices via swipe-reveal or accidental hover-emulation. */}
+                        devices via swipe-reveal or accidental hover-emulation.
+                        v1.0.2: strip is right-bound (justify-end + mr-auto
+                        here) so the icon group sits on the right edge on
+                        touch too, matching the unit cards — previously
+                        justify-between left-aligned it when this handle
+                        wasn't rendered. */}
                     {HAS_FINE_POINTER && (
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
+                      <div className="mr-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
                         <span className="text-gray-300 text-sm">⠿</span>
                         <span className="text-[9px] text-gray-300 uppercase tracking-wider">{t('common.drag_to_reorder')}</span>
                       </div>
@@ -416,77 +510,29 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
                       >
                         ↓
                       </button>
-                      {/* v1.0.0p: per-column kebab menu. Hosts the
-                          deeper actions (Rename / Settings / Manage
-                          units / Delete) at the column level rather
-                          than under the global "Manage Group Types"
-                          drawer, where they were buried two clicks
-                          deep. Up/Down stay outside the menu — quick
-                          reorder is the most common action. */}
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setKebabOpenCatId(kebabOpenCatId === cat.id ? null : cat.id);
-                          }}
-                          aria-label={t('organise.column_menu')}
-                          title={t('organise.column_menu')}
-                          className="w-6 h-6 rounded-md flex items-center justify-center text-sm hover:bg-black/5 dark:hover:bg-white/10"
-                          style={{ color: 'var(--text-subtle)' }}
-                        >
-                          ⋮
-                        </button>
-                        {kebabOpenCatId === cat.id && (
-                          <div
-                            onClick={e => e.stopPropagation()}
-                            className="absolute right-0 top-7 z-40 min-w-[180px] rounded-lg shadow-lg py-1"
-                            style={{
-                              background: 'var(--card-bg-solid)',
-                              border: '1px solid var(--card-border)',
-                            }}>
-                            <button
-                              type="button"
-                              onClick={() => startInlineRename(cat)}
-                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/10"
-                              style={{ color: 'var(--text-primary)' }}>
-                              {t('organise.menu.rename')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setKebabOpenCatId(null);
-                                setEditingCat(cat);
-                                setManageOpen(true);
-                              }}
-                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/10"
-                              style={{ color: 'var(--text-primary)' }}>
-                              {t('organise.menu.settings')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setKebabOpenCatId(null);
-                                setSelectedCatId(cat.id);
-                              }}
-                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/10"
-                              style={{ color: 'var(--text-primary)' }}>
-                              {t('organise.menu.manage_units')}
-                            </button>
-                            <div className="my-1" style={{ borderTop: '1px solid var(--card-border)' }} />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setKebabOpenCatId(null);
-                                handleDeleteCat(cat.id);
-                              }}
-                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-alert/10"
-                              style={{ color: 'var(--alert)' }}>
-                              {t('common.delete')}
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                      {/* v1.0.1e-6: kebab collapsed to the app-standard pair —
+                          pen = edit settings (modal), red trash = delete (with
+                          the shared confirm). Rename removed (inline on the
+                          title); "manage units" removed (the card body already
+                          navigates to the unit board). */}
+                      {isAdmin && (
+                        <>
+                          <button type="button"
+                            onClick={(e) => { e.stopPropagation(); setEditingCat(cat); setManageOpen(true); }}
+                            aria-label={t('common.edit')} title={t('common.edit')}
+                            className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10"
+                            style={{ color: 'var(--text-subtle)' }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                          </button>
+                          <button type="button"
+                            onClick={(e) => { e.stopPropagation(); handleDeleteCat(cat.id); }}
+                            aria-label={t('common.delete')} title={t('common.delete')}
+                            className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-alert/10"
+                            style={{ color: 'var(--alert)' }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M10 11v6M14 11v6" /></svg>
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}

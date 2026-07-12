@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { users as usersApi, eventAssignments as assignApi } from '../services/api';
 import { useConfirmOverlay } from './ConfirmOverlay';
+import { EditIconButton, DeleteIconButton } from './RowActions';
 import { useI18n } from '../hooks/useI18n';
 
 import TranslatedError from './TranslatedError';
@@ -532,17 +533,9 @@ export default function EventAssignmentsPanel({ eventId, isAdmin, onChange }) {
                         </p>
                       </div>
                       {isAdmin && (
-                        <div className="flex gap-3 shrink-0">
-                          <button onClick={() => handleStartEdit(a)}
-                            className="text-xs font-semibold hover:underline"
-                            style={{ color: 'var(--io-accent)' }}>
-                            {t('common.edit')}
-                          </button>
-                          <button onClick={() => handleRemove(a)}
-                            className="text-xs font-semibold hover:underline"
-                            style={{ color: 'var(--alert-burgundy)' }}>
-                            {t('common.remove')}
-                          </button>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <EditIconButton onClick={() => handleStartEdit(a)} title={t('common.edit')} />
+                          <DeleteIconButton onClick={() => handleRemove(a)} title={t('common.remove')} />
                         </div>
                       )}
                     </div>

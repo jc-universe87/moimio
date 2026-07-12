@@ -245,6 +245,12 @@ async def list_units(db: AsyncSession, category_id: uuid.UUID) -> list[dict]:
             "id": unit.id, "category_id": unit.category_id, "name": unit.name,
             "description": unit.description, "capacity": unit.capacity,
             "gender_restriction": unit.gender_restriction, "sort_order": unit.sort_order,
+            # v1.0.1e-2: these two were saved by PATCH but stripped from every
+            # read because this hand-built dict lists fields explicitly — the
+            # UI therefore never saw a lock or a mark "stick". Root cause of
+            # the "padlock does nothing / mark vanishes on refresh" reports.
+            "mark_restriction": unit.mark_restriction,
+            "is_kept": unit.is_kept,
             "occupant_count": occupant_counts.get(unit.id, 0),
         })
     return out

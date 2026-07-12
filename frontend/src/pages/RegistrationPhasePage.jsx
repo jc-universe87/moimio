@@ -30,18 +30,19 @@ import TranslatedError from '../components/TranslatedError';
 // { days, label, points } — days is an array of Date objects (oldest first,
 // daily buckets), label is the translation key for the sparkline heading,
 // points is the {date, count}[] for the Sparkline component.
-function buildSparkline(participantList, eventCreatedAt) {
+// v1.0.1e-23: window is selectable — '7d', '30d', or 'all' (since the event
+// was created). 7d/30d are clamped to the creation date so a young event
+// never shows empty leading days. Returns the daily points plus the total
+// sign-ups in the window (for the summary line).
+function buildSparkline(participantList, eventCreatedAt, range) {
   const now = new Date();
   const createdMs = eventCreatedAt ? new Date(eventCreatedAt).getTime() : now.getTime();
-  const daysSinceCreated = (now.getTime() - createdMs) / (1000 * 60 * 60 * 24);
-  const useAllTime = daysSinceCreated < 7;
+  const DAY = 24 * 60 * 60 * 1000;
+  let startMs;
+  if (range === 'all') startMs = createdMs;
+  else if (range === '30d') startMs = Math.max(createdMs, now.getTime() - 30 * DAY);
+  else startMs = Math.max(createdMs, now.getTime() - 7 * DAY); // '7d' default
 
-  // Oldest date in window — either event creation day or 7 days ago.
-  const startMs = useAllTime
-    ? createdMs
-    : now.getTime() - 7 * 24 * 60 * 60 * 1000;
-
-  // Build day buckets (midnight local) between start and today inclusive.
   const start = new Date(startMs);
   start.setHours(0, 0, 0, 0);
   const today = new Date();
@@ -52,25 +53,21 @@ function buildSparkline(participantList, eventCreatedAt) {
     buckets.push(new Date(d));
   }
 
-  // Count participants registered on each day (by created_at, excluding cancelled).
-  const counts = buckets.map(b => {
+  let total = 0;
+  const points = buckets.map(b => {
     const bNext = new Date(b);
     bNext.setDate(bNext.getDate() + 1);
-    return {
-      date: b.toISOString(),
-      count: participantList.filter(p => {
-        if (p.registration_status === 'cancelled') return false;
-        if (!p.created_at) return false;
-        const ms = new Date(p.created_at).getTime();
-        return ms >= b.getTime() && ms < bNext.getTime();
-      }).length,
-    };
+    const count = participantList.filter(p => {
+      if (p.registration_status === 'cancelled') return false;
+      if (!p.created_at) return false;
+      const ms = new Date(p.created_at).getTime();
+      return ms >= b.getTime() && ms < bNext.getTime();
+    }).length;
+    total += count;
+    return { date: b.toISOString(), count };
   });
 
-  return {
-    points: counts,
-    labelKey: useAllTime ? 'reg_phase.sparkline.all_time' : 'reg_phase.sparkline.7day',
-  };
+  return { points, total };
 }
 
 // Relative time for recent sign-ups ("5 min ago", "2 h ago", "3 d ago")
@@ -112,6 +109,7 @@ export default function RegistrationPhasePage({
   const [closing, setClosing] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [recentVisible, setRecentVisible] = useState(true);
+  const [range, setRange] = useState('7d'); // sparkline window: 7d | 30d | all
   const [error, setError] = useState(null);
 
   // Derived participant stats
@@ -142,8 +140,8 @@ export default function RegistrationPhasePage({
 
   // Sparkline data
   const spark = useMemo(
-    () => buildSparkline(participantList, event?.created_at),
-    [participantList, event?.created_at]
+    () => buildSparkline(participantList, event?.created_at, range),
+    [participantList, event?.created_at, range]
   );
 
   const handleClose = async () => {
@@ -176,28 +174,35 @@ export default function RegistrationPhasePage({
           rather than after the Share button where it read as if it
           belonged to Share. */}
       {isAdmin && (
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 flex-1 sm:flex-initial">
+        <div
+          className="card-surface-solid rounded-2xl p-4 sm:px-5 sm:py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+          style={{ border: '1px solid var(--card-border)' }}
+        >
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            className="inline-flex items-center justify-center gap-2 text-sm font-medium px-4 py-2.5 rounded-card border hover:bg-black/5 dark:hover:bg-white/10 self-stretch sm:self-auto shrink-0"
+            style={{ borderColor: 'var(--card-border)', color: 'var(--text-muted)' }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+            </svg>
+            {t('reg_phase.share.button')}
+          </button>
+          <div className="flex flex-col items-stretch sm:items-end gap-1.5 min-w-0">
             <button
               type="button"
               onClick={handleClose}
               disabled={closing}
-              className="text-sm font-semibold px-5 py-2.5 rounded-card bg-steel-blue text-white hover:bg-steel-blue-700 dark:bg-gold dark:text-deep-navy dark:hover:bg-gold/80 disabled:opacity-50"
+              className="text-sm font-semibold px-5 py-2.5 rounded-card bg-steel-blue text-white hover:bg-steel-blue-700 dark:bg-gold dark:text-deep-navy dark:hover:bg-gold/80 disabled:opacity-50 whitespace-nowrap"
             >
               {closing ? t('reg_phase.closing') : t('reg_phase.close.button')} →
             </button>
-            <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>
+            <p className="text-xs sm:text-right" style={{ color: 'var(--text-subtle)' }}>
               {t('reg_phase.close.hint')}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShareOpen(true)}
-            className="text-sm font-medium px-4 py-2.5 rounded-card border hover:bg-black/5 dark:hover:bg-white/10"
-            style={{ borderColor: 'var(--card-border)', color: 'var(--text-muted)' }}
-          >
-            {t('reg_phase.share.button')}
-          </button>
         </div>
       )}
 
@@ -270,10 +275,33 @@ export default function RegistrationPhasePage({
                 </div>
               )}
             </div>
-            <p className="text-[10px] uppercase tracking-caps font-semibold mb-1" style={{ color: 'var(--text-subtle)' }}>
-              {t(spark.labelKey)}
-            </p>
-            <Sparkline points={spark.points} label={t(spark.labelKey)} />
+            <div className="flex items-end justify-between gap-3 mb-2">
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-caps font-semibold" style={{ color: 'var(--text-subtle)' }}>
+                  {t('reg_phase.sparkline.title')}
+                </p>
+                <p className="text-sm font-body" style={{ color: 'var(--text-muted)' }}>
+                  {t('reg_phase.sparkline.total', { n: spark.total })}
+                </p>
+              </div>
+              <div className="inline-flex rounded-card overflow-hidden border shrink-0" style={{ borderColor: 'var(--card-border)' }}>
+                {['7d', '30d', 'all'].map(r => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setRange(r)}
+                    aria-pressed={range === r}
+                    className="px-2.5 py-1 text-xs font-medium transition-colors"
+                    style={range === r
+                      ? { background: 'var(--io-accent)', color: '#fff' }
+                      : { color: 'var(--text-muted)', background: 'transparent' }}
+                  >
+                    {t(`reg_phase.range.${r}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Sparkline points={spark.points} height={64} label={t('reg_phase.sparkline.title')} />
           </>
         )}
       </div>

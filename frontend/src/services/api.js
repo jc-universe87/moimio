@@ -188,6 +188,9 @@ export const events = {
   create: (data) => request('/events/', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/events/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   getFields: (eventId) => request(`/events/${eventId}/fields`),
+  // v1.0.1e-31: registration-form export/import (field toggles + custom fields).
+  exportForm: (eventId) => request(`/events/${eventId}/registration-form/export`),
+  importForm: (eventId, payload) => request(`/events/${eventId}/registration-form/import`, { method: 'POST', body: JSON.stringify(payload) }),
   setFields: (eventId, configs) => request(`/events/${eventId}/fields`, { method: 'PUT', body: JSON.stringify(configs) }),
   getFieldsPublic: (eventId) => request(`/events/${eventId}/fields/public`),
   // Setup hub (v50b §3 gate rules).
@@ -233,6 +236,9 @@ export const participants = {
 // ─── Allocation Categories ───
 export const allocationCategories = {
   list: (eventId) => request(`/events/${eventId}/allocation-categories/`),
+  // v1.0.1e-31: room-layout export/import (group types + units, GDPR-safe).
+  exportLayout: (eventId) => request(`/events/${eventId}/allocation-categories/export`),
+  importLayout: (eventId, payload) => request(`/events/${eventId}/allocation-categories/import`, { method: 'POST', body: JSON.stringify(payload) }),
   create: (eventId, data) => request(`/events/${eventId}/allocation-categories/`, { method: 'POST', body: JSON.stringify(data) }),
   update: (eventId, catId, data) => request(`/events/${eventId}/allocation-categories/${catId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   delete: (eventId, catId) => request(`/events/${eventId}/allocation-categories/${catId}`, { method: 'DELETE' }),

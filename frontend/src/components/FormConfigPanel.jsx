@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { events as eventsApi, customFields as cfApi } from '../services/api';
 import { useConfirmOverlay } from './ConfirmOverlay';
+import { EditIconButton, DeleteIconButton } from './RowActions';
 import { useI18n } from '../hooks/useI18n';
 import { useToast } from '../hooks/useToast';
 
@@ -16,6 +17,11 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
   const [editingFieldId, setEditingFieldId] = useState(null);
   const [editField, setEditField] = useState({ label: '', field_type: 'text', is_required: false, options: '', show_in_form: true });
   const [loading, setLoading] = useState(true);
+  // v1.0.1e-31: registration-form export/import menu
+  const [ioMenuOpen, setIoMenuOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const ioMenuRef = useRef(null);
+  const fileInputRef = useRef(null);
   const { confirm, ConfirmOverlay } = useConfirmOverlay();
   const { t } = useI18n();
   const { showToast, ToastHost } = useToast();
@@ -45,6 +51,50 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
       setFields(fieldsData); setCustomFieldList(customData);
     } catch (err) { setError(err); }
     finally { setLoading(false); }
+  };
+
+  // ── v1.0.1e-31: registration-form export / import ────────────────────
+  useEffect(() => {
+    if (!ioMenuOpen) return undefined;
+    const onDoc = (e) => {
+      if (ioMenuRef.current && !ioMenuRef.current.contains(e.target)) setIoMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [ioMenuOpen]);
+
+  const handleExportForm = async () => {
+    setIoMenuOpen(false);
+    try {
+      const payload = await eventsApi.exportForm(eventId);
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'registration-form.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) { setError(err); }
+  };
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setImporting(true);
+    setError(null);
+    try {
+      const payload = JSON.parse(await file.text());
+      await eventsApi.importForm(eventId, payload);
+      await loadAll();
+      showToast(t('event.form.imported'));
+    } catch (err) {
+      setError(err instanceof SyntaxError ? { i18nKey: 'errors.import.invalid_form_file' } : err);
+    } finally {
+      setImporting(false);
+    }
   };
 
   // v50b-7: auto-save on every toggle. No more explicit "Save field settings"
@@ -146,9 +196,39 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
 
   return (
     <div>
-      <h3 className="font-heading font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-        {t('event.form_fields')}
-      </h3>
+      <div className="flex items-start justify-between gap-3 mb-1">
+        <h3 className="font-heading font-bold" style={{ color: 'var(--text-primary)' }}>
+          {t('event.form_fields')}
+        </h3>
+        {isAdmin && (
+          <div className="relative shrink-0" ref={ioMenuRef}>
+            <input ref={fileInputRef} type="file" accept="application/json,.json" onChange={handleImportFile} className="hidden" />
+            <button type="button" onClick={() => setIoMenuOpen(o => !o)} disabled={importing}
+              aria-label={t('organise.layout.menu')} aria-haspopup="true" aria-expanded={ioMenuOpen}
+              className="w-7 h-7 flex items-center justify-center rounded-card hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
+              style={{ color: 'var(--text-muted)' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" />
+              </svg>
+            </button>
+            {ioMenuOpen && (
+              <div className="absolute right-0 mt-1 w-44 rounded-card border shadow-lg z-30 py-1"
+                style={{ background: 'var(--card-bg-solid, var(--app-bg))', borderColor: 'var(--card-border)' }}>
+                <button type="button" onClick={handleExportForm}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+                  style={{ color: 'var(--text-primary)' }}>
+                  {t('event.form.export')}
+                </button>
+                <button type="button" onClick={() => { setIoMenuOpen(false); fileInputRef.current?.click(); }}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+                  style={{ color: 'var(--text-primary)' }}>
+                  {t('event.form.import')}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
       <p className="text-xs mb-4" style={{ color: 'var(--text-subtle)' }}>
         {t('event.form_fields.hint')}
       </p>
@@ -373,17 +453,9 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
                       )}
                     </div>
                     {isAdmin && (
-                      <div className="flex gap-3 shrink-0">
-                        <button onClick={() => handleEditCustom(cf)}
-                          className="text-xs font-semibold hover:underline"
-                          style={{ color: 'var(--io-accent)' }}>
-                          {t('common.edit')}
-                        </button>
-                        <button onClick={() => handleDeleteCustom(cf.id)}
-                          className="text-xs font-semibold hover:underline"
-                          style={{ color: 'var(--alert-burgundy)' }}>
-                          {t('common.delete')}
-                        </button>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <EditIconButton onClick={() => handleEditCustom(cf)} title={t('common.edit')} />
+                        <DeleteIconButton onClick={() => handleDeleteCustom(cf.id)} title={t('common.delete')} />
                       </div>
                     )}
                   </div>

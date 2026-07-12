@@ -152,3 +152,38 @@ async def stream_organise(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get("/api/events/{event_id}/registration/stream")
+async def stream_registration(
+    event_id: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_query_token),
+):
+    """Stream registration events (new sign-ups and email confirmations) for
+    one event, so the organiser's registration dashboard updates live without
+    a refresh.
+
+    Same query-token auth as the other streams. Gated on read access to
+    participant data ("people") — that's what the registration dashboard
+    surfaces (counts + recent sign-ups).
+    """
+    event = await get_event_by_id(db, event_id)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"key": "errors.event.not_found"})
+
+    if current_user.role != UserRole.SUPER_ADMIN:
+        perms = await get_event_permissions(db, current_user, event_id)
+        if perms is None or not has_read(perms, "people"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"key": "errors.participant.no_event_perms"})
+
+    return StreamingResponse(
+        _stream_events(request, f"registration:{event_id}"),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { allocationCategories } from '../services/api';
 import { useConfirmOverlay } from './ConfirmOverlay';
+import { EditIconButton, DeleteIconButton } from './RowActions';
 import { useI18n } from '../hooks/useI18n';
 import TranslatedError from './TranslatedError';
 
@@ -47,7 +48,7 @@ const HAS_FINE_POINTER = typeof window !== 'undefined'
  *                       band and land directly on the create form
  *                       (one click instead of two).
  */
-export default function GroupTypesEditor({ eventId, isAdmin, onChange, initialEditCatId = null, initialShowAddCat = false }) {
+export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, initialEditCatId = null, initialShowAddCat = false }) {
   const [categories, setCategories] = useState([]);
   const [editingCat, setEditingCat] = useState(null);
   const [showAddCat, setShowAddCat] = useState(!!initialShowAddCat);
@@ -104,6 +105,7 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, initialEd
       setShowAddCat(false);
       await loadCategories();
       notifyChange();
+      if (onDone) onDone();   // v1.0.1e-6: close the modal after a successful add
     } catch (err) { setError(err); }
   };
 
@@ -119,6 +121,7 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, initialEd
       setEditingCat(null);
       await loadCategories();
       notifyChange();
+      if (onDone) onDone();   // v1.0.1e-6: close the modal after a successful save
     } catch (err) { setError(err); }
   };
 
@@ -307,16 +310,14 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, initialEd
                       style={{ color: 'var(--text-subtle)' }}>
                       ▼
                     </button>
-                    <button onClick={() => setEditingCat({ ...cat })}
-                      className="text-[10px] font-semibold hover:underline ml-1"
-                      style={{ color: 'var(--io-accent)' }}>
-                      {t('common.edit')}
-                    </button>
-                    <button onClick={() => handleDeleteCat(cat.id)}
-                      className="text-[10px] font-semibold hover:underline"
-                      style={{ color: 'var(--alert-burgundy)' }}>
-                      {t('common.delete')}
-                    </button>
+                    {/* v1.0.2: last holdout of the consistency sweep — the
+                        internal list's Edit/Delete text links become the
+                        app-standard pen/trash icons (same as MarksPanel,
+                        FormConfigPanel, Users). Reorder arrows unchanged. */}
+                    <EditIconButton onClick={() => setEditingCat({ ...cat })}
+                      title={t('common.edit')} className="ml-1" />
+                    <DeleteIconButton onClick={() => handleDeleteCat(cat.id)}
+                      title={t('common.delete')} />
                   </div>
                 </div>
               )}

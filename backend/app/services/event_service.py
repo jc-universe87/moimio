@@ -70,7 +70,8 @@ async def create_event(db: AsyncSession, data: EventCreate, created_by: uuid.UUI
         await create_default_categories(db, event.id)
     else:
         await duplicate_event_config(
-            db, source_event_id=data.copy_from_event_id, dest_event_id=event.id
+            db, source_event_id=data.copy_from_event_id, dest_event_id=event.id,
+            options=data.copy_options,
         )
 
     # v0.50j: auto-grant the creator a per-event admin assignment so
@@ -354,7 +355,11 @@ async def duplicate_event_config(
     db: AsyncSession,
     source_event_id: uuid.UUID,
     dest_event_id: uuid.UUID,
+    options: "CopyOptions | None" = None,
 ) -> None:
+    from app.schemas.event import CopyOptions
+    if options is None:
+        options = CopyOptions()  # None = copy everything (back-compat)
     from app.models.mark import MarkDefinition
     from app.models.event_field_config import EventFieldConfig
     from app.models.custom_field import CustomFieldDefinition
@@ -363,99 +368,117 @@ async def duplicate_event_config(
     from app.models.event_assignment import EventUserAssignment
 
     # ─── Marks ─────────────────────────────────────────────────────────
-    mark_res = await db.execute(
-        select(MarkDefinition).where(MarkDefinition.event_id == source_event_id)
-    )
-    for m in mark_res.scalars().all():
-        db.add(MarkDefinition(
-            event_id=dest_event_id,
-            name=m.name,
-            colour=m.colour,
-            visible_in=list(m.visible_in or []),
-            created_by_user_id=m.created_by_user_id,
-        ))
+    # v1.0.1e-25/26: keep a source_mark_id → new_mark_id map so a copied unit's
+    # mark_restriction can be rewired to the NEW event's mark. If marks aren't
+    # copied, the map stays empty and any copied room's mark restriction falls
+    # back to none (a restriction to a mark that isn't here would be invalid).
+    mark_id_map: dict[uuid.UUID, uuid.UUID] = {}
+    if options.marks:
+        mark_res = await db.execute(
+            select(MarkDefinition).where(MarkDefinition.event_id == source_event_id)
+        )
+        for m in mark_res.scalars().all():
+            payload = {
+                col.name: getattr(m, col.name)
+                for col in MarkDefinition.__table__.columns
+                if col.name not in ("id", "created_at", "updated_at", "event_id")
+            }
+            payload["event_id"] = dest_event_id
+            new_mark = MarkDefinition(**payload)
+            db.add(new_mark)
+            await db.flush()  # populate new_mark.id
+            mark_id_map[m.id] = new_mark.id
 
     # ─── Event field configs (registration form schema) ─────────────────
-    fc_res = await db.execute(
-        select(EventFieldConfig).where(EventFieldConfig.event_id == source_event_id)
-    )
-    for fc in fc_res.scalars().all():
-        db.add(EventFieldConfig(
-            event_id=dest_event_id,
-            field_name=fc.field_name,
-            is_enabled=fc.is_enabled,
-            is_required=fc.is_required,
-        ))
+    if options.registration_form:
+        fc_res = await db.execute(
+            select(EventFieldConfig).where(EventFieldConfig.event_id == source_event_id)
+        )
+        for fc in fc_res.scalars().all():
+            db.add(EventFieldConfig(
+                event_id=dest_event_id,
+                field_name=fc.field_name,
+                is_enabled=fc.is_enabled,
+                is_required=fc.is_required,
+            ))
 
     # ─── Custom field definitions ──────────────────────────────────────
-    cf_res = await db.execute(
-        select(CustomFieldDefinition).where(CustomFieldDefinition.event_id == source_event_id)
-    )
-    for cf in cf_res.scalars().all():
-        db.add(CustomFieldDefinition(
-            event_id=dest_event_id,
-            label=cf.label,
-            field_type=cf.field_type,
-            options=cf.options,
-            is_required=cf.is_required,
-            sort_order=cf.sort_order,
-        ))
+    if options.custom_fields:
+        cf_res = await db.execute(
+            select(CustomFieldDefinition).where(CustomFieldDefinition.event_id == source_event_id)
+        )
+        for cf in cf_res.scalars().all():
+            db.add(CustomFieldDefinition(
+                event_id=dest_event_id,
+                label=cf.label,
+                field_type=cf.field_type,
+                options=cf.options,
+                is_required=cf.is_required,
+                sort_order=cf.sort_order,
+            ))
 
     # ─── Allocation categories + units ────────────────────────────────
-    # Units FK into categories, so we need the NEW category IDs to
-    # rewire them. Keep a source_cat_id → new_cat_id map during copy.
-    cat_res = await db.execute(
-        select(AllocationCategory).where(AllocationCategory.event_id == source_event_id)
-    )
-    cat_id_map: dict[uuid.UUID, uuid.UUID] = {}
-    for cat in cat_res.scalars().all():
-        new_cat = AllocationCategory(
-            event_id=dest_event_id,
-            name=cat.name,
-            item_label=cat.item_label,
-            description=cat.description,
-            rule_type=cat.rule_type,
-            has_capacity=cat.has_capacity,
-            has_gender_restriction=cat.has_gender_restriction,
-            sort_order=cat.sort_order,
-            is_default=cat.is_default,
-            # Fresh event starts with no confirmed allocations.
-            confirmed=False,
-            settings=cat.settings,
+    if options.group_types:
+        # Units FK into categories, so we need the NEW category IDs to
+        # rewire them. Keep a source_cat_id → new_cat_id map during copy.
+        cat_res = await db.execute(
+            select(AllocationCategory).where(AllocationCategory.event_id == source_event_id)
         )
-        db.add(new_cat)
-        await db.flush()  # populate new_cat.id
-        cat_id_map[cat.id] = new_cat.id
+        cat_id_map: dict[uuid.UUID, uuid.UUID] = {}
+        for cat in cat_res.scalars().all():
+            new_cat = AllocationCategory(
+                event_id=dest_event_id,
+                name=cat.name,
+                item_label=cat.item_label,
+                description=cat.description,
+                rule_type=cat.rule_type,
+                has_capacity=cat.has_capacity,
+                has_gender_restriction=cat.has_gender_restriction,
+                sort_order=cat.sort_order,
+                is_default=cat.is_default,
+                # Fresh event starts with no confirmed allocations.
+                confirmed=False,
+                settings=cat.settings,
+            )
+            db.add(new_cat)
+            await db.flush()  # populate new_cat.id
+            cat_id_map[cat.id] = new_cat.id
 
-    if cat_id_map:
-        unit_res = await db.execute(
-            select(AllocationUnit).where(AllocationUnit.category_id.in_(list(cat_id_map.keys())))
-        )
-        for u in unit_res.scalars().all():
-            # Introspect available columns defensively — AllocationUnit
-            # may have fields we don't know about at write time. Use
-            # the SQLAlchemy column list as the source of truth.
-            payload = {
-                col.name: getattr(u, col.name)
-                for col in AllocationUnit.__table__.columns
-                if col.name not in ("id", "created_at", "updated_at", "category_id")
-            }
-            payload["category_id"] = cat_id_map[u.category_id]
-            db.add(AllocationUnit(**payload))
+        if cat_id_map:
+            unit_res = await db.execute(
+                select(AllocationUnit).where(AllocationUnit.category_id.in_(list(cat_id_map.keys())))
+            )
+            for u in unit_res.scalars().all():
+                # Introspect available columns defensively — AllocationUnit
+                # may have fields we don't know about at write time. Use
+                # the SQLAlchemy column list as the source of truth.
+                payload = {
+                    col.name: getattr(u, col.name)
+                    for col in AllocationUnit.__table__.columns
+                    if col.name not in ("id", "created_at", "updated_at", "category_id")
+                }
+                payload["category_id"] = cat_id_map[u.category_id]
+                # v1.0.1e-25: rewire the room's mark restriction to the copied mark
+                # so the restriction is valid in the new event. Fall back to no
+                # restriction if the source mark somehow wasn't copied.
+                if payload.get("mark_restriction"):
+                    payload["mark_restriction"] = mark_id_map.get(payload["mark_restriction"])
+                db.add(AllocationUnit(**payload))
 
     # ─── Staff assignments ────────────────────────────────────────────
-    # Per Q3: yes, copy staff assignments. Deduped downstream in
-    # create_event (creator gets ensured after this call).
-    asn_res = await db.execute(
-        select(EventUserAssignment).where(EventUserAssignment.event_id == source_event_id)
-    )
-    for a in asn_res.scalars().all():
-        db.add(EventUserAssignment(
-            event_id=dest_event_id,
-            user_id=a.user_id,
-            role=a.role,
-            permissions=a.permissions,
-        ))
+    if options.staff:
+        # Per Q3: yes, copy staff assignments. Deduped downstream in
+        # create_event (creator gets ensured after this call).
+        asn_res = await db.execute(
+            select(EventUserAssignment).where(EventUserAssignment.event_id == source_event_id)
+        )
+        for a in asn_res.scalars().all():
+            db.add(EventUserAssignment(
+                event_id=dest_event_id,
+                user_id=a.user_id,
+                role=a.role,
+                permissions=a.permissions,
+            ))
 
     await db.flush()
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { marks as marksApi, events as eventsApi, participants as participantsApi } from '../services/api';
 import { useConfirmOverlay } from './ConfirmOverlay';
 import StrongDeleteConfirm from './StrongDeleteConfirm';
+import { EditIconButton, DeleteIconButton } from './RowActions';
 import { useI18n } from '../hooks/useI18n';
 import EmptyState from './EmptyState';
 import { formatNamesList } from '../utils/formatNamesList';
@@ -548,17 +549,9 @@ export default function MarksPanel({ eventId, isAdmin, currentUserId, marksPerm,
                     return <MarkCountBadge count={total} names={names} lang={lang} t={t} />;
                   })()}
                   {canModify(def) && (
-                    <div className="flex gap-3 shrink-0">
-                      <button onClick={() => startEdit(def)}
-                        className="text-[10px] font-semibold hover:underline"
-                        style={{ color: 'var(--io-accent)' }}>
-                        {t('common.edit')}
-                      </button>
-                      <button onClick={() => handleDelete(def)}
-                        className="text-[10px] font-semibold hover:underline"
-                        style={{ color: 'var(--alert-burgundy)' }}>
-                        {t('common.delete')}
-                      </button>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <EditIconButton onClick={() => startEdit(def)} title={t('common.edit')} />
+                      <DeleteIconButton onClick={() => handleDelete(def)} title={t('common.delete')} />
                     </div>
                   )}
                 </div>

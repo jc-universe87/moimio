@@ -115,6 +115,23 @@ async def public_register(
             lang=lang,
         )
 
+    # v1.0.1e-22: fan out to the organiser's registration dashboard so its
+    # counts and recent-sign-ups list update live, without a refresh. Fire-
+    # and-forget — the registration already succeeded; a publish failure must
+    # not fail the request.
+    try:
+        from app.core.pubsub import broker
+        await broker.publish(
+            f"registration:{event_id}",
+            {
+                "type": "registration_created",
+                "participant_id": str(participant.id),
+                "status": participant.registration_status.value,
+            },
+        )
+    except Exception as e:
+        logger.warning("registration_pubsub_publish_failed", error=str(e))
+
     return participant
 
 
@@ -165,6 +182,16 @@ async def confirm_registration(
                 group_code=participant.group_code,
                 lang=getattr(participant, 'preferred_language', 'en') or 'en',
             )
+        # v1.0.1e-22: live-update the registration dashboard's confirmed count
+        # when someone clicks their email link. Fire-and-forget.
+        try:
+            from app.core.pubsub import broker
+            await broker.publish(
+                f"registration:{participant.event_id}",
+                {"type": "registration_confirmed", "participant_id": str(participant.id)},
+            )
+        except Exception as e:
+            logger.warning("registration_pubsub_publish_failed", error=str(e))
     else:  # state == "already"
         logger.info(
             "participant_confirm_revisit",

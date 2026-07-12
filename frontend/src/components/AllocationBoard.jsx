@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { normalizeSearch as norm } from '../services/searchNormalize';
 import { allocationUnits, allocations as allocApi, notes as notesApi, allocationCategories as catApi, preferenceRequests as prefApi, getToken , formatErrorMessage } from '../services/api';
 import NotesModal from './NotesModal';
 import MarkDots from './MarkDots';
@@ -83,6 +84,75 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   const [isMobileView, setIsMobileView] = useState(() => window.innerWidth < 768);
   const rightPanelRef = useRef(null);
   const leftPanelRef = useRef(null);
+  // v1.0.1e-11: unassigned panel — sticky in-column by default, or pop out
+  // into a floating window. Position + size are controlled via state; a single
+  // pointer listener (attached only while floating) drives both move (header)
+  // and resize (corner), using the mode stored in panelInteract.
+  const [panelFloating, setPanelFloating] = useState(false);
+  const [panelPos, setPanelPos] = useState({ x: 24, y: 96 });
+  const [panelSize, setPanelSize] = useState({ w: 300, h: 460 });
+  const panelInteract = useRef(null);
+  const startPanelMove = (e) => { e.preventDefault(); panelInteract.current = { mode: 'move', startX: e.clientX, startY: e.clientY, origX: panelPos.x, origY: panelPos.y }; };
+  const startPanelResize = (e) => { e.preventDefault(); e.stopPropagation(); panelInteract.current = { mode: 'resize', startX: e.clientX, startY: e.clientY, origW: panelSize.w, origH: panelSize.h }; };
+  useEffect(() => {
+    if (!panelFloating) return;
+    const onMove = (e) => {
+      const st = panelInteract.current;
+      if (!st) return;
+      const dx = e.clientX - st.startX, dy = e.clientY - st.startY;
+      if (st.mode === 'move') {
+        setPanelPos({ x: Math.min(Math.max(0, st.origX + dx), window.innerWidth - 80), y: Math.min(Math.max(0, st.origY + dy), window.innerHeight - 40) });
+      } else if (st.mode === 'resize') {
+        setPanelSize({ w: Math.max(240, st.origW + dx), h: Math.max(220, st.origH + dy) });
+      }
+    };
+    const onUp = () => { panelInteract.current = null; };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
+  }, [panelFloating]);
+
+  // v1.0.1e-13: JS-driven sticky for the docked panel — attempt 2. The root
+  // is min-h-screen, so <main>'s overflow-auto never actually scrolls; the
+  // WINDOW does. So we listen on the window AND on any real overflow ancestor,
+  // and pin the panel to a fixed viewport offset by translating it as its row
+  // scrolls up. Stays in flex flow (no layout shift). Desktop only.
+  useEffect(() => {
+    if (panelFloating) return;
+    const panel = leftPanelRef.current;
+    if (!panel) return;
+    const mq = window.matchMedia('(min-width: 768px)');
+    const targets = [window];
+    let node = panel.parentElement;
+    while (node && node !== document.body) {
+      const oy = getComputedStyle(node).overflowY;
+      if (oy === 'auto' || oy === 'scroll') targets.push(node);
+      node = node.parentElement;
+    }
+    let raf = null;
+    const update = () => {
+      raf = null;
+      const parent = panel.parentElement;
+      if (!mq.matches || !parent) { panel.style.transform = ''; return; }
+      const OFFSET = 16;
+      const parentTop = parent.getBoundingClientRect().top;
+      let shift = OFFSET - parentTop;
+      if (shift < 0) shift = 0;
+      const maxShift = Math.max(0, parent.offsetHeight - panel.offsetHeight - 8);
+      if (shift > maxShift) shift = maxShift;
+      panel.style.transform = shift > 0 ? `translateY(${shift}px)` : '';
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
+    targets.forEach(tg => tg.addEventListener('scroll', onScroll, { passive: true }));
+    window.addEventListener('resize', onScroll);
+    update();
+    return () => {
+      targets.forEach(tg => tg.removeEventListener('scroll', onScroll));
+      window.removeEventListener('resize', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+      panel.style.transform = '';
+    };
+  }, [panelFloating]);
 
   const { confirm, ConfirmOverlay } = useConfirmOverlay();
   const { t, lang } = useI18n();
@@ -213,7 +283,6 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
 
   // Split-button mode picker + overflow menu + manage units
   const [showModePicker, setShowModePicker] = useState(false);
-  const [manageUnitsOpen, setManageUnitsOpen] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const overflowMenuRef = useRef(null);
 
@@ -627,12 +696,29 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     } catch (err) { setError(err); }
   };
 
-  // v1.0.1e: toggle "keep as-is" straight from the room row (the padlock).
-  const handleToggleKeep = async (unit) => {
+  // v1.0.1e-2: room marks popup — the same assign/remove experience as
+  // participant marks, but the room's single restriction mark.
+  const [unitMarksFor, setUnitMarksFor] = useState(null);
+  const handleSetUnitMark = async (unit, markId) => {
     try {
-      await allocationUnits.update(eventId, category.id, unit.id, { is_kept: !unit.is_kept });
+      const updated = await allocationUnits.update(eventId, category.id, unit.id, { mark_restriction: markId });
       await loadAll();
       if (onDataChange) onDataChange();
+      setUnitMarksFor(prev => prev && prev.id === unit.id
+        ? { ...prev, mark_restriction: updated?.mark_restriction ?? markId }
+        : prev);
+    } catch (err) { setError(err); }
+  };
+
+  // v1.0.1e: toggle "keep as-is" straight from the room row (the padlock).
+  // v1.0.1e-2: confirm with a toast, so the click visibly did something.
+  const handleToggleKeep = async (unit) => {
+    const next = !unit.is_kept;
+    try {
+      await allocationUnits.update(eventId, category.id, unit.id, { is_kept: next });
+      await loadAll();
+      if (onDataChange) onDataChange();
+      showToast(t(next ? 'organise.room.toast_kept' : 'organise.room.toast_released'));
     } catch (err) { setError(err); }
   };
 
@@ -668,6 +754,32 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   const cancelInlineRenameUnit = () => {
     setEditingUnitRenameId(null);
     setUnitRenameDraft('');
+  };
+
+  // v1.0.1e-7: unit settings modal save. editingUnit with an id updates;
+  // without an id creates. Marks are NOT in this modal (they stay inline on
+  // the card), so on update we pass the existing mark_restriction through
+  // unchanged rather than wiping it.
+  const handleSaveUnitModal = async (e) => {
+    e.preventDefault();
+    if (!editingUnit?.name?.trim()) return;
+    const payload = {
+      name: editingUnit.name.trim(),
+      description: editingUnit.description?.trim() || null,
+      capacity: editingUnit.capacity ? parseInt(editingUnit.capacity) : 1,
+      gender_restriction: editingUnit.gender_restriction || null,
+    };
+    try {
+      if (editingUnit.id) {
+        payload.mark_restriction = editingUnit.mark_restriction || null;
+        await allocationUnits.update(eventId, category.id, editingUnit.id, payload);
+      } else {
+        await allocationUnits.create(eventId, category.id, payload);
+      }
+      setEditingUnit(null);
+      await loadAll();
+      if (onDataChange) onDataChange();
+    } catch (err) { setError(err); }
   };
 
   const handleDeleteUnit = async (unitId) => {
@@ -745,8 +857,9 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   const unassignedConfirmedCount = leftPanelCount - pendingCount;
 
   const filteredLeftPanel = leftPanelPeople.filter(p => {
-    const q = search.toLowerCase();
-    const nameMatch = !q || `${p.first_name} ${p.last_name}`.toLowerCase().includes(q) || (p.group_code && p.group_code.toLowerCase().includes(q));
+    // v1.0.1e-20: normalise punctuation, accents and umlauts (shared helper)
+    const q = norm(search);
+    const nameMatch = !q || norm(`${p.first_name} ${p.last_name}`).includes(q) || (p.group_code && norm(p.group_code).includes(q));
     const genderMatch = !genderFilter || p.gender === genderFilter;
     return nameMatch && genderMatch;
   });
@@ -962,7 +1075,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
       const projected = targetUnit.occupant_count + newArrivals;
       if (projected > targetUnit.capacity) {
         const displayName = dragParticipant.bulk?.length > 1
-          ? `${adding} ${t('nav.people').toLowerCase()}`
+          ? `${adding} ${t('nav.people')}`
           : findName(dragParticipant.id);
         const ok = await confirm({
           title: t('organise.overbook_confirm.title', { unit: targetUnit.name }),
@@ -1467,8 +1580,17 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
               </span>
             )}
 
-            {/* Spacer */}
-            <div className="flex-1" />
+            {/* v1.0.2: right-bound action pair — [+ Add {unit}] then [⋯],
+                matching the Organise header. ml-auto (not a flex-1 spacer)
+                keeps the pair on the right edge even when the row wraps
+                on narrow screens. */}
+            <div className="flex items-center gap-2 ml-auto">
+              <button onClick={() => setEditingUnit({ name: '', description: '', capacity: '', gender_restriction: '' })}
+                className="text-xs font-semibold hover:underline flex items-center gap-1"
+                style={{ color: 'var(--io-accent)' }}>
+                <span className="text-sm leading-none">+</span>
+                {t('organise.add_unit', { item: itemLabel })}
+              </button>
 
             {/* ⋯ overflow menu */}
             <div className="relative" ref={overflowMenuRef}>
@@ -1606,6 +1728,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                 </div>
               )}
             </div>
+            </div>
           </div>
         )}
 
@@ -1671,14 +1794,6 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
             <span className="text-xs" style={{ color: 'var(--text-subtle)' }}>{units.length} × {itemLabel}</span>
           </div>
           <div className="flex items-center gap-2">
-            {isAdmin && !isOverview && (
-              <button onClick={() => setManageUnitsOpen(p => !p)}
-                className="text-xs font-semibold hover:underline flex items-center gap-1"
-                style={{ color: 'var(--io-accent)' }}>
-                <span style={{ display: 'inline-block', transform: manageUnitsOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>
-                {t('organise.manage_units', { item: itemLabel })}
-              </button>
-            )}
           {/* Overview: keep print button visible */}
           {isOverview && (
             <button onClick={() => window.print()}
@@ -1731,229 +1846,44 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
         </div>
       )}
 
-      {/* Create unit form */}
-      {/* ── Collapsible: Manage Units ── */}
-      {isAdmin && !isOverview && manageUnitsOpen && (
-        <div
-          className="rounded-2xl p-4 mb-4 space-y-3"
-          style={{ background: 'var(--app-bg)', border: '1px solid var(--card-border)' }}>
-          {/* Existing units list */}
-          {units.length > 0 && (
-            <div className="space-y-1.5">
-              {units.map((unit, idx) => (
-                <div key={unit.id}>
-                  {editingUnit?.id === unit.id ? (
-                    <div
-                      className="card-surface-solid rounded-card p-3"
-                      style={{
-                        borderTop: '1px solid var(--card-border)',
-                        borderRight: '1px solid var(--card-border)',
-                        borderBottom: '1px solid var(--card-border)',
-                        borderLeft: '3px solid var(--io-accent)',
-                      }}>
-                      <form onSubmit={handleUpdateUnit} className="space-y-2">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-semibold" style={{ color: 'var(--io-accent)' }}>
-                            {t('organise.editing', { name: editingUnit.name })}
-                          </span>
-                          <button type="button" onClick={() => setEditingUnit(null)}
-                            className="text-xs hover:underline"
-                            style={{ color: 'var(--text-subtle)' }}>
-                            {t('common.cancel')}
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <input type="text" value={editingUnit.name} onChange={e => setEditingUnit(p => ({ ...p, name: e.target.value }))}
-                            className="rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]" />
-                          <input type="text" placeholder={t('events.description')} value={editingUnit.description || ''} onChange={e => setEditingUnit(p => ({ ...p, description: e.target.value }))}
-                            className="rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]" />
-                        </div>
-                        <div className="flex gap-2 flex-wrap">
-                          {category.has_capacity && (
-                            <input type="number" min="1" value={editingUnit.capacity || ''} placeholder={t('organise.capacity')}
-                              onChange={e => setEditingUnit(p => ({ ...p, capacity: e.target.value }))}
-                              className="w-24 rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]" />
-                          )}
-                          {category.has_gender_restriction && (
-                            <select value={editingUnit.gender_restriction || ''} onChange={e => setEditingUnit(p => ({ ...p, gender_restriction: e.target.value }))}
-                              className="rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]">
-                              <option value="">{t('common.mixed')}</option>
-                              <option value="male">{t('common.male_only')}</option>
-                              <option value="female">{t('common.female_only')}</option>
-                            </select>
-                          )}
-                          {markDefs.length > 0 && (
-                            <select value={editingUnit.mark_restriction || ''} onChange={e => setEditingUnit(p => ({ ...p, mark_restriction: e.target.value || null }))}
-                              className="rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]">
-                              <option value="">{t('organise.mark_restriction.none')}</option>
-                              {markDefs.map(m => <option key={m.id} value={m.id}>{t('organise.mark_restriction.only', { mark: m.name })}</option>)}
-                            </select>
-                          )}
-                          <button type="submit"
-                            className="text-xs font-semibold px-4 py-1.5 rounded-card bg-steel-blue text-white hover:bg-steel-blue-700 dark:bg-gold dark:text-deep-navy dark:hover:bg-gold/80">
-                            {t('common.save')}
-                          </button>
-                        </div>
-                      </form>
-                    </div>
-                  ) : (
-                    <div
-                      className="card-surface-solid flex items-center justify-between rounded-card px-3 py-2"
-                      style={{ border: '1px solid var(--card-border)' }}>
-                      <div className="min-w-0">
-                        <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{unit.name}</span>
-                        {unit.capacity && <span className="text-[10px] ml-2" style={{ color: 'var(--text-subtle)' }}>cap {unit.capacity}</span>}
-                        {unit.gender_restriction && <span className="text-[10px] ml-1" style={{ color: 'var(--text-subtle)' }}>{unit.gender_restriction}</span>}
-                        {unit.mark_restriction && markDefs.some(m => m.id === unit.mark_restriction) && <span className="text-[10px] ml-1" style={{ color: 'var(--text-subtle)' }}>{markDefs.find(m => m.id === unit.mark_restriction).name}</span>}
-                        {unit.is_kept && <span className="text-[10px] ml-1 font-semibold" style={{ color: 'var(--io-accent)' }}>{t('organise.room.kept')}</span>}
-                      </div>
-                      <div className="flex gap-2 items-center shrink-0">
-                        {/* v0.58e-1: reorder arrows — universal on mobile + desktop */}
-                        <button
-                          onClick={() => {
-                            if (idx === 0) return;
-                            handleReorderUnits(unit.id, units[idx - 1].id);
-                          }}
-                          disabled={idx === 0}
-                          aria-label={t('organise.move_up')}
-                          title={t('organise.move_up')}
-                          className="text-sm leading-none px-1 disabled:opacity-20 hover:opacity-70"
-                          style={{ color: 'var(--text-subtle)' }}>
-                          ▲
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (idx === units.length - 1) return;
-                            handleReorderUnits(unit.id, units[idx + 1].id);
-                          }}
-                          disabled={idx === units.length - 1}
-                          aria-label={t('organise.move_down')}
-                          title={t('organise.move_down')}
-                          className="text-sm leading-none px-1 disabled:opacity-20 hover:opacity-70"
-                          style={{ color: 'var(--text-subtle)' }}>
-                          ▼
-                        </button>
-                        <button onClick={() => handleToggleKeep(unit)}
-                          aria-label={unit.is_kept ? t('organise.room.kept') : t('organise.room.keep')}
-                          title={t('organise.room.kept_hint')}
-                          className="px-1 leading-none hover:opacity-70"
-                          style={{ color: unit.is_kept ? 'var(--io-accent)' : 'var(--text-subtle)' }}>
-                          {unit.is_kept ? (
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline', verticalAlign: 'middle' }}>
-                              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                            </svg>
-                          ) : (
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline', verticalAlign: 'middle' }}>
-                              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 9.9-1" />
-                            </svg>
-                          )}
-                        </button>
-                        <button onClick={() => setEditingUnit({ ...unit })}
-                          className="text-[10px] font-semibold hover:underline ml-1"
-                          style={{ color: 'var(--io-accent)' }}>
-                          {t('common.edit')}
-                        </button>
-                        <button onClick={() => handleDeleteUnit(unit.id)}
-                          className="text-[10px] font-semibold hover:underline"
-                          style={{ color: 'var(--alert-burgundy)' }}>
-                          {t('common.delete')}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          {/* Add new unit. v1.0.0e: when there are no units yet, the
-              add-area renders as a prominent dashed-border CTA card so
-              the user's eye lands on it after clicking "Manage" on the
-              far-right header (previously the small text-link was
-              easy to miss on a wide viewport). When units exist, keep
-              the subtle inline link — the unit cards above already
-              anchor the eye and an aggressive CTA below them would
-              clutter the surface. */}
-          {!showCreate ? (
-            units.length === 0 ? (
-              <button
-                type="button"
-                onClick={() => setShowCreate(true)}
-                className="block w-full rounded-card text-center py-6 text-sm font-semibold transition-colors"
-                style={{
-                  border: '2px dashed var(--card-border)',
-                  background: 'transparent',
-                  color: 'var(--io-accent)',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--io-accent)'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--card-border)'; }}>
-                {t('organise.empty_units.cta', { item: itemLabel })}
-              </button>
-            ) : (
-              <button onClick={() => setShowCreate(true)}
-                className="text-xs font-semibold hover:underline"
-                style={{ color: 'var(--io-accent)' }}>
-                + {t('organise.new_unit', { item: itemLabel })}
-              </button>
-            )
-          ) : (
-            <div
-              className="card-surface-solid rounded-card p-3"
-              style={{ border: '1px solid var(--card-border)' }}>
-              <form onSubmit={handleCreate} className="space-y-2">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
-                    {t('organise.new_unit', { item: itemLabel })}
-                  </span>
-                  <button type="button" onClick={() => setShowCreate(false)}
-                    className="text-xs hover:underline"
-                    style={{ color: 'var(--text-subtle)' }}>
-                    {t('common.cancel')}
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <input type="text" placeholder={`${itemLabel} ${t('common.name')} *`} value={form.name}
-                    onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required
-                    className="rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]" />
-                  <input type="text" placeholder={t('events.description')} value={form.description}
-                    onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                    className="rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]" />
-                </div>
-                <div className="flex gap-2 flex-wrap">
-                  {category.has_capacity && (
-                    <input type="number" min="1" value={form.capacity} placeholder={t('organise.capacity')}
-                      onChange={e => setForm(p => ({ ...p, capacity: e.target.value }))}
-                      className="w-24 rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]" />
-                  )}
-                  {category.has_gender_restriction && (
-                    <select value={form.gender_restriction} onChange={e => setForm(p => ({ ...p, gender_restriction: e.target.value }))}
-                      className="rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]">
-                      <option value="">{t('common.mixed')}</option>
-                      <option value="male">{t('common.male_only')}</option>
-                      <option value="female">{t('common.female_only')}</option>
-                    </select>
-                  )}
-                  <button type="submit"
-                    className="text-xs font-semibold px-4 py-1.5 rounded-card bg-steel-blue text-white hover:bg-steel-blue-700 dark:bg-gold dark:text-deep-navy dark:hover:bg-gold/80">
-                    {t('common.create')}
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ═══ TWO-PANEL LAYOUT ═══ */}
       <div className="flex flex-col md:flex-row gap-4">
 
         {/* ─── LEFT: People Panel (hidden in setup mode) ─── */}
         {(
         <div ref={leftPanelRef}
-          className="card-surface-solid w-full md:w-64 md:shrink-0 rounded-2xl flex flex-col"
-          style={{ border: '1px solid var(--card-border)' }}
+          className={panelFloating
+            ? "card-surface-solid rounded-2xl flex flex-col fixed z-[60] shadow-2xl overflow-hidden"
+            : "card-surface-solid w-full md:w-64 md:shrink-0 rounded-2xl flex flex-col md:self-start"}
+          style={panelFloating
+            ? { border: '1px solid var(--card-border)', left: panelPos.x, top: panelPos.y, width: panelSize.w, height: panelSize.h }
+            : { border: '1px solid var(--card-border)' }}
           onDragOver={e => { e.preventDefault(); setDragOverUnit('unassigned'); }}
           onDragLeave={() => setDragOverUnit(null)}
           onDrop={e => { e.preventDefault(); handleDropUnassigned(); }}>
+
+          {/* v1.0.1e-11: control strip — float/dock toggle; the whole strip is
+              the drag handle while floating. */}
+          <div className="px-2 py-1 flex items-center shrink-0 select-none"
+            style={{ borderBottom: '1px solid var(--card-border)', background: 'rgba(128,128,128,0.06)', cursor: panelFloating ? 'move' : 'default', touchAction: 'none' }}
+            onPointerDown={panelFloating ? startPanelMove : undefined}>
+            {panelFloating ? (
+              <span className="text-[10px] uppercase tracking-wider flex items-center gap-1 mr-auto" style={{ color: 'var(--text-subtle)' }}>
+                <span aria-hidden="true">⠿</span>{leftPanelLabel}
+              </span>
+            ) : <span className="mr-auto" />}
+            <button type="button" onClick={() => (panelFloating ? setPanelFloating(false) : setPanelFloating(true))}
+              onPointerDown={e => e.stopPropagation()}
+              aria-label={panelFloating ? t('organise.panel_dock') : t('organise.panel_float')}
+              title={panelFloating ? t('organise.panel_dock') : t('organise.panel_float')}
+              className="w-5 h-5 rounded flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 shrink-0" style={{ color: 'var(--text-subtle)' }}>
+              {panelFloating ? (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18" /></svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg>
+              )}
+            </button>
+          </div>
 
           <div className="p-3 space-y-2 shrink-0" style={{ borderBottom: '1px solid var(--card-border)' }}>
             <div className="relative">
@@ -2007,9 +1937,9 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
               // when the number of unassigned fluctuates (was jumping
               // taller/shorter 1→4 entries). maxHeight is the backstop
               // once it's genuinely crowded.
-              minHeight: '24rem',
-              maxHeight: '70vh',
-              overflowY: 'auto',
+              ...(panelFloating
+                ? { flex: '1 1 0', minHeight: 0, overflowY: 'auto' }
+                : { minHeight: '24rem', maxHeight: '70vh', overflowY: 'auto' }),
               WebkitOverflowScrolling: 'touch',
               overscrollBehavior: 'contain',
               ...(dragOverUnit === 'unassigned' ? {
@@ -2089,6 +2019,12 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
               );
             })}
           </div>
+          {panelFloating && (
+            <div onPointerDown={startPanelResize} aria-label={t('organise.panel_resize')} title={t('organise.panel_resize')}
+              className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize" style={{ touchAction: 'none' }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--text-subtle)" strokeWidth="1.5" strokeLinecap="round"><path d="M11 5 5 11M11 9l-2 2" /></svg>
+            </div>
+          )}
         </div>
         )}
 
@@ -2105,16 +2041,17 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
               <p className="text-sm mb-1">{t('organise.no_units', { item: itemLabel })}</p>
               <p className="text-xs">{t('organise.no_units.hint')}</p>
               {isAdmin && (
-                <button onClick={() => { setManageUnitsOpen(true); setShowCreate(true); }}
-                  className="mt-3 text-xs font-semibold hover:underline"
+                <button onClick={() => setEditingUnit({ name: '', description: '', capacity: '', gender_restriction: '' })}
+                  className="mt-3 text-xs font-semibold hover:underline inline-flex items-center gap-1"
                   style={{ color: 'var(--io-accent)' }}>
-                  {t('organise.create_first', { item: itemLabel.toLowerCase() })}
+                  <span className="text-sm leading-none">+</span>
+                  {t('organise.add_unit', { item: itemLabel })}
                 </button>
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {units.map(unit => {
+            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+              {units.map((unit, idx) => {
                 const unitMembers = allMembers[String(unit.id)] || [];
                 const nc = getNoteCount('unit', unit.id);
                 const uNotes = showNotes ? (unitNotes[String(unit.id)] || []) : [];
@@ -2157,12 +2094,41 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                     style={{ borderWidth: '2px', borderStyle: 'solid', ...unitStyle, cursor: selectedPeople.size > 0 ? 'pointer' : undefined }}>
 
                     <div className="px-3 pt-3 pb-2">
-                      {isAdmin && HAS_FINE_POINTER && (
-                        <div className="flex items-center gap-1.5 mb-1 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing select-none">
-                          <span className="text-xs" style={{ color: 'var(--text-subtle)', opacity: 0.5 }}>⠿⠿</span>
-                          <span className="text-[9px] uppercase tracking-caps" style={{ color: 'var(--text-subtle)', opacity: 0.7 }}>
-                            {t('common.drag_to_reorder')}
-                          </span>
+                      {/* v1.0.1e-9: structurally identical to the group-type
+                          card — justify-between with the drag hint far-left
+                          (hover) and ONE right cluster of ↑ ↓ notes pen trash,
+                          same colours (subtle for reorder/notes/edit, alert for
+                          delete). Notes moved up here from the old footer. */}
+                      {isAdmin && (
+                        <div className="flex items-center justify-between gap-2 -mx-3 -mt-3 mb-2 px-3 py-1.5 rounded-t-2xl" style={{ background: 'rgba(128,128,128,0.06)' }}>
+                          {HAS_FINE_POINTER ? (
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
+                              <span className="text-gray-300 text-sm">⠿</span>
+                              <span className="text-[9px] text-gray-300 uppercase tracking-wider">{t('common.drag_to_reorder')}</span>
+                            </div>
+                          ) : <span />}
+                          <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); if (idx > 0) handleReorderUnits(unit.id, units[idx - 1].id); }} disabled={idx === 0}
+                              aria-label={t('common.move_earlier')} title={t('common.move_earlier')}
+                              className="w-6 h-6 rounded-md flex items-center justify-center text-xs hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed" style={{ color: 'var(--text-subtle)' }}>↑</button>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); if (idx < units.length - 1) handleReorderUnits(unit.id, units[idx + 1].id); }} disabled={idx === units.length - 1}
+                              aria-label={t('common.move_later')} title={t('common.move_later')}
+                              className="w-6 h-6 rounded-md flex items-center justify-center text-xs hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed" style={{ color: 'var(--text-subtle)' }}>↓</button>
+                            <button type="button" onClick={() => setNotesFor({ type: 'unit', id: unit.id, name: unit.name })}
+                              aria-label={t('common.notes')} title={t('common.notes')}
+                              className="w-6 h-6 rounded-md flex items-center justify-center relative hover:bg-black/5 dark:hover:bg-white/10" style={{ color: 'var(--text-subtle)' }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="13" y2="17" /></svg>
+                              {nc > 0 && (<span className="absolute -top-0.5 -right-0.5 text-[8px] leading-none px-1 rounded-full" style={{ background: 'var(--io-accent)', color: 'var(--card-bg-solid)' }}>{nc}</span>)}
+                            </button>
+                            <button type="button" onClick={() => setEditingUnit({ ...unit })} aria-label={t('common.edit')} title={t('common.edit')}
+                              className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" style={{ color: 'var(--text-subtle)' }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                            </button>
+                            <button type="button" onClick={() => handleDeleteUnit(unit.id)} aria-label={t('common.delete')} title={t('common.delete')}
+                              className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-alert/10" style={{ color: 'var(--alert)' }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M10 11v6M14 11v6" /></svg>
+                            </button>
+                          </div>
                         </div>
                       )}
                       <div className="flex items-start justify-between mb-1">
@@ -2172,6 +2138,10 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                             commits, Esc reverts. Falls back to the
                             full edit form via the "Bearbeiten" / Edit
                             button for capacity / gender / description. */}
+                        {/* v1.0.1e-14: name + mark dots grouped left so the dots
+                            sit right after the unit name (like participants),
+                            not centered by justify-between. */}
+                        <div className="flex items-center gap-1.5 min-w-0">
                         {isAdmin && !isOverview && editingUnitRenameId === unit.id ? (
                           <input
                             type="text"
@@ -2199,6 +2169,12 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                             {unit.name}
                           </h4>
                         )}
+                        {markDefs.length > 0 && (() => {
+                          const md = unit.mark_restriction && markDefs.find(m => m.id === unit.mark_restriction);
+                          return <MarkDots marksForParticipant={md ? [md] : []} compact
+                            onManage={isAdmin && !isOverview ? () => setUnitMarksFor(unit) : undefined} />;
+                        })()}
+                        </div>
                         {(() => {
                           // v0.50d-5i: capacity pill — inline colour via capColor helper
                           // or neutral tint for overlapping (no-capacity) mode.
@@ -2225,6 +2201,23 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                                   style={{ color: 'var(--alert-burgundy)' }}>
                                   {t('organise.over_capacity')}
                                 </span>
+                              )}
+                              {isAdmin && !isOverview && (
+                                <button onClick={(e) => { e.stopPropagation(); handleToggleKeep(unit); }}
+                                  aria-label={unit.is_kept ? t('organise.room.kept') : t('organise.room.keep')}
+                                  title={t(unit.is_kept ? 'organise.room.hint_locked' : 'organise.room.hint_unlocked')}
+                                  className="leading-none hover:opacity-70"
+                                  style={{ color: unit.is_kept ? 'var(--io-accent)' : 'var(--text-subtle)' }}>
+                                  {unit.is_kept ? (
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline', verticalAlign: 'middle' }}>
+                                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                    </svg>
+                                  ) : (
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline', verticalAlign: 'middle' }}>
+                                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                                    </svg>
+                                  )}
+                                </button>
                               )}
                             </span>
                           );
@@ -2323,53 +2316,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                         the card boundary. Icons + aria-label + title
                         keep the row clean and accessible.
                         v0.70d-2d-1 (AB1) was the prior partial fix. */}
-                    <div className="flex items-center gap-3 px-3 py-2 rounded-b-2xl mt-auto"
-                      style={{
-                        borderTop: '1px solid var(--card-border)',
-                        background: 'rgba(0,0,0,0.02)',
-                      }}
-                      onClick={e => e.stopPropagation()}>
-                      <button onClick={() => setNotesFor({ type: 'unit', id: unit.id, name: unit.name })}
-                        aria-label={t('common.notes')}
-                        title={t('common.notes')}
-                        className="text-[10px] font-semibold hover:underline inline-flex items-center"
-                        style={{ color: 'var(--io-accent)' }}>
-                        <span className="inline-flex" aria-hidden="true">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                            <line x1="8" y1="13" x2="16" y2="13" />
-                            <line x1="8" y1="17" x2="13" y2="17" />
-                          </svg>
-                        </span>
-                        {nc > 0 && (
-                          <span className="ml-0.5 text-[8px] px-1 py-0 rounded-full"
-                            style={{ background: 'var(--io-accent)', color: 'var(--card-bg-solid)' }}>
-                            {nc}
-                          </span>
-                        )}
-                      </button>
-                      {isAdmin && (
-                        <>
-<button onClick={() => handleDeleteUnit(unit.id)}
-                            aria-label={t('common.delete')}
-                            title={t('common.delete')}
-                            className="text-[10px] font-semibold hover:underline ml-auto inline-flex items-center"
-                            style={{ color: 'var(--alert-burgundy)' }}>
-                            <span className="inline-flex" aria-hidden="true">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="3 6 5 6 21 6" />
-                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                <path d="M10 11v6M14 11v6" />
-                                <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-                              </svg>
-                            </span>
-                          </button>
-                        </>
-                      )}
-                    </div>
+
                   </div>
                 );
               })}
@@ -2436,6 +2383,87 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
         </div>
       )}
 
+      {editingUnit && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setEditingUnit(null)}>
+          <form onSubmit={handleSaveUnitModal} className="rounded-2xl p-4 w-full max-w-md my-8" style={{ background: 'var(--card-bg-solid, var(--app-bg))', border: '1px solid var(--card-border)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-heading font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
+                {editingUnit.id ? t('common.edit') : t('organise.add_unit', { item: itemLabel })}
+              </h3>
+              <button type="button" onClick={() => setEditingUnit(null)} className="text-lg leading-none hover:opacity-70" style={{ color: 'var(--text-subtle)' }}>×</button>
+            </div>
+            <div className="space-y-2.5">
+              <div>
+                <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>{t('organise.name_label', { item: itemLabel })}</label>
+                <input autoFocus type="text" value={editingUnit.name} onChange={e => setEditingUnit(p => ({ ...p, name: e.target.value }))}
+                  className="w-full rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]" />
+              </div>
+              <div>
+                <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>{t('events.description')}</label>
+                <input type="text" value={editingUnit.description || ''} onChange={e => setEditingUnit(p => ({ ...p, description: e.target.value }))}
+                  className="w-full rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]" />
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {category.has_capacity && (
+                  <div>
+                    <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>{t('organise.capacity')}</label>
+                    <input type="number" min="1" value={editingUnit.capacity || ''} onChange={e => setEditingUnit(p => ({ ...p, capacity: e.target.value }))}
+                      className="w-24 rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]" />
+                  </div>
+                )}
+                {category.has_gender_restriction && (
+                  <div>
+                    <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>&nbsp;</label>
+                    <select value={editingUnit.gender_restriction || ''} onChange={e => setEditingUnit(p => ({ ...p, gender_restriction: e.target.value }))}
+                      className="rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]">
+                      <option value="">{t('common.mixed')}</option>
+                      <option value="male">{t('common.male_only')}</option>
+                      <option value="female">{t('common.female_only')}</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button type="button" onClick={() => setEditingUnit(null)}
+                className="text-xs font-semibold px-4 py-1.5 rounded-card border" style={{ color: 'var(--text-muted)', borderColor: 'var(--card-border)' }}>{t('common.cancel')}</button>
+              <button type="submit"
+                className="text-xs font-semibold px-4 py-1.5 rounded-card bg-steel-blue text-white hover:bg-steel-blue-700 dark:bg-gold dark:text-deep-navy dark:hover:bg-gold/80">{t('common.save')}</button>
+            </div>
+          </form>
+        </div>
+      )}
+      {unitMarksFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setUnitMarksFor(null)}>
+          <div className="rounded-card shadow-xl w-full max-w-sm p-4" style={{ background: 'var(--card-bg, var(--app-bg))', border: '1px solid var(--card-border)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <h3 className="font-heading font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{t('nav.marks')}</h3>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{unitMarksFor.name}</p>
+              </div>
+              <button onClick={() => setUnitMarksFor(null)} className="text-lg leading-none hover:opacity-70" style={{ color: 'var(--text-subtle)' }}>×</button>
+            </div>
+            <div className="space-y-2">
+              {markDefs.map(m => (
+                <div key={m.id} className="flex items-center justify-between rounded-lg px-3 py-2" style={{ background: 'var(--app-bg)', border: '1px solid var(--card-border)' }}>
+                  <span className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-primary)' }}>
+                    <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ background: m.colour }} />
+                    {m.name}
+                  </span>
+                  {unitMarksFor.mark_restriction === m.id ? (
+                    <button onClick={() => handleSetUnitMark(unitMarksFor, null)}
+                      className="text-xs font-semibold px-3 py-1 rounded-lg"
+                      style={{ background: 'rgba(128,128,128,0.15)', color: 'var(--text-primary)' }}>{t('marks.remove')}</button>
+                  ) : (
+                    <button onClick={() => handleSetUnitMark(unitMarksFor, m.id)}
+                      className="text-xs font-semibold px-3 py-1 rounded-lg bg-steel-blue text-white hover:bg-mid-navy">{t('marks.assign')}</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {notesFor && (
         <NotesModal entityType={notesFor.type} entityId={notesFor.id} entityName={notesFor.name}
           onClose={() => { setNotesFor(null); loadAll(); if (onDataChange) onDataChange(); }}

@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { cfSortValue } from '../utils/customFieldSort';
+import { normalizeSearch as norm } from '../services/searchNormalize';
 import { participants as participantsApi, customFields as cfApi, getToken } from '../services/api';
 import { useDateFormat } from '../hooks/useDateFormat';
 import { useI18n } from '../hooks/useI18n';
@@ -370,17 +372,20 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
   const filtered = useMemo(() => {
     let list = [...participantList];
     if (search) {
-      const q = search.toLowerCase();
+      // v1.0.1e-20: normalise punctuation, accents and umlauts (shared helper)
+      // so names match however they're typed — eun-hye=eunhye, O'Brien=OBrien,
+      // Müller=Mueller. Applies to both sides of every comparison.
+      const q = norm(search);
       // Check if query matches any mark name
       const matchingMarkIds = new Set(
-        markDefs.filter(m => m.name.toLowerCase().includes(q)).map(m => String(m.id))
+        markDefs.filter(m => norm(m.name).includes(q)).map(m => String(m.id))
       );
       list = list.filter(p => {
-        if (`${p.first_name} ${p.last_name}`.toLowerCase().includes(q)) return true;
-        if (p.email.toLowerCase().includes(q)) return true;
-        if (p.group_code && p.group_code.toLowerCase().includes(q)) return true;
-        if (p.phone && p.phone.toLowerCase().includes(q)) return true;
-        if (p.church_organisation && p.church_organisation.toLowerCase().includes(q)) return true;
+        if (norm(`${p.first_name} ${p.last_name}`).includes(q)) return true;
+        if (norm(p.email).includes(q)) return true;
+        if (p.group_code && norm(p.group_code).includes(q)) return true;
+        if (p.phone && norm(p.phone).includes(q)) return true;
+        if (p.church_organisation && norm(p.church_organisation).includes(q)) return true;
         // Search by mark name
         if (matchingMarkIds.size > 0) {
           const pid = String(p.id);
@@ -407,30 +412,18 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
         if (aCancelled !== bCancelled) return aCancelled ? 1 : -1;
       }
       let va, vb;
-      if (sortCol.startsWith('cf:')) {
+      // v1.0.1e-2: THE People-view sort bug since v1.0.1c — headers set
+      // 'cf_<id>' (underscore) but this checked only 'cf:' (colon), so no
+      // custom column ever matched and clicking did nothing at all. Both
+      // prefixes are 3 chars, so slice(3) below already handles either.
+      if (sortCol.startsWith('cf_') || sortCol.startsWith('cf:')) {
+        // v1.0.1e-1: one shared, typed comparator (utils/customFieldSort)
+        // used by BOTH this view and the check-in view — dates now sort
+        // chronologically, and the two views can no longer drift.
         const cfId = sortCol.slice(3);
         const cfDef = customFieldDefs.find(cf => String(cf.id) === cfId);
-        const rawA = a.custom_fields?.[cfId];
-        const rawB = b.custom_fields?.[cfId];
-        if (cfDef?.field_type === 'select' && cfDef.options?.choices) {
-          const idx = (v) => {
-            const i = cfDef.options.choices.indexOf(v);
-            return i === -1 ? -1 : i; // unset/unknown values sort first, ascending
-          };
-          va = idx(rawA); vb = idx(rawB);
-        } else if (cfDef?.field_type === 'number') {
-          va = rawA === undefined || rawA === null || rawA === '' ? -Infinity : parseFloat(rawA);
-          vb = rawB === undefined || rawB === null || rawB === '' ? -Infinity : parseFloat(rawB);
-          if (Number.isNaN(va)) va = -Infinity;
-          if (Number.isNaN(vb)) vb = -Infinity;
-        } else if (cfDef?.field_type === 'boolean') {
-          const truthy = (v) => String(v).toLowerCase() === 'true' || v === '1' ? 1 : 0;
-          va = rawA ? truthy(rawA) : -1; // unset sorts before both false and true
-          vb = rawB ? truthy(rawB) : -1;
-        } else {
-          // text, date (ISO strings sort correctly as text), and unknown types
-          va = rawA || ''; vb = rawB || '';
-        }
+        va = cfSortValue(cfDef, a.custom_fields?.[cfId]);
+        vb = cfSortValue(cfDef, b.custom_fields?.[cfId]);
       } else {
         switch (sortCol) {
         case 'participant_number': va = a.participant_number || 0; vb = b.participant_number || 0; break;

@@ -32,7 +32,6 @@ const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 // Admin routes stay eager — see rationale above.
 import EventsPage from './pages/EventsPage';
 import EventDetailPage from './pages/EventDetailPage';
-import DuplicateEventPage from './pages/DuplicateEventPage';
 import OverviewPage from './pages/OverviewPage';
 import CheckinOverlayPage from './pages/CheckinOverlayPage';
 import SetupPage from './pages/SetupPage';
@@ -133,7 +132,6 @@ function App() {
                 {/* Admin routes (eager) */}
                 <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
                   <Route index element={<EventsPage />} />
-                  <Route path="events/duplicate/:sourceId" element={<DuplicateEventPage />} />
                   <Route path="events/:eventId" element={<EventDetailPage />} />
                   <Route path="users" element={<UserManagementPage />} />
                   <Route path="backup" element={<BackupPage />} />

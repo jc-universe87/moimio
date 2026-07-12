@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { events as eventsApi, marks as marksApi, billingInfo as billingInfoApi } from '../services/api';
+import { events as eventsApi, billingInfo as billingInfoApi } from '../services/api';
+import CopyFromEventPicker, { DEFAULT_COPY_OPTIONS } from '../components/CopyFromEventPicker';
 import { useAuth, getRoleForEvent } from '../hooks/useAuth';
 import { useCapabilities } from '../hooks/useCapabilities';
 import { useDateFormat } from '../hooks/useDateFormat';
@@ -45,8 +46,10 @@ export default function EventsPage() {
   // entry point before SetupHub loads. New events land in SetupHub
   // with Details auto-opened.
   const [form, setForm] = useState({ name: '' });
-  const [copyMarks, setCopyMarks] = useState(false);
-  const [copyMarksSourceId, setCopyMarksSourceId] = useState('');
+  // v1.0.1e-27: replaces the marks-only transfer with a selective one.
+  const [transferFrom, setTransferFrom] = useState(false);
+  const [transferSourceId, setTransferSourceId] = useState('');
+  const [copyOptions, setCopyOptions] = useState(DEFAULT_COPY_OPTIONS);
   const [search, setSearch] = useState('');
   const [error, setError] = useState(null);
 
@@ -166,19 +169,18 @@ export default function EventsPage() {
       // remaining fields to null/empty; SetupHub Details card asks
       // for them once.
       const payload = { name: form.name };
-      const newEvent = await eventsApi.create(payload);
-      if (copyMarks && copyMarksSourceId) {
-        try {
-          await marksApi.importFrom(newEvent.id, copyMarksSourceId);
-        } catch (err) {
-          console.warn('Mark import on create failed:', err);
-        }
+      // v1.0.1e-27: selective copy happens server-side at create time.
+      if (transferFrom && transferSourceId) {
+        payload.copy_from_event_id = transferSourceId;
+        payload.copy_options = copyOptions;
       }
+      const newEvent = await eventsApi.create(payload);
       setShowCreate(false);
       setShowConfirmCreate(false);
       setForm({ name: '' });
-      setCopyMarks(false);
-      setCopyMarksSourceId('');
+      setTransferFrom(false);
+      setTransferSourceId('');
+      setCopyOptions(DEFAULT_COPY_OPTIONS);
       // v0.70d-2e-1 (E3): if the user created the event from the
       // Past or Archived tab, return them to Active before navigating
       // — when they come back to EventsPage later (via sidebar nav),
@@ -216,10 +218,6 @@ export default function EventsPage() {
     } catch (err) {
       setError(err);
     }
-  };
-
-  const handleRowDuplicate = (event) => {
-    navigate(`/admin/events/duplicate/${event.id}`);
   };
 
   const handleRowArchiveConfirm = async () => {
@@ -379,7 +377,6 @@ export default function EventsPage() {
     const metric = metricFor(event);
     const dim = isPast(event) || event.is_archived;
 
-    const canDuplicate = isAdmin;
     const canArchive = isSuperAdmin;
     const canDelete = isSuperAdmin;
 
@@ -450,10 +447,8 @@ export default function EventsPage() {
             canPin={isSuperAdmin}
             onPin={() => handleRowPin(event)}
             event={event}
-            canDuplicate={canDuplicate}
             canArchive={canArchive}
             canDelete={canDelete}
-            onDuplicate={() => handleRowDuplicate(event)}
             onArchive={() => setArchiveTarget(event)}
             onDelete={() => setDeleteTarget(event)}
           />
@@ -550,34 +545,32 @@ export default function EventsPage() {
             {existingEvents.length > 0 && (
               <div className="space-y-2 pt-1">
                 <label className="flex items-start gap-2 cursor-pointer">
-                  <input type="checkbox" checked={copyMarks}
-                    onChange={e => setCopyMarks(e.target.checked)}
+                  <input type="checkbox" checked={transferFrom}
+                    onChange={e => setTransferFrom(e.target.checked)}
                     className="h-3.5 w-3.5 rounded accent-steel-blue dark:accent-gold mt-0.5" />
                   <div className="min-w-0">
                     <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-                      {t('events.create.copy_marks')}
+                      {t('events.transfer.toggle')}
                     </span>
                     <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-subtle)' }}>
-                      {t('events.create.copy_marks.hint')}
+                      {t('events.transfer.toggle.hint')}
                     </p>
                   </div>
                 </label>
-                {copyMarks && (
-                  <select
-                    value={copyMarksSourceId}
-                    onChange={e => setCopyMarksSourceId(e.target.value)}
-                    className="w-full rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]"
-                  >
-                    <option value="">{t('events.create.copy_marks.select')}</option>
-                    {existingEvents.map(e => (
-                      <option key={e.id} value={e.id}>{e.name}</option>
-                    ))}
-                  </select>
+                {transferFrom && (
+                  <CopyFromEventPicker
+                    events={existingEvents}
+                    sourceId={transferSourceId}
+                    onSourceChange={setTransferSourceId}
+                    options={copyOptions}
+                    onOptionsChange={setCopyOptions}
+                    showSourceSelect
+                  />
                 )}
               </div>
             )}
 
-            <button type="submit" disabled={creating || (copyMarks && !copyMarksSourceId)}
+            <button type="submit" disabled={creating || (transferFrom && !transferSourceId)}
               className="text-sm font-semibold px-4 py-2 rounded-card bg-steel-blue text-white hover:bg-steel-blue-700 dark:bg-gold dark:text-deep-navy dark:hover:bg-gold/80 disabled:opacity-50 transition-colors">
               {creating ? t('events.creating') : t('events.create.title')}
             </button>

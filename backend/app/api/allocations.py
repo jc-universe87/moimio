@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -149,6 +149,39 @@ async def api_create_category(
         payload["sort_order"] = (max_so if max_so is not None else -1) + 1
     await _publish_organise_change(event_id, "category_created")
     return await create_category(db, event_id, **payload)
+
+
+@router.get("/allocation-categories/export")
+async def api_export_room_layout(
+    event_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_event_admin_dep()),
+):
+    """Export this event's group types + units as a portable JSON layout.
+    Admin only. GDPR-safe — configuration only, never participants."""
+    from app.services.room_layout_io import export_room_layout
+    return await export_room_layout(db, event_id)
+
+
+@router.post("/allocation-categories/import")
+async def api_import_room_layout(
+    event_id: uuid.UUID,
+    payload: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_event_admin_dep()),
+):
+    """Import a room layout exported from another event. Adds new group types +
+    units alongside any existing ones; a unit's mark restriction links to a mark
+    of the same name here, or is dropped if that mark isn't present."""
+    await ensure_event_writable(db, event_id, current_user)
+    from app.services.room_layout_io import import_room_layout
+    try:
+        result = await import_room_layout(db, event_id, payload)
+    except ValueError:
+        raise HTTPException(status_code=422, detail={"key": "errors.import.invalid_file"})
+    await db.commit()
+    await _publish_organise_change(event_id, "category_created")
+    return result
 
 
 @router.patch("/allocation-categories/{category_id}")

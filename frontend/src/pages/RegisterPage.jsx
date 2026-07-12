@@ -224,7 +224,10 @@ function RegisterForm() {
         submission.group_code = formData.group_code.trim();
         if (formData.group_code_categories) submission.group_code_categories = formData.group_code_categories;
       } else if (groupingMode === 'start' && showCustomName && startCustomName.trim()) {
-        submission.group_code = startCustomName.trim();
+        // Normalise to the stem so the custom field ALWAYS starts a fresh
+        // group with an auto-suffix (typing a full code shape like
+        // JUGEND-104 here must not silently join that group).
+        submission.group_code = stemFromName(startCustomName);
       }
       const cfEntries = Object.entries(customValues).filter(([_, v]) => v);
       if (cfEntries.length > 0) submission.custom_fields = Object.fromEntries(cfEntries);

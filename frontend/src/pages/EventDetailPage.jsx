@@ -5,6 +5,7 @@ import { formatErrorMessage } from '../services/api';
 import { useAuth, getPermsForEvent, getRoleForEvent } from '../hooks/useAuth';
 import { useDateFormat } from '../hooks/useDateFormat';
 import { useEventPhase, PHASE, SUB_STATE } from '../hooks/useEventPhase';
+import { useEventStream } from '../hooks/useEventStream';
 import OrganiseDashboard from '../components/OrganiseDashboard';
 import PeopleTable from '../components/PeopleTable';
 import CheckInPanel from '../components/CheckInPanel';
@@ -353,6 +354,27 @@ export default function EventDetailPage() {
     finally { setLoading(false); }
   };
 
+  // v1.0.1e-22: live registration updates. When someone signs up — or confirms
+  // via their email link — the backend pushes an event on this stream and we
+  // refetch in the background. loadData does NOT flip `loading`, so the
+  // dashboard's counts, recent-sign-ups list and chart update in place: no
+  // white flash, no manual refresh. Bursts (a sign-up rush) are debounced into
+  // a single refetch. The stream hook auto-reconnects and pauses on a hidden
+  // tab, so this is cheap to leave on.
+  const regRefetchTimer = useRef(null);
+  useEventStream({
+    eventId,
+    surface: 'registration',
+    enabled: !!eventId,
+    onEvent: (msg) => {
+      if (!msg) return;
+      if (msg.type !== 'registration_created' && msg.type !== 'registration_confirmed') return;
+      if (regRefetchTimer.current) clearTimeout(regRefetchTimer.current);
+      regRefetchTimer.current = setTimeout(() => { loadData(); }, 800);
+    },
+  });
+  useEffect(() => () => { if (regRefetchTimer.current) clearTimeout(regRefetchTimer.current); }, []);
+
   // Categories + (Event-phase only) allocations map for the unassigned banner.
   const [allocationsByCategory, setAllocationsByCategory] = useState({}); // {catId: {unitId: [{participant_id, ...}]}}
 
@@ -576,7 +598,7 @@ export default function EventDetailPage() {
       className="card-surface-solid rounded-2xl px-4 py-3 mb-4"
       style={{ border: '1px solid var(--card-border)' }}
     >
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h1 className="font-heading text-lg font-bold truncate" style={{ color: 'var(--text-primary)' }}>

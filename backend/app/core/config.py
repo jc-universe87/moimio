@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     # per tenant if a tier shouldn't expose it.
     feature_allocation: bool = True
     feature_outbound_webhooks: bool = True
+    # v1.0.1e-6: FEATURE_ACCOUNT_PORTAL — is this instance managed by the
+    # Moimio SaaS control-plane (so the external account/billing portal link
+    # is meaningful)? Defaults FALSE: the self-hosted CE is the source of
+    # truth, and a self-hoster has no SaaS portal even if they set an
+    # account_url for their own reasons. The SaaS sets this true per tenant.
+    # This replaces the old, wrong criterion of "account_url is non-empty".
+    feature_account_portal: bool = False
 
     # ─── Create-event confirmation (v1.0.0h) ───
     #

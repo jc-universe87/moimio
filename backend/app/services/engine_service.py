@@ -262,8 +262,17 @@ async def run_engine(
             Participant.registration_status.in_(eligible_statuses),
             Participant.deleted_at.is_(None),
         )
+        # v1.0.1e-16: deterministic order. Without ORDER BY the DB returns rows
+        # in an arbitrary order that can change between runs, making the whole
+        # allocation non-reproducible ("re-run gives a totally different
+        # result"). Registration order (created_at) is the natural, stable
+        # sequence; id breaks any ties.
+        .order_by(Participant.created_at, Participant.id)
     )
     participants = list(parts_q.scalars().all())
+    # v1.0.1e-15: full id→participant map (before any top_up/kept filtering)
+    # so evicted violators can be looked up and re-added to the pool below.
+    participant_by_id_all = {str(p.id): p for p in participants}
 
     if not participants:
         return _empty_return(units, mode, run_id)
@@ -315,6 +324,40 @@ async def run_engine(
     # top_up mode: load existing, seed unit_slots, filter pool
     already_allocated_pids: set[str] = set()
     if mode == "top_up":
+        # v1.0.1e-15: restrictions are authoritative even in top_up. Build the
+        # restriction eligibility data up-front so we refuse to seed an occupant
+        # who no longer satisfies their unit's gender/mark restriction (e.g. a
+        # restriction added AFTER they were placed). Violators are left in the
+        # pool and re-placed by the passes below — this is the fix for "mark a
+        # room, re-allocate, but the old non-matching people are still there."
+        # Kept units are exempt (explicitly frozen). participants_with_mark is
+        # rebuilt once more below for the passes; the extra query only runs in
+        # top_up when a restriction mark exists.
+        _unit_map = {str(u.id): u for u in units}
+        _restr_mark_ids = {str(u.mark_restriction) for u in units if u.mark_restriction}
+        _pwm: dict[str, set[str]] = defaultdict(set)
+        if _restr_mark_ids:
+            _q = await db.execute(
+                select(MarkAssignment).where(
+                    MarkAssignment.event_id == event_id,
+                    MarkAssignment.mark_id.in_([uuid.UUID(m) for m in _restr_mark_ids]),
+                )
+            )
+            for _ma in _q.scalars().all():
+                _pwm[str(_ma.mark_id)].add(str(_ma.participant_id))
+
+        def _seed_ok(u, pid):
+            if getattr(u, "is_kept", False):
+                return True  # frozen unit: keep occupant regardless
+            if u.gender_restriction:
+                pp = participant_by_id_all.get(pid)
+                g = (pp.gender or "").lower() if pp else ""
+                if g != u.gender_restriction.lower():
+                    return False
+            if u.mark_restriction and pid not in _pwm.get(str(u.mark_restriction), set()):
+                return False
+            return True
+
         existing_q = await db.execute(
             select(Allocation).where(
                 Allocation.event_id == event_id,
@@ -324,6 +367,9 @@ async def run_engine(
         for existing in existing_q.scalars().all():
             uid = str(existing.unit_id)
             pid = str(existing.participant_id)
+            u = _unit_map.get(uid)
+            if u is not None and not _seed_ok(u, pid):
+                continue  # violator: don't seed, leave in pool for re-placement
             if uid in unit_slots:
                 unit_slots[uid].append(pid)
             already_allocated_pids.add(pid)
@@ -405,7 +451,6 @@ async def run_engine(
         """A cluster fits a mark-restricted unit only if every member holds the
         mark (all-or-nothing, matching cluster_gender_eligible)."""
         return all(mark_eligible(unit, pid) for pid in cluster_pids)
-
     # ── PASS 1: group_code clusters ──
     clusters_total = 0
     clusters_kept_whole = 0
@@ -715,6 +760,38 @@ async def run_engine(
             cluster_mark_eligible=cluster_mark_eligible,
         )
 
+    # ── PASS 4d (v1.0.1e-16): final capacity backfill ──
+    # Safety net: after every rule-based pass and the equalise sweep, people can
+    # still be unplaced while eligible capacity remains (restricted rooms
+    # fragment the pool; an unlucky round-robin cursor; etc.). Place any still-
+    # unplaced participant into an eligible unit that still has room — respecting
+    # gender, mark, capacity and exclusive claims — preferring the EMPTIEST
+    # eligible unit so this also nudges toward even distribution. Held-back
+    # cluster members are skipped so an intentionally-unplaced family (split
+    # disabled) is not scattered. This can only ADD placements; it never moves or
+    # removes anyone, so it cannot make distribution worse — only fill gaps.
+    backfill_pool = [
+        p for p in participants
+        if str(p.id) not in placed_ids and str(p.id) not in held_back
+    ]
+    for participant in backfill_pool:
+        best = None
+        best_key = None
+        for u in units:
+            uid = str(u.id)
+            if uid in exclusive_units:
+                continue
+            cap = remaining_cap(uid)
+            if cap > 0 and gender_eligible(u, participant.gender) and mark_eligible(u, str(participant.id)):
+                key = (-cap, u.sort_order, u.created_at)
+                if best_key is None or key < best_key:
+                    best_key = key
+                    best = u
+        if best is not None:
+            unit_slots[str(best.id)].append(str(participant.id))
+            placed_ids.add(str(participant.id))
+            placement_reasons[str(participant.id)] = {"reason": "backfill", "unit_id": str(best.id)}
+
     # ── PASS 5: classify unplaced ──
     all_ids = {str(p.id) for p in participants}
     unplaced_ids = list(all_ids - placed_ids)
@@ -931,10 +1008,15 @@ def _place_cluster(
                 }
         return False, False
 
-    # Try single-unit fit: smallest cap >= size, then most-perfect-fit.
+    # Try single-unit fit. v1.0.1e-16: a cluster only reaches candidate_units
+    # for a mark-restricted room if EVERY member holds that mark, so such a
+    # room is exactly where those holders belong — prefer it (first sort key)
+    # over general rooms, otherwise the tightest-fit heuristic could drop a
+    # fully-eligible holder group into whatever room has ~N seats free and
+    # leave the mark room empty. After that: smallest cap, then tightest fit.
     single_fits = sorted(
         [u for u in candidate_units if remaining_cap(str(u.id)) >= cluster_size],
-        key=lambda u: (u.capacity, remaining_cap(str(u.id)), u.sort_order, u.created_at),
+        key=lambda u: (u.mark_restriction is None, u.capacity, remaining_cap(str(u.id)), u.sort_order, u.created_at),
     )
     if single_fits:
         u = single_fits[0]

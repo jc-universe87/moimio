@@ -6,6 +6,17 @@ from datetime import date, datetime
 from pydantic import BaseModel
 
 
+class CopyOptions(BaseModel):
+    """v1.0.1e-26: per-section selection for duplicate-from-source. Each flag
+    toggles one config group. Omitted / None on EventCreate means copy
+    everything (back-compat with the original whole-config duplicate)."""
+    marks: bool = True
+    registration_form: bool = True
+    custom_fields: bool = True
+    group_types: bool = True          # allocation categories + their units
+    staff: bool = True                # team-member assignments
+
+
 class EventCreate(BaseModel):
     name: str
     description: str | None = None
@@ -19,6 +30,8 @@ class EventCreate(BaseModel):
     # the default field-config + default-category scaffolding since the
     # source event already has those. Caller must have access to source.
     copy_from_event_id: uuid.UUID | None = None
+    # v1.0.1e-26: which config groups to copy. None = all (back-compat).
+    copy_options: CopyOptions | None = None
 
 
 class EventUpdate(BaseModel):

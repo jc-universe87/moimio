@@ -26,6 +26,7 @@ router = APIRouter(tags=["capabilities"])
 class CapabilitiesResponse(BaseModel):
     allocation: bool
     outbound_webhooks: bool
+    account_portal: bool
     # v1.0.0h: when true, the frontend should call GET /api/billing-info
     # before completing event creation and show a confirmation dialog
     # rendering the returned amount/currency/card-last-4.
@@ -43,6 +44,7 @@ async def get_capabilities() -> CapabilitiesResponse:
     return CapabilitiesResponse(
         allocation=settings.feature_allocation,
         outbound_webhooks=settings.feature_outbound_webhooks,
+        account_portal=settings.feature_account_portal,
         create_event_confirmation=settings.feature_create_event_confirmation,
         account_url=settings.account_url,
     )
