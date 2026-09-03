@@ -3,7 +3,7 @@
 import uuid
 
 from fastapi import APIRouter, Body, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,12 +46,17 @@ async def _publish_organise_change(event_id: uuid.UUID, kind: str, **extra) -> N
 # ─── Schemas ───
 
 class CategoryCreate(BaseModel):
+    # v1.0.4: a group type the organiser creates has no key and its name is
+    # theirs from the start. Only our two built-in types carry one.
     name: str
     item_label: str | None = None
     description: str | None = None
     rule_type: str = "exclusive"
-    has_capacity: bool = False
-    has_gender_restriction: bool = False  # DEPRECATED v0.74; engine ignores
+    # DEPRECATED. Both are IGNORED from v1.0.3: capacity and gender are
+    # available on every group type. Accepted and stored so that rolling a
+    # workspace back to 1.0.2c does not hide the fields again.
+    has_capacity: bool = True
+    has_gender_restriction: bool = True
     exclusive_group_codes: bool = False  # v0.74
     sort_order: int = 0
     settings: dict | None = None
@@ -61,8 +66,8 @@ class CategoryUpdate(BaseModel):
     item_label: str | None = None
     description: str | None = None
     rule_type: str | None = None
-    has_capacity: bool | None = None
-    has_gender_restriction: bool | None = None  # DEPRECATED v0.74
+    has_capacity: bool | None = None  # DEPRECATED; ignored from v1.0.3
+    has_gender_restriction: bool | None = None  # DEPRECATED; ignored from v1.0.3
     exclusive_group_codes: bool | None = None  # v0.74
     sort_order: int | None = None
     settings: dict | None = None
@@ -70,7 +75,7 @@ class CategoryUpdate(BaseModel):
 class UnitCreate(BaseModel):
     name: str
     description: str | None = None
-    capacity: int  # v0.74: required (was Optional)
+    capacity: int = Field(ge=0)  # v1.0.3: 0 = no capacity limit
     gender_restriction: str | None = None
     mark_restriction: uuid.UUID | None = None  # v1.0.1e: single-mark room restriction
     is_kept: bool = False  # v1.0.1e: freeze unit on re-allocate
@@ -79,7 +84,7 @@ class UnitCreate(BaseModel):
 class UnitUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
-    capacity: int | None = None  # optional on update (no change implies same)
+    capacity: int | None = Field(default=None, ge=0)  # 0 = no limit; None = unchanged
     gender_restriction: str | None = None
     mark_restriction: uuid.UUID | None = None  # v1.0.1e: single-mark room restriction
     is_kept: bool | None = None  # v1.0.1e: freeze unit on re-allocate

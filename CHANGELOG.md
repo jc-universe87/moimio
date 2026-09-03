@@ -10,6 +10,100 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ## [Unreleased]
 
+## [1.0.4] — 2026-09-03
+
+Capacity and gender settings now work the same way on every group type,
+and the interface reads properly in every language it offers. Two
+long-standing defects are fixed along the way, one of which could leave
+most participants unallocated on a newly created event.
+
+### Fixed
+
+- **New group types no longer cap silently at one person.** When a group
+  type had its capacity setting switched off, the capacity box was hidden
+  but a placeholder capacity of 1 was still saved against every unit, and
+  the allocation engine enforced it. Because Small Groups was created with
+  that setting off, a newly created event could place one person per group
+  and report everyone else as having no space. Existing units carrying the
+  placeholder are corrected automatically on upgrade.
+- **Gender restrictions are now enforced on manual placement in every
+  group type.** A unit set to male only or female only was always
+  respected by automatic allocation, but a manual drag-and-drop skipped
+  the check on any group type whose gender setting was off. The two paths
+  now behave identically.
+- **A group type set to gender-restricted could not be created.** The
+  switch that turned gender on was removed in an earlier release while the
+  interface still depended on it, leaving gender permanently unavailable
+  on any group type that did not already have it. No longer applicable, as
+  gender is now always available.
+- **Layout export now carries the exclusive group codes setting.**
+  Exporting a layout and importing it into another event silently lost the
+  "group codes claim units exclusively" setting, which reverted to off.
+- Report section colours no longer depend on the language a roster is
+  printed in. The colour was derived from the group type's name, so a
+  translated name would have printed in a different colour.
+- Four unused text entries removed, including two carrying placeholder
+  spellings such as "Erste(n)" and "Novo(a)" from an earlier attempt to
+  work around the grammar problem below.
+- The PDF language selector is readable in dark mode. The dropdown had no
+  background of its own, so its list appeared as pale text on the system's
+  white, effectively invisible.
+
+### Added
+
+- **The two built-in group types now follow your language.** Rooms and
+  Small Groups appear as Zimmer and Kleingruppen to an organiser working
+  in German, 방 and 소그룹 in Korean, and so on, without anyone having to
+  rename anything. Rename either one and it becomes yours permanently, in
+  the words you chose. Group types you create yourself are unaffected and
+  always were. Existing events pick this up automatically, except where a
+  built-in type has already been renamed, which is left alone.
+- Printed rosters follow the same rule, in the PDF's own language, which
+  is chosen separately from the interface language. A German organiser can
+  print an English roster for an international team.
+
+### Changed
+
+- **Every group type now supports capacity and gender.** The two
+  checkboxes that switched these on and off per group type have been
+  removed. Both are available everywhere, on every group type, without any
+  setup. A group type still has a name, an item label, and the choice of
+  whether a person may belong to more than one.
+- **Capacity can be left blank.** The capacity box now carries a "No
+  capacity limit" tick. Leaving the box empty ticks it; typing a number
+  clears it; clearing the number brings it back. A unit with no capacity
+  limit accepts any number of people, and its occupancy is shown as a
+  plain count rather than a fraction.
+- **New rooms and groups are gender-neutral by default.** Each unit still
+  carries its own mixed / male only / female only setting, and mixed
+  remains the default, so an organiser who does not care about gender
+  never has to touch it.
+- **Evening out treats a blank capacity as an ordinary unit.** When some
+  units in a group type carry a capacity and others are left blank, the
+  blank ones are balanced as though they were of average size for that
+  group type, so they receive a fair share instead of being skipped. When
+  every unit is blank, people are spread evenly by head count, as before.
+- **Interface text no longer bends around the name of your group type.**
+  Several labels used to insert that name into a sentence needing a
+  grammatical article, which cannot work when the word is one the
+  organiser chose: German produced "Name des Group", and French, Spanish
+  and Portuguese had the same problem. Those labels have been rewritten so
+  that no sentence has to agree with a word it cannot know.
+- **Em and en dashes removed from all interface text**, in all six
+  languages, in favour of ordinary sentence punctuation. 48 keys.
+
+### Upgrade note
+
+On upgrade, units holding the hidden placeholder capacity of 1 are set to
+"no capacity limit". Only units in group types that had their capacity
+setting switched off are touched, since that is where the placeholder was
+written. Capacities entered by hand are left exactly as they are.
+
+Downgrading a workspace to 1.0.2c after this release is not recommended:
+earlier versions read a blank capacity as room for nobody and would leave
+participants unallocated. The database migration can be reversed if a
+downgrade is unavoidable.
+
 ## [1.0.2c] — 2026-07-12
 
 Small follow-up release to 1.0.2: managed-instance behaviour now works

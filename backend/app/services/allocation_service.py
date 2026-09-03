@@ -10,10 +10,11 @@ user context (tests, migrations).
 
 import uuid
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import MoimioAppError
+from app.core.default_type_names import matches_default
 from app.core.logging import get_logger
 from app.models.allocation_category import AllocationCategory
 from app.models.allocation_unit import AllocationUnit
@@ -68,6 +69,9 @@ async def list_categories(db: AsyncSession, event_id: uuid.UUID) -> list[dict]:
             AllocationUnit.category_id,
             func.count(AllocationUnit.id).label("unit_count"),
             func.sum(AllocationUnit.capacity).label("total_capacity"),
+            # v1.0.3: capacity 0 = no limit. A group type containing even
+            # one such unit has no meaningful total, so count them.
+            func.count(case((AllocationUnit.capacity == 0, 1))).label("uncapped_count"),
         )
         .where(AllocationUnit.category_id.in_(cat_ids))
         .group_by(AllocationUnit.category_id)
@@ -92,6 +96,9 @@ async def list_categories(db: AsyncSession, event_id: uuid.UUID) -> list[dict]:
         us = units_stats.get(cat.id)
         unit_count = us.unit_count if us else 0
         total_capacity = (us.total_capacity or 0) if us else 0
+        # v1.0.3: replaces the has_capacity toggle, which is no longer read.
+        uncapped_count = (us.uncapped_count or 0) if us else 0
+        has_total = unit_count > 0 and uncapped_count == 0
         allocated = alloc_counts.get(cat.id, 0)
 
         out.append({
@@ -103,7 +110,10 @@ async def list_categories(db: AsyncSession, event_id: uuid.UUID) -> list[dict]:
             "sort_order": cat.sort_order, "is_default": cat.is_default,
             "confirmed": cat.confirmed,
             "unit_count": unit_count, "allocated_count": allocated,
-            "total_capacity": total_capacity if cat.has_capacity else None,
+            "total_capacity": total_capacity if has_total else None,
+            # v1.0.4: present means "this name is ours, render it translated".
+            "name_key": cat.name_key,
+            "item_label_key": cat.item_label_key,
             "settings": cat.settings,
         })
     return out
@@ -118,11 +128,30 @@ async def update_category(db: AsyncSession, category_id: uuid.UUID, **kwargs) ->
     cat = await get_category(db, category_id)
     if not cat:
         raise MoimioAppError("errors.allocation.group_type_not_found", status_code=404)
-    # v0.74: pre-v0.74 Bug 3 guard ("reject has_capacity=true→false
-    # when units have capacity set") is obsolete. Capacity is now
-    # required on every unit (NOT NULL); the toggle controls whether
-    # the engine honours the values. Toggling off no longer leaves
-    # dead data.
+    # v1.0.3: the has_capacity guard that used to live here is gone with the
+    # toggle itself. Capacity lives on the unit, where 0 means no limit.
+
+    # v1.0.4: decide whether this is a rename or a no-op save, BEFORE the
+    # values are written. The organiser is looking at a name translated into
+    # their own language, so a plain "did the text change?" test would call
+    # every save from a German session a rename. Instead: if what comes back
+    # is still one of OUR translations of this key, nothing was renamed and
+    # the key survives. Anything else is a name they chose, so the key is
+    # cleared and the text becomes theirs permanently.
+    #
+    # Deliberately not in the API layer: this has to hold for every writer,
+    # including copy-event, layout import and any future API client.
+    for field, key_field in (("name", "name_key"), ("item_label", "item_label_key")):
+        incoming = kwargs.get(field)
+        if incoming is None:
+            continue                      # field not being touched at all
+        current_key = getattr(cat, key_field)
+        if current_key and not matches_default(current_key, incoming):
+            kwargs[key_field] = None
+            # Setting a key to None cannot go through the loop below, which
+            # skips None on purpose, so apply it directly.
+            setattr(cat, key_field, None)
+
     for k, v in kwargs.items():
         if v is not None and hasattr(cat, k):
             setattr(cat, k, v)
@@ -188,11 +217,13 @@ async def create_default_categories(db: AsyncSession, event_id: uuid.UUID):
     """Create Rooms + Small Groups for a new event."""
     await create_category(
         db, event_id, name="Rooms", item_label="Room", rule_type="exclusive",
-        has_capacity=True, has_gender_restriction=True, sort_order=0, is_default=True,
+        name_key="rooms", item_label_key="room",
+        has_capacity=True, has_gender_restriction=True, sort_order=0, is_default=True,  # v1.0.3: flags unread; kept true for rollback safety
     )
     await create_category(
         db, event_id, name="Small Groups", item_label="Group", rule_type="exclusive",
-        has_capacity=False, has_gender_restriction=False, sort_order=1, is_default=True,
+        name_key="small_groups", item_label_key="group",
+        has_capacity=True, has_gender_restriction=True, sort_order=1, is_default=True,  # v1.0.3: was False/False — the cause of the silent capacity-1 cap
     )
 
 
@@ -373,7 +404,7 @@ async def assign_participant(
     # organiser sees a different message depending on cause.
     #   - Wrong gender → find a different room
     #   - No gender on record → update the participant, then re-try
-    if cat.has_gender_restriction and unit.gender_restriction:
+    if unit.gender_restriction:
         if not participant.gender:
             raise MoimioAppError(
                 "errors.allocation.unit_gender_unknown_blocked",

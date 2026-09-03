@@ -98,11 +98,19 @@ CATEGORY_PALETTE = [
 ]
 
 
-def _category_colour(name: str) -> tuple[int, int, int]:
-    """Stable colour for a category name. Same name → same colour across runs."""
-    if not name:
+def _category_colour(name: str, name_key: str | None = None) -> tuple[int, int, int]:
+    """Stable colour for a category. Same category → same colour across runs.
+
+    v1.0.4: prefer the translation key when there is one. The colour is
+    derived from the characters of the name, so once default names are
+    rendered per language the same group type would otherwise print in a
+    different colour for a German reader than an English one. Keying off
+    the stable identifier keeps the docstring's promise honest.
+    """
+    basis = name_key or name
+    if not basis:
         return STEEL_BLUE
-    idx = sum(ord(c) for c in name) % len(CATEGORY_PALETTE)
+    idx = sum(ord(c) for c in basis) % len(CATEGORY_PALETTE)
     return CATEGORY_PALETTE[idx][1]
 
 
@@ -116,6 +124,8 @@ def _category_colour(name: str) -> tuple[int, int, int]:
 #
 # Supported languages mirror the frontend: en, de, ko, es, pt-BR, fr.
 # If an unknown lang is requested, we fall back to English silently.
+from app.core.default_type_names import resolve as resolve_default_name
+
 PDF_LANGS = ("en", "de", "ko", "es", "pt-BR", "fr")
 DEFAULT_PDF_LANG = "en"
 
@@ -698,11 +708,14 @@ def _pdf_for_data(
     category = data["category"]
     return MoimioPDF(
         event_name=event.name,
-        category_name=category.name,
+        # v1.0.4: our own group type names print in the PDF's language,
+        # which is chosen independently of the interface language.
+        category_name=resolve_default_name(
+            category.name_key, category.name, lang),
         format_label=_pdf_t(lang, format_label_key),
         event_date_line=_format_date_range(event.start_date, event.end_date),
         event_location=event.location,
-        category_colour=_category_colour(category.name),
+        category_colour=_category_colour(category.name, category.name_key),
         orientation=orientation,
         lang=lang,
     )

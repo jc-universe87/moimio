@@ -29,7 +29,23 @@ permissions:
   packages: write
 
 jobs:
+  # v1.0.4: the only place in the pipeline that can see BOTH trees.
+  # Each image build is scoped to its own directory (./backend, ./frontend),
+  # so neither can check the built-in group type names against the other
+  # side. The backend's equivalent test skips itself inside the container
+  # for the same reason. This job runs on the full checkout, and gates the
+  # image builds so a drifted name can never reach GHCR.
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate i18n keys and built-in group type names
+        run: python3 frontend/scripts/validate-i18n-keys.py
+
   build:
+    needs: checks
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

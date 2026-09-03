@@ -55,3 +55,28 @@ async def test_import_rejects_bad_payload(db):
     with pytest.raises(ValueError):
         await import_room_layout(db, dest.id, {"kind": "something_else"})
     print("  bad payload rejected")
+
+
+@pytest.mark.asyncio
+async def test_roundtrip_preserves_exclusive_group_codes(db):
+    """v1.0.3 fix: the setting was omitted from the export, so importing a
+    proven layout silently reverted it to off. On a dorm layout that is the
+    difference between "the family has the room" and "a stranger fills the
+    spare bed", with nothing on screen to say it changed.
+    """
+    src = await make_event(db)
+    cat = await make_category(db, src.id, has_capacity=True,
+                              exclusive_group_codes=True)
+    await make_unit(db, cat.id, "Family room", capacity=6)
+
+    payload = await export_room_layout(db, src.id)
+    assert payload["group_types"][0]["exclusive_group_codes"] is True, \
+        "exclusive_group_codes missing from the exported layout"
+
+    dest = await make_event(db)
+    await import_room_layout(db, dest.id, payload)
+    await db.flush()
+    dcat = (await db.execute(select(AllocationCategory).where(
+        AllocationCategory.event_id == dest.id))).scalars().first()
+    assert dcat.exclusive_group_codes is True, \
+        "exclusive_group_codes lost on import"

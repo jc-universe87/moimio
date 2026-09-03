@@ -82,8 +82,17 @@ async def export_room_layout(db: AsyncSession, event_id: uuid.UUID) -> dict:
             "item_label": cat.item_label,
             "description": cat.description,
             "rule_type": cat.rule_type,
-            "has_capacity": cat.has_capacity,
-            "has_gender_restriction": cat.has_gender_restriction,
+            # Both ignored from v1.0.3; still written so a file exported here
+            # can be read by an older instance without hiding its fields.
+            "has_capacity": True,
+            "has_gender_restriction": True,
+            # v1.0.3 fix: this was omitted, so importing a layout silently
+            # reverted "group codes claim units exclusively" to off.
+            "exclusive_group_codes": cat.exclusive_group_codes,
+            # v1.0.4: carry the translation markers so an exported layout
+            # lands in the reader's language rather than freezing English.
+            "name_key": cat.name_key,
+            "item_label_key": cat.item_label_key,
             "settings": _settings_ids_to_names(cat.settings, id_to_name),
             "units": [{
                 "name": u.name,
@@ -123,8 +132,11 @@ async def import_room_layout(db: AsyncSession, event_id: uuid.UUID, payload: dic
             item_label=gt.get("item_label"),
             description=gt.get("description"),
             rule_type=gt.get("rule_type"),
-            has_capacity=gt.get("has_capacity", True),
-            has_gender_restriction=gt.get("has_gender_restriction", False),
+            has_capacity=True,  # v1.0.3: ignored; always on
+            has_gender_restriction=True,  # v1.0.3: ignored; always on
+            exclusive_group_codes=gt.get("exclusive_group_codes", False),
+            name_key=gt.get("name_key"),
+            item_label_key=gt.get("item_label_key"),
             sort_order=next_sort,
             is_default=False,
             confirmed=False,

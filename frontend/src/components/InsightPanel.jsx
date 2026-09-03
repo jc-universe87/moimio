@@ -14,6 +14,7 @@ import { downloadParticipantDataExport } from '../utils/downloadParticipantDataE
 import MarkDots from './MarkDots';
 import AllocationHistory from './AllocationHistory';
 import GroupCodeTooltip from './GroupCodeTooltip';
+import { typeName, typeItemLabel } from '../utils/groupTypeLabel';
 
 /**
  * InsightPanel — slide-out (desktop) / bottom sheet (mobile) showing a
@@ -172,7 +173,7 @@ export default function InsightPanel({ participant, eventId, marksForPerson = []
       const cat = categories.find(c => String(c.id) === String(catId));
       myAllocations.push({
         unitName: (unit && unit.name) || unitId,
-        categoryName: (cat && cat.name) || '—',
+        categoryName: (cat && typeName(cat, t)) || '—',
       });
     }
   }

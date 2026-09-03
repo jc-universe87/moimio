@@ -4,6 +4,7 @@ import { formatErrorMessage } from '../services/api';
 import { useI18n } from '../hooks/useI18n';
 
 import ErrorBanner from './ErrorBanner';
+import { typeName, typeItemLabel } from '../utils/groupTypeLabel';
 /**
  * ReportsPanel — aggregate reporting surface for an event (v0.50g).
  *
@@ -309,7 +310,7 @@ export default function ReportsPanel({ eventId, eventName, phase }) {
                     id="pdf-lang-select"
                     value={pdfLang}
                     onChange={e => setPdfLang(e.target.value)}
-                    className="text-xs rounded-card px-2 py-1 border bg-transparent"
+                    className="text-xs rounded-card px-2 py-1 border bg-[var(--app-bg)]"
                     style={{
                       borderColor: 'var(--card-border)',
                       color: 'var(--text-primary)',
@@ -355,7 +356,7 @@ export default function ReportsPanel({ eventId, eventName, phase }) {
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                          {cat.name}
+                          {typeName(cat, t)}
                         </p>
                         <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-subtle)' }}>
                           {/* v0.89 #29: simpler per-category metric —
@@ -369,7 +370,7 @@ export default function ReportsPanel({ eventId, eventName, phase }) {
                         </p>
                       </div>
                       <button
-                        onClick={() => downloadPdf(cat.id, cat.name, 'compact')}
+                        onClick={() => downloadPdf(cat.id, typeName(cat, t), 'compact')}
                         disabled={downloadingKey === compactKey}
                         className="text-xs font-medium px-3 py-1.5 rounded-card border hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50 shrink-0"
                         style={{ borderColor: 'var(--card-border)', color: 'var(--text-muted)' }}
@@ -379,7 +380,7 @@ export default function ReportsPanel({ eventId, eventName, phase }) {
                           : (t('reports.rosters.compact'))}
                       </button>
                       <button
-                        onClick={() => downloadPdf(cat.id, cat.name, 'signin')}
+                        onClick={() => downloadPdf(cat.id, typeName(cat, t), 'signin')}
                         disabled={downloadingKey === signinKey}
                         className="text-xs font-medium px-3 py-1.5 rounded-card border hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50 shrink-0"
                         style={{ borderColor: 'var(--card-border)', color: 'var(--text-muted)' }}

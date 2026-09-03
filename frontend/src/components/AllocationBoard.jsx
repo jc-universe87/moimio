@@ -17,6 +17,7 @@ import { computeMarkSplits } from '../utils/computeCategoryHints';
 import { useEventStream } from '../hooks/useEventStream';
 
 import TranslatedError from './TranslatedError';
+import { typeName, typeItemLabel } from '../utils/groupTypeLabel';
 const TRUNCATE_LEN = 90;
 const truncate = (s) => s && s.length > TRUNCATE_LEN ? s.slice(0, TRUNCATE_LEN) + '…' : s;
 
@@ -37,7 +38,6 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   const canAssignMarks = isAdmin || marksPerm === 'write';
   const [units, setUnits] = useState([]);
   const [allMembers, setAllMembers] = useState({});
-  const [showCreate, setShowCreate] = useState(false);
   const [editingUnit, setEditingUnit] = useState(null);
   // v1.0.0q: lightweight inline-rename for unit names. Separate from
   // editingUnit (which opens the full edit form for name + description
@@ -46,7 +46,6 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   // type, Enter or blur saves, Esc reverts, empty reverts.
   const [editingUnitRenameId, setEditingUnitRenameId] = useState(null);
   const [unitRenameDraft, setUnitRenameDraft] = useState('');
-  const [form, setForm] = useState({ name: '', description: '', capacity: '', gender_restriction: '' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notesFor, setNotesFor] = useState(null);
@@ -156,7 +155,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
 
   const { confirm, ConfirmOverlay } = useConfirmOverlay();
   const { t, lang } = useI18n();
-  const itemLabel = category?.item_label || 'Item';
+  const itemLabel = typeItemLabel(category, t);  // v1.0.4
 
   // ─── Engine state ───
   const [suggesting, setSuggesting] = useState(false);
@@ -219,7 +218,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
         .replace(/^_+|_+$/g, '');
       const today = new Date();
       const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      const parts = [slug(eventName), slug(category.name), 'detailed', dateStr, slug(pdfLang)].filter(Boolean);
+      const parts = [slug(eventName), slug(typeName(category, t)), 'detailed', dateStr, slug(pdfLang)].filter(Boolean);
       a.download = `${parts.join('_')}.pdf`;
       a.click();
       URL.revokeObjectURL(a.href);
@@ -654,29 +653,6 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   };
 
   // ─── Unit CRUD ───
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    if (!form.name.trim()) return;
-    try {
-      // v0.74: capacity is required at the schema layer (NOT NULL).
-      // When the category's has_capacity toggle is off OR the form
-      // field is empty, default to 1. The engine ignores caps when
-      // the toggle is off, so this is a placeholder value the
-      // organiser can adjust later. Gender_restriction stays gated
-      // on category.has_gender_restriction (still in DB; deprecated).
-      await allocationUnits.create(eventId, category.id, {
-        name: form.name.trim(),
-        description: form.description.trim() || null,
-        capacity: form.capacity ? parseInt(form.capacity) : 1,
-        gender_restriction: category.has_gender_restriction && form.gender_restriction ? form.gender_restriction : null,
-      });
-      setForm({ name: '', description: '', capacity: '', gender_restriction: '' });
-      setShowCreate(false);
-      await loadAll();
-      if (onDataChange) onDataChange();
-    } catch (err) { setError(err); }
-  };
-
   const handleUpdateUnit = async (e) => {
     e.preventDefault();
     if (!editingUnit) return;
@@ -685,7 +661,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
         name: editingUnit.name,
         description: editingUnit.description || null,
         // v0.74: capacity required-everywhere. Fall back to 1 if cleared.
-        capacity: editingUnit.capacity ? parseInt(editingUnit.capacity) : 1,
+        capacity: editingUnit.capacity ? parseInt(editingUnit.capacity) : 0,  // v1.0.3: 0 = no limit
         gender_restriction: editingUnit.gender_restriction || null,
         mark_restriction: editingUnit.mark_restriction || null,
       });
@@ -766,7 +742,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     const payload = {
       name: editingUnit.name.trim(),
       description: editingUnit.description?.trim() || null,
-      capacity: editingUnit.capacity ? parseInt(editingUnit.capacity) : 1,
+      capacity: editingUnit.capacity ? parseInt(editingUnit.capacity) : 0,  // v1.0.3: 0 = no limit
       gender_restriction: editingUnit.gender_restriction || null,
     };
     try {
@@ -1061,7 +1037,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     // enforced by the backend and surfaces as an error toast in the catch
     // below. For bulk drops we check against the additional count.
     const targetUnit = units.find(u => String(u.id) === String(targetUnitId));
-    if (category.has_capacity && targetUnit && targetUnit.capacity) {
+    if (targetUnit && targetUnit.capacity) {
       const adding = dragParticipant.bulk?.length > 1 ? dragParticipant.bulk.length : 1;
       // How many of the dropped participants are NOT currently in the target
       // unit? (Bulk drops may include people already here — they don't add.)
@@ -1335,7 +1311,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                 disabled={suggesting || units.length === 0}
                 onClick={() => setShowModePicker(p => !p)}
                 className="bg-gold text-deep-navy font-bold text-sm px-4 py-2 hover:bg-gold/80 disabled:opacity-40 transition-colors flex items-center gap-2"
-                title={units.length === 0 ? t('engine.no_units_hint', { item: itemLabel }) : t('engine.run_from_board', { item: itemLabel })}>
+                title={units.length === 0 ? t('engine.no_units_hint') : t('engine.run_from_board')}>
                 {suggesting ? <span className="animate-spin inline-block">⟳</span> : <span>✦</span>}
                 {suggesting ? t('engine.suggesting') : t('engine.auto_allocate')}
               </button>
@@ -1605,7 +1581,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                 <div
                   className="card-surface-solid absolute top-full right-0 mt-1 rounded-card py-1 z-30 w-44"
                   style={{ border: '1px solid var(--card-border)', boxShadow: '0 12px 32px rgba(0,0,0,0.25)' }}>
-                  <button onClick={() => { setNotesFor({ type: 'category', id: category.id, name: category.name }); setShowOverflowMenu(false); }}
+                  <button onClick={() => { setNotesFor({ type: 'category', id: category.id, name: typeName(category, t) }); setShowOverflowMenu(false); }}
                     className="w-full text-left px-4 py-2 text-xs flex items-center justify-between hover:bg-black/5 dark:hover:bg-white/10"
                     style={{ color: 'var(--text-muted)' }}>
                     {t('common.notes')}
@@ -1708,7 +1684,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                         setShowOverflowMenu(false);
                         const ok = await confirm({
                           title: t('organise.clear_all_confirm.title'),
-                          message: t('organise.clear_all_confirm.body', { category: category.name }),
+                          message: t('organise.clear_all_confirm.body', { category: typeName(category, t) }),
                           confirmLabel: t('organise.clear_all_confirm.cta'),
                           danger: true,
                         });
@@ -2030,7 +2006,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
 
         {/* ─── RIGHT: Allocation Board ─── */}
         <div ref={rightPanelRef} className="flex-1 min-w-0">
-          {units.length === 0 && !showCreate ? (
+          {units.length === 0 ? (
             <div
               className="rounded-2xl p-12 text-center"
               style={{
@@ -2038,7 +2014,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                 border: '1px solid var(--card-border)',
                 color: 'var(--text-subtle)',
               }}>
-              <p className="text-sm mb-1">{t('organise.no_units', { item: itemLabel })}</p>
+              <p className="text-sm mb-1">{t("organise.no_units")}</p>
               <p className="text-xs">{t('organise.no_units.hint')}</p>
               {isAdmin && (
                 <button onClick={() => setEditingUnit({ name: '', description: '', capacity: '', gender_restriction: '' })}
@@ -2089,7 +2065,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                       if (dropValid) setDragOverUnit(unit.id); else setDragOverUnit('invalid-' + unit.id);
                     }}
                     onDragLeave={() => { setDragOverUnit(null); setDragOverUnitId(null); }}
-                    onDrop={e => { e.preventDefault(); setDragOverUnit(null); setDragOverUnitId(null); if (dragUnitId && dragUnitId !== unit.id) { handleReorderUnits(dragUnitId, unit.id); return; } if (dropValid) handleDrop(unit.id); else showToast(t('organise.drop_here') + ' — ' + (category.has_capacity && unit.capacity && unit.occupant_count >= unit.capacity ? t('organise.full') : t('organise.rule_violation')), 'error'); }}
+                    onDrop={e => { e.preventDefault(); setDragOverUnit(null); setDragOverUnitId(null); if (dragUnitId && dragUnitId !== unit.id) { handleReorderUnits(dragUnitId, unit.id); return; } if (dropValid) handleDrop(unit.id); else showToast(t('organise.drop_here') + ' — ' + (unit.capacity && unit.occupant_count >= unit.capacity ? t('organise.full') : t('organise.rule_violation')), 'error'); }}
                     className="card-surface-solid rounded-2xl transition-all group flex flex-col"
                     style={{ borderWidth: '2px', borderStyle: 'solid', ...unitStyle, cursor: selectedPeople.size > 0 ? 'pointer' : undefined }}>
 
@@ -2182,7 +2158,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                           // render a small burgundy label "over capacity" next to the
                           // pill so the signal is unambiguous at a glance, not just a
                           // colour shift.
-                          const hasCap = category.has_capacity && unit.capacity;
+                          const hasCap = unit.capacity;  // v1.0.3: 0 = no limit, shows a bare count
                           const pillClass = hasCap
                             ? capColor(unit.occupant_count, unit.capacity)
                             : '';
@@ -2348,7 +2324,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                 className="card-surface-solid absolute bottom-full mb-2 left-0 rounded-card min-w-[180px] py-1 max-h-56 overflow-y-auto"
                 style={{ border: '1px solid var(--card-border)', boxShadow: '0 12px 32px rgba(0,0,0,0.25)' }}>
                 {units.map(u => {
-                  const full = category.has_capacity && u.capacity && u.occupant_count >= u.capacity;
+                  const full = u.capacity && u.occupant_count >= u.capacity;
                   return (
                     <button key={u.id} disabled={full} onClick={() => handleBulkAssign(u.id)}
                       className="w-full text-left text-xs px-3 py-2 flex items-center justify-between hover:bg-black/5 dark:hover:bg-white/10 disabled:cursor-not-allowed"
@@ -2394,7 +2370,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
             </div>
             <div className="space-y-2.5">
               <div>
-                <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>{t('organise.name_label', { item: itemLabel })}</label>
+                <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>{t("organise.name_label")}</label>
                 <input autoFocus type="text" value={editingUnit.name} onChange={e => setEditingUnit(p => ({ ...p, name: e.target.value }))}
                   className="w-full rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]" />
               </div>
@@ -2404,25 +2380,29 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                   className="w-full rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]" />
               </div>
               <div className="flex gap-2 flex-wrap">
-                {category.has_capacity && (
-                  <div>
-                    <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>{t('organise.capacity')}</label>
-                    <input type="number" min="1" value={editingUnit.capacity || ''} onChange={e => setEditingUnit(p => ({ ...p, capacity: e.target.value }))}
-                      className="w-24 rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]" />
-                  </div>
-                )}
-                {category.has_gender_restriction && (
-                  <div>
-                    <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>&nbsp;</label>
-                    <select value={editingUnit.gender_restriction || ''} onChange={e => setEditingUnit(p => ({ ...p, gender_restriction: e.target.value }))}
-                      className="rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]">
-                      <option value="">{t('common.mixed')}</option>
-                      <option value="male">{t('common.male_only')}</option>
-                      <option value="female">{t('common.female_only')}</option>
-                    </select>
-                  </div>
-                )}
+                <div>
+                  <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>{t('organise.capacity')}</label>
+                  <input type="number" min="1" value={editingUnit.capacity || ''} onChange={e => setEditingUnit(p => ({ ...p, capacity: e.target.value }))}
+                    className="w-24 rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]" />
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>&nbsp;</label>
+                  <select value={editingUnit.gender_restriction || ''} onChange={e => setEditingUnit(p => ({ ...p, gender_restriction: e.target.value }))}
+                    className="rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]">
+                    <option value="">{t('common.mixed')}</option>
+                    <option value="male">{t('common.male_only')}</option>
+                    <option value="female">{t('common.female_only')}</option>
+                  </select>
+                </div>
               </div>
+              {/* v1.0.3: the capacity number is the single source of truth.
+                  The tick mirrors "the box is empty", and clicking it clears
+                  the box, so the two can never contradict each other. */}
+              <label className="flex items-center gap-2 text-xs cursor-pointer select-none" style={{ color: 'var(--text-muted)' }}>
+                <input type="checkbox" checked={!editingUnit.capacity}
+                  onChange={() => setEditingUnit(p => ({ ...p, capacity: '' }))} />
+                {t('organise.no_capacity_limit')}
+              </label>
             </div>
             <div className="flex justify-end gap-2 mt-4">
               <button type="button" onClick={() => setEditingUnit(null)}

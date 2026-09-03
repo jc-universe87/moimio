@@ -146,6 +146,71 @@ def scan_file(path: Path):
     return static, template, var
 
 
+def check_default_type_names(quiet: bool) -> bool:
+    """Assert the built-in group type names match the backend's copy (v1.0.4).
+
+    Rooms / Room / Small Groups / Group exist twice by necessity: here for
+    the interface, and in backend/app/core/default_type_names.py, which
+    renders them into the PDF server-side and uses them to tell a rename
+    from a no-op save. Two copies drift. This is the guard.
+
+    It lives in this script rather than only in the backend test suite
+    because the backend runs its tests inside a container built from
+    ./backend alone, where the locale files do not exist and the
+    equivalent test skips itself. Neither Docker build can see both
+    trees; a full checkout can, which is what CI has.
+
+    Returns True if drift was found. When the backend tree is not present
+    (running inside the frontend image build, where the context is
+    ./frontend only) the check is skipped, silently under --quiet.
+    """
+    backend = SCRIPT_DIR.parent.parent / "backend/app/core/default_type_names.py"
+    if not backend.exists():
+        if not quiet:
+            print("validate-i18n-keys: default-name check skipped "
+                  "(backend tree not present).")
+        return False
+
+    ns: dict = {}
+    exec(compile(backend.read_text(), str(backend), "exec"), ns)
+    expected: dict = ns["DEFAULT_TYPE_NAMES"]
+    langs: tuple = ns["LANGS"]
+
+    problems: list[str] = []
+    for lang in langs:
+        path = EN_JSON.parent / f"{lang}.json"
+        if not path.exists():
+            problems.append(f"{lang}.json is missing entirely")
+            continue
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for key, per_lang in expected.items():
+            full = f"organise.default_type.{key}"
+            got = data.get(full)
+            if got is None:
+                problems.append(f"{lang}.json has no {full}")
+            elif got != per_lang[lang]:
+                problems.append(
+                    f"{lang} {full}: locale file says {got!r}, "
+                    f"backend says {per_lang[lang]!r}")
+
+    if problems:
+        print("validate-i18n-keys: FAIL — built-in group type names have "
+              "drifted from the backend:", file=sys.stderr)
+        for p in problems:
+            print(f"  {p}", file=sys.stderr)
+        print(file=sys.stderr)
+        print("These names live in two places on purpose (the PDF renders "
+              "server-side).", file=sys.stderr)
+        print("Fix by editing BOTH the locale files and "
+              "backend/app/core/default_type_names.py.", file=sys.stderr)
+        return True
+
+    if not quiet:
+        print(f"validate-i18n-keys: built-in group type names agree with the "
+              f"backend ({len(expected)} keys × {len(langs)} languages).")
+    return False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -215,6 +280,10 @@ def main() -> None:
               "renamed/removed without updating callers.", file=sys.stderr)
         print("Fix by either correcting the callsite or adding the key to "
               "all 6 locale files (per TRANSLATION_RULE.md).", file=sys.stderr)
+        sys.exit(1)
+
+    drift = check_default_type_names(args.quiet)
+    if drift:
         sys.exit(1)
 
     if not args.quiet:

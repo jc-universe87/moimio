@@ -8,6 +8,7 @@ import { useToast } from '../hooks/useToast';
 import GroupTypesEditor from './GroupTypesEditor';
 
 import ErrorBanner from './ErrorBanner';
+import { typeName, typeItemLabel } from '../utils/groupTypeLabel';
 
 // v0.61c-2: detect a pointer device with a fine-grained pointer
 // (mouse, trackpad). Same predicate as in GroupTypesEditor — see the
@@ -168,7 +169,7 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
   const startInlineRename = (cat) => {
     setKebabOpenCatId(null);
     setEditingCatRenameId(cat.id);
-    setRenameDraft(cat.name || '');
+    setRenameDraft(typeName(cat, t));  // v1.0.4: rename starts from what they see
   };
   const commitInlineRename = async (catId) => {
     const trimmed = (renameDraft || '').trim();
@@ -568,15 +569,17 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
                         onClick={isAdmin ? (e) => { e.stopPropagation(); startInlineRename(cat); } : undefined}
                         title={isAdmin ? t('organise.title_click_to_rename') : undefined}
                         className={`font-heading font-bold text-lg text-body group-hover:text-steel-blue dark:group-hover:text-gold transition-colors ${isAdmin ? 'cursor-text hover:underline decoration-dotted decoration-1 underline-offset-4' : ''}`}>
-                        {cat.name}
+                        {typeName(cat, t)}
                       </h3>
                     )}
                     <p className="text-[10px] text-gray-400 mt-0.5">
+                      {/* v1.0.3: the Capacity and Gender chips are gone. Both
+                          are now available on every group type, so naming
+                          them here distinguished nothing. */}
                       {ruleLabel(cat.rule_type)}
-                      {cat.has_capacity && ' · ' + t('organise.capacity')}{cat.has_gender_restriction && ' · ' + t('organise.gender')}
                     </p>
                   </div>
-                  <span className="text-xs font-semibold text-gray-400">{cat.unit_count} × {cat.item_label || 'Item'}</span>
+                  <span className="text-xs font-semibold text-gray-400">{cat.unit_count} × {typeItemLabel(cat, t)}</span>
                 </div>
                 <div className="mb-2">
                   <div className="flex justify-between text-xs text-gray-500 mb-1">

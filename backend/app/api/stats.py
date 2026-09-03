@@ -155,6 +155,11 @@ async def event_stats(
         per_category.append({
             "id": str(cat["id"]),
             "name": cat["name"],
+            # v1.0.4: this payload is built here rather than reused from
+            # list_categories, so the translation markers have to be carried
+            # explicitly or the Reports page falls back to English names.
+            "name_key": cat.get("name_key"),
+            "item_label_key": cat.get("item_label_key"),
             "unit_count": cat.get("unit_count", 0),
             "capacity": cap,
             "occupied": occ,

@@ -432,8 +432,10 @@ async def duplicate_event_config(
                 item_label=cat.item_label,
                 description=cat.description,
                 rule_type=cat.rule_type,
-                has_capacity=cat.has_capacity,
-                has_gender_restriction=cat.has_gender_restriction,
+                name_key=cat.name_key,          # v1.0.4: a copied default
+                item_label_key=cat.item_label_key,  # is still a default
+                has_capacity=True,  # v1.0.3: ignored; always on
+                has_gender_restriction=True,  # v1.0.3: ignored; always on
                 sort_order=cat.sort_order,
                 is_default=cat.is_default,
                 # Fresh event starts with no confirmed allocations.

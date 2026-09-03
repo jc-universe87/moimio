@@ -4,6 +4,7 @@ import { useConfirmOverlay } from './ConfirmOverlay';
 import { EditIconButton, DeleteIconButton } from './RowActions';
 import { useI18n } from '../hooks/useI18n';
 import TranslatedError from './TranslatedError';
+import { typeName, typeItemLabel } from '../utils/groupTypeLabel';
 
 // v0.61c-1: detect a pointer device with a fine-grained pointer (mouse,
 // trackpad). Touch-only devices report `coarse` and report `pointer:
@@ -56,8 +57,11 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
     name: '',
     item_label: '',
     rule_type: 'exclusive',
-    has_capacity: false,
-    has_gender_restriction: false,  // v0.74: deprecated, default false
+    // v1.0.3: both ignored by every code path. Sent as true so that a
+    // workspace rolled back to 1.0.2c shows the capacity and gender fields
+    // instead of hiding them.
+    has_capacity: true,
+    has_gender_restriction: true,
     exclusive_group_codes: false,  // v0.74
   });
   const [error, setError] = useState(null);
@@ -90,7 +94,7 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
     if (!initialEditCatId || categories.length === 0) return;
     const target = categories.find(c => c.id === initialEditCatId);
     if (target) {
-      setEditingCat({ ...target });
+      setEditingCat({ ...target, name: typeName(target, t), item_label: typeItemLabel(target, t, '') });
     }
   }, [initialEditCatId, categories]);
 
@@ -101,7 +105,7 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
     if (!newCat.name.trim()) return;
     try {
       await allocationCategories.create(eventId, newCat);
-      setNewCat({ name: '', item_label: '', rule_type: 'exclusive', has_capacity: false, has_gender_restriction: false, exclusive_group_codes: false });
+      setNewCat({ name: '', item_label: '', rule_type: 'exclusive', has_capacity: true, has_gender_restriction: true, exclusive_group_codes: false });
       setShowAddCat(false);
       await loadCategories();
       notifyChange();
@@ -112,10 +116,8 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
   const handleUpdateCat = async (e) => {
     e.preventDefault();
     if (!editingCat) return;
-    // v0.74: pre-v0.74 Bug 3 wipe-on-toggle-off ceremony is removed.
-    // Capacity is required-everywhere in v0.74; toggling has_capacity
-    // off no longer wipes unit data — it just signals the engine to
-    // ignore the caps. Data stays intact.
+    // v1.0.3: there is no capacity toggle any more. Capacity lives on the
+    // unit, where 0 means no limit.
     try {
       await allocationCategories.update(eventId, editingCat.id, editingCat);
       setEditingCat(null);
@@ -228,13 +230,12 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
                       </select>
                     </div>
                     <div className="flex gap-4 flex-wrap">
-                      <label className="flex items-center gap-1.5 text-xs cursor-pointer"
-                        style={{ color: 'var(--text-muted)' }}>
-                        <input type="checkbox" checked={!!editingCat.has_capacity}
-                          onChange={e => setEditingCat(p => ({ ...p, has_capacity: e.target.checked }))}
-                          className="h-3.5 w-3.5 rounded accent-steel-blue dark:accent-gold" />
-                        {t('organise.capacity_limits')}
-                      </label>
+                      {/* v1.0.3: "Capacity limits" checkbox removed. Capacity
+                          is available on every group type; a unit with no
+                          capacity entered has no limit. The old switch hid
+                          the capacity box while a placeholder of 1 was still
+                          saved and enforced, which capped groups at one
+                          person. The column stays for API compat. */}
                       {/* v1.0-pre #24: "Group codes claim units exclusively"
                           checkbox removed from this group-type editor — it
                           now lives in the per-category Engine settings panel
@@ -285,7 +286,7 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
                         ⠿
                       </span>
                     )}
-                    <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{cat.name}</span>
+                    <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{typeName(cat, t)}</span>
                     <span className="text-[10px] ml-2" style={{ color: 'var(--text-subtle)' }}>
                       {ruleLabel(cat.rule_type)}
                     </span>
@@ -314,7 +315,7 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
                         internal list's Edit/Delete text links become the
                         app-standard pen/trash icons (same as MarksPanel,
                         FormConfigPanel, Users). Reorder arrows unchanged. */}
-                    <EditIconButton onClick={() => setEditingCat({ ...cat })}
+                    <EditIconButton onClick={() => setEditingCat({ ...cat, name: typeName(cat, t), item_label: typeItemLabel(cat, t, '') })}
                       title={t('common.edit')} className="ml-1" />
                     <DeleteIconButton onClick={() => handleDeleteCat(cat.id)}
                       title={t('common.delete')} />
@@ -385,13 +386,8 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
                   <option value="overlapping">{t('organise.rule.overlapping')}</option>
                 </select>
               </div>
-              <label className="flex items-center gap-1.5 text-xs cursor-pointer"
-                style={{ color: 'var(--text-muted)' }}>
-                <input type="checkbox" checked={newCat.has_capacity}
-                  onChange={e => setNewCat(p => ({ ...p, has_capacity: e.target.checked }))}
-                  className="h-3.5 w-3.5 rounded accent-steel-blue dark:accent-gold" />
-                {t('organise.capacity_limits')}
-              </label>
+              {/* v1.0.3: "Capacity limits" checkbox removed — see the edit
+                  form above. */}
               {/* v1.0.0k: leftover has_gender_restriction toggle removed
                   from Create form to match Edit form. The v0.74
                   deprecation only ever removed it from Edit; this

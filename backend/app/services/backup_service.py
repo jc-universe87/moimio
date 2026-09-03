@@ -532,8 +532,10 @@ async def confirm_restore(content: bytes, db: AsyncSession) -> dict:
             item_label=cat_src.get("item_label"),
             description=cat_src.get("description"),
             rule_type=cat_src.get("rule_type", "none"),
-            has_capacity=cat_src.get("has_capacity", False),
-            has_gender_restriction=cat_src.get("has_gender_restriction", False),
+            name_key=cat_src.get("name_key"),            # v1.0.4
+            item_label_key=cat_src.get("item_label_key"),  # v1.0.4
+            has_capacity=True,  # v1.0.3: ignored; always on
+            has_gender_restriction=True,  # v1.0.3: ignored; always on
             sort_order=cat_src.get("sort_order", 0),
             is_default=cat_src.get("is_default", False),
             settings=cat_src.get("settings") or {},

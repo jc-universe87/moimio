@@ -18,6 +18,12 @@ class AllocationCategory(Base):
     event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     item_label: Mapped[str | None] = mapped_column(String(50), nullable=True)  # singular: "Room", "Group", "Session"
+    # v1.0.4: while set, the name is one of ours and is rendered in the
+    # reader's language (app/core/default_type_names.py). Cleared the moment
+    # the organiser types a name of their own, after which `name` is theirs.
+    # `name` still holds the English text as a fallback for old clients.
+    name_key: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    item_label_key: Mapped[str | None] = mapped_column(String(40), nullable=True)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     rule_type: Mapped[str] = mapped_column(String(20), nullable=False, default="exclusive")  # "exclusive" or "overlapping"
     has_capacity: Mapped[bool] = mapped_column(Boolean, default=False)

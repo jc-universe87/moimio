@@ -116,6 +116,21 @@ from app.services.allocation_events_service import record_allocation_event
 from app.services.webhook_service import queue_event
 
 
+# v1.0.3: a unit capacity of 0 means "no capacity limit". (Legacy rows may
+# carry NULL; treated the same.) The engine models an uncapped unit as one
+# with a very large capacity rather than special-casing every pass. That
+# keeps remaining space a falling function of occupancy, so the existing
+# "prefer the emptiest unit" and "fill the smallest unit first" orderings
+# keep working unchanged instead of seeing an uncapped unit as either
+# permanently full or the smallest room in the house.
+_UNCAPPED = 1_000_000
+
+
+def _effective_cap(unit) -> int:
+    """Capacity to reason with: the stored number, or _UNCAPPED if unset."""
+    return unit.capacity if unit.capacity else _UNCAPPED
+
+
 DEFAULT_ENGINE_SETTINGS = {
     "use_group_codes": True,          # honour group_code clusters
     "group_remaining_by_gender": True, # prefer same gender when placing uncoded participants
@@ -404,8 +419,9 @@ async def run_engine(
     # Helpers used across passes ─────────────────────────────────────
 
     def remaining_cap(unit_id: str) -> int:
+        # v1.0.3: capacity 0 = no limit (see _effective_cap).
         unit = _unit_by_id(units, unit_id)
-        return unit.capacity - len(unit_slots[unit_id])
+        return _effective_cap(unit) - len(unit_slots[unit_id])
 
     def gender_eligible(unit: AllocationUnit, participant_gender: str | None) -> bool:
         """v0.74: read unit-level gender_restriction directly. The
@@ -582,7 +598,7 @@ async def run_engine(
         # Sort eligible units cap ASC (small units fill first).
         eligible_units = sorted(
             [u for u in units if str(u.id) not in exclusive_units and remaining_cap(str(u.id)) > 0],
-            key=lambda u: (u.capacity, u.sort_order, u.created_at),
+            key=lambda u: (_effective_cap(u), u.sort_order, u.created_at),
         )
         if not eligible_units:
             continue
@@ -621,7 +637,7 @@ async def run_engine(
         [u for u in units
          if (u.gender_restriction or u.mark_restriction)
          and str(u.id) not in exclusive_units],
-        key=lambda u: (u.capacity, u.sort_order, u.created_at),
+        key=lambda u: (_effective_cap(u), u.sort_order, u.created_at),
     )
     remaining = [
         p for p in participants
@@ -667,7 +683,7 @@ async def run_engine(
         [u for u in units
          if not u.gender_restriction and not u.mark_restriction
          and str(u.id) not in exclusive_units],
-        key=lambda u: (u.capacity, u.sort_order, u.created_at),
+        key=lambda u: (_effective_cap(u), u.sort_order, u.created_at),
     )
 
     # Process remaining in interleaved gender order if group_by_gender,
@@ -1016,7 +1032,7 @@ def _place_cluster(
     # leave the mark room empty. After that: smallest cap, then tightest fit.
     single_fits = sorted(
         [u for u in candidate_units if remaining_cap(str(u.id)) >= cluster_size],
-        key=lambda u: (u.mark_restriction is None, u.capacity, remaining_cap(str(u.id)), u.sort_order, u.created_at),
+        key=lambda u: (u.mark_restriction is None, _effective_cap(u), remaining_cap(str(u.id)), u.sort_order, u.created_at),
     )
     if single_fits:
         u = single_fits[0]
@@ -1134,7 +1150,7 @@ def _smallest_set_that_fits(units, cluster_size, n, remaining_cap):
     oversized clusters which are rare.
     """
     from itertools import combinations
-    sorted_units = sorted(units, key=lambda u: u.capacity)
+    sorted_units = sorted(units, key=_effective_cap)
     best = None
     best_total = None
     for combo in combinations(sorted_units, n):
@@ -1267,21 +1283,33 @@ def _equalise_sweep(
             if not v.get("_inconsistent") and v["pids"]
         }
 
-    # Compute occupancy ratio for a unit. For uncapacitated categories,
-    # treat each unit as having capacity = (sum of all occupants /
-    # number of units) so they normalise to an even-fill target.
-    total_capacity = sum((u.capacity or 0) for u in units)
-    use_proportional = total_capacity > 0
+    # Occupancy ratio for a unit, used to decide which units are over-
+    # and which under-filled.
+    #
+    # v1.0.3: a unit left with no capacity limit is balanced as though it
+    # had the average capacity of the units in this group type that DO
+    # carry one, so a capacity the organiser simply did not fill in
+    # behaves like an ordinary unit. Pre-1.0.3 it counted as permanently
+    # full, which meant equalise never moved anyone into it: on a mixed
+    # group type the unmeasured unit ended up empty while the measured
+    # ones were packed. When NO unit carries a capacity there is nothing
+    # to normalise against, so units are levelled by head count — the
+    # pre-1.0.3 behaviour for that case, unchanged.
+    #
+    # This is a BALANCING weight only. The hard limit is unchanged and
+    # lives in remaining_cap / fits_capacity, both of which treat an
+    # unset capacity as genuinely unlimited.
+    capped = [u.capacity for u in units if u.capacity]
+    use_proportional = bool(capped)
+    implied_cap = max(1, round(sum(capped) / len(capped))) if capped else 0
 
-    def ratio(unit) -> float:
-        count = len(unit_slots[str(unit.id)])
-        if use_proportional and unit.capacity:
-            return count / unit.capacity
+    def ratio_for(unit, count: int) -> float:
         if not use_proportional:
             return float(count)
-        # Capacity-mixed: capacitated units normalised, uncapacitated
-        # treated as full (don't move into them).
-        return 1.0 if not unit.capacity else (count / unit.capacity)
+        return count / (unit.capacity if unit.capacity else implied_cap)
+
+    def ratio(unit) -> float:
+        return ratio_for(unit, len(unit_slots[str(unit.id)]))
 
     # Pre-compute cluster genders for eligibility tests against
     # destination units.
@@ -1350,12 +1378,12 @@ def _equalise_sweep(
                     # ratios after the hypothetical move.
                     src_count_after = len(unit_slots[src_uid]) - cl_size
                     dst_count_after = dst_count + cl_size
-                    if use_proportional and src_unit.capacity and dst_unit.capacity:
-                        new_src = src_count_after / src_unit.capacity
-                        new_dst = dst_count_after / dst_unit.capacity
-                    else:
-                        new_src = float(src_count_after)
-                        new_dst = float(dst_count_after)
+                    # v1.0.3: project through the same function ratio()
+                    # uses, so a mixed group type is judged on one scale.
+                    # Previously a single uncapped unit in the pair
+                    # silently switched BOTH sides to raw head counts.
+                    new_src = ratio_for(src_unit, src_count_after)
+                    new_dst = ratio_for(dst_unit, dst_count_after)
                     dst_ratio = ratio(dst_unit)
                     # Strict improvement: reduce the gap between this
                     # source–destination pair, AND don't overshoot
