@@ -10,6 +10,16 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ## [Unreleased]
 
+## [1.0.4b] — 2026-09-04
+
+### Fixed
+
+- **The Webhooks admin page now shows why a request was refused.** Error
+  messages on that page were being passed to the banner component under
+  the wrong property name and were never displayed, so a refused
+  endpoint URL (or any other error there) looked like a button that did
+  nothing. Every other page was unaffected.
+
 ## [1.0.4a] — 2026-09-04
 
 A security fix for outbound webhooks, a rename of the built-in Rooms

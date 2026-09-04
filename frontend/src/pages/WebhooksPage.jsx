@@ -252,7 +252,7 @@ export default function WebhooksPage() {
         </div>
       )}
 
-      {error && <TranslatedError error={error} />}
+      {error && <TranslatedError err={error} />}
 
       {showCreate && (
         <form
