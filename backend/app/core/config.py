@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     # per tenant if a tier shouldn't expose it.
     feature_allocation: bool = True
     feature_outbound_webhooks: bool = True
+    # v1.0.4a: WEBHOOK_ALLOW_PRIVATE_TARGETS. Outbound webhooks refuse
+    # targets on private, loopback, link-local and similar addresses (see
+    # app/services/webhook_url_policy.py). A self-hoster delivering to an
+    # internal tool on their own network may switch this on. The hosted
+    # edition never sets it. Default OFF: fail closed.
+    webhook_allow_private_targets: bool = False
     # v1.0.1e-6: FEATURE_ACCOUNT_PORTAL — is this instance managed by the
     # Moimio SaaS control-plane (so the external account/billing portal link
     # is meaningful)? Defaults FALSE: the self-hosted CE is the source of

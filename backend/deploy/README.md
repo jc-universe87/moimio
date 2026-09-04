@@ -98,7 +98,8 @@ sensible defaults.
 | `SMTP_FROM_NAME` | `Moimio` | Display name on outbound mail. |
 | `SMTP_TLS` | `true` | STARTTLS for SMTP. |
 | `SMTP_SSL` | `false` | Implicit SSL for SMTP. |
-| `FEATURE_OUTBOUND_WEBHOOKS` | `true` | Whether the backend emits CE → SaaS webhooks. |
+| `FEATURE_OUTBOUND_WEBHOOKS` | `false` | Whether the outbound webhook subsystem is enabled. Off unless set explicitly (v1.0.4a). |
+| `WEBHOOK_ALLOW_PRIVATE_TARGETS` | `false` | Allow webhook endpoints on private or loopback addresses. Self-hosters only. |
 | `FEATURE_CREATE_EVENT_CONFIRMATION` | `false` | Stripe-style event-create confirmation flow. |
 | `EVENT_CHARGE_AMOUNT` | `` | Per-event charge amount shown in UI. |
 | `EVENT_CHARGE_CURRENCY` | `` | Per-event charge currency. |

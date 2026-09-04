@@ -34,6 +34,7 @@ from app.schemas.outbound_webhook import (
     TestSendOut,
 )
 from app.services import webhook_service
+from app.services.webhook_url_policy import WebhookUrlRejected, check_webhook_url
 
 
 router = APIRouter(
@@ -71,6 +72,22 @@ async def _get_user_endpoint(
             detail={"key": "errors.webhooks.endpoint_not_found"},
         )
     return ep
+
+
+
+def _require_allowed_url(url: str) -> None:
+    """422 if the URL points at a private or internal address (v1.0.4a).
+
+    Plain-language reason for the admin lives under the i18n key; the
+    machine token from the policy goes into the log only.
+    """
+    try:
+        check_webhook_url(url)
+    except WebhookUrlRejected as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"key": "errors.webhooks.url_not_allowed"},
+        ) from exc
 
 
 # ── Endpoints CRUD ──
@@ -116,6 +133,7 @@ async def create_endpoint(
     # viewer URL (https://webhook.site/#!/view/<uuid>) instead of the
     # endpoint URL (https://webhook.site/<uuid>). v1.0.0g-2.
     url_clean = str(body.url).split("#", 1)[0]
+    _require_allowed_url(url_clean)
     endpoint = OutboundWebhookEndpoint(
         name=body.name,
         url=url_clean,
@@ -178,7 +196,9 @@ async def update_endpoint(
         ep.name = body.name
     if body.url is not None:
         # Same fragment-strip as on create. v1.0.0g-2.
-        ep.url = str(body.url).split("#", 1)[0]
+        url_clean = str(body.url).split("#", 1)[0]
+        _require_allowed_url(url_clean)
+        ep.url = url_clean
     if body.event_types is not None:
         if not isinstance(body.event_types, list) or not body.event_types:
             raise HTTPException(

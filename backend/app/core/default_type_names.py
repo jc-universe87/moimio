@@ -28,12 +28,12 @@ DEFAULT_LANG = "en"
 # key -> lang -> text
 DEFAULT_TYPE_NAMES: dict[str, dict[str, str]] = {
     "rooms": {
-        "en": "Rooms",
-        "de": "Zimmer",
-        "ko": "방",
-        "es": "Habitaciones",
-        "fr": "Chambres",
-        "pt-BR": "Quartos",
+        "en": "Room Allocation",
+        "de": "Zimmerbelegung",
+        "ko": "방 배정",
+        "es": "Asignación de habitaciones",
+        "fr": "Attribution des chambres",
+        "pt-BR": "Atribuição de quartos",
     },
     "room": {
         "en": "Room",
@@ -72,6 +72,19 @@ def resolve(key: str | None, fallback: str | None, lang: str = DEFAULT_LANG) -> 
     return per_lang.get(lang) or per_lang[DEFAULT_LANG]
 
 
+# Names we have shipped in the past and have since changed. They still count
+# as "not a rename", because a browser tab opened before an upgrade will send
+# back the OLD name on save. Without this, that save would look like an
+# organiser typing a name of their own, and the group type would silently and
+# permanently stop being translated.
+#
+# v1.0.4 shipped `rooms` as the plain noun in every language; v1.0.4a changed
+# it to name the activity. Never remove entries from this map.
+LEGACY_DEFAULT_NAMES: dict[str, tuple[str, ...]] = {
+    "rooms": ("Rooms", "Zimmer", "방", "Habitaciones", "Chambres", "Quartos"),
+}
+
+
 def matches_default(key: str | None, text: str | None) -> bool:
     """True if `text` is this key's default name in ANY supported language.
 
@@ -90,4 +103,5 @@ def matches_default(key: str | None, text: str | None) -> bool:
     if not per_lang:
         return False
     needle = text.strip().casefold()
-    return any(v.strip().casefold() == needle for v in per_lang.values())
+    candidates = list(per_lang.values()) + list(LEGACY_DEFAULT_NAMES.get(key, ()))
+    return any(v.strip().casefold() == needle for v in candidates)

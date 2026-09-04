@@ -10,6 +10,24 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ## [Unreleased]
 
+### Security
+
+- **Outbound webhooks can no longer target the server's own network.**
+  A webhook endpoint URL pointing at a private, loopback, link-local
+  or similar address (for example `10.20.30.40`, `localhost`,
+  `169.254.169.254`) is now refused when the endpoint is created or
+  edited, and the check is repeated immediately before every delivery
+  so a hostname re-pointed later is caught as well. Without this, a
+  super admin, or anyone holding a leaked admin session, could make
+  the server issue requests to addresses only it can reach.
+  Self-hosters delivering to a receiver on their own network can opt
+  out with `WEBHOOK_ALLOW_PRIVATE_TARGETS=true`.
+- **The hosted deployment template now defaults outbound webhooks to
+  off.** `backend/deploy/production.yml` reads
+  `FEATURE_OUTBOUND_WEBHOOKS` as `false` when the variable is absent,
+  so a dropped setting can no longer switch a capability on. The
+  self-hosting `docker-compose.yml` keeps its previous default.
+
 ## [1.0.4] — 2026-09-03
 
 Capacity and gender settings now work the same way on every group type,

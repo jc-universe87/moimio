@@ -44,8 +44,8 @@ def test_every_key_covers_every_language():
 
 def test_resolve_falls_back_to_stored_text_without_a_key():
     assert resolve(None, "Chalets", "de") == "Chalets"
-    assert resolve("rooms", "Rooms", "de") == "Zimmer"
-    assert resolve("rooms", "Rooms", "sv") == "Rooms"      # unknown language
+    assert resolve("rooms", "Rooms", "de") == "Zimmerbelegung"
+    assert resolve("rooms", "Rooms", "sv") == "Room Allocation"  # unknown language falls back to English
     assert resolve("nonsense", "Chalets", "de") == "Chalets"  # unknown key
 
 

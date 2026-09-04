@@ -44,7 +44,13 @@ lists your configured endpoints and shows their delivery history.
    - **Name** — a label for yourself, e.g. "Slack notifications"
    - **URL** — the receiver URL on the other side. Use HTTPS in
      production; HTTP is accepted but inadvisable. URL fragments
-     (`#...`) are stripped automatically since servers never see them
+     (`#...`) are stripped automatically since servers never see them.
+     The URL must point at a public internet address: targets on
+     private networks (10.x, 172.16-31.x, 192.168.x), `localhost`,
+     link-local and similar addresses are refused, and the check is
+     repeated before every delivery in case the hostname is
+     re-pointed later. Self-hosters who need to deliver to a receiver
+     on their own network can set `WEBHOOK_ALLOW_PRIVATE_TARGETS=true`
    - **Event types** — comma-separated list of event types this
      endpoint wants, or `*` for everything. For v1.0.0g, only
      `test.ping` is emittable; future releases will add more
@@ -306,6 +312,7 @@ The webhook subsystem is controlled by these environment variables
 | Variable | Default | Meaning |
 |---|---|---|
 | `FEATURE_OUTBOUND_WEBHOOKS` | `true` | Disable the entire subsystem when set to `false` — admin UI hidden, router not registered, scheduler jobs not started |
+| `WEBHOOK_ALLOW_PRIVATE_TARGETS` | `false` | Allow webhook endpoints on private, loopback and link-local addresses. Off by default so the server cannot be used to reach into its own network. Switch on only if your receiver is on your own network and you understand the exposure |
 | `WEBHOOK_DELIVERY_RETENTION_DAYS` | `30` | How many days of delivery history to keep before the daily prune job deletes them |
 | `MOIMIO_WEBHOOK_URL` | (empty) | When set together with `MOIMIO_WEBHOOK_SECRET`, Moimio auto-creates a webhook endpoint at first boot subscribing to all events. Intended for deployment automation — most self-hosters leave this empty |
 | `MOIMIO_WEBHOOK_SECRET` | (empty) | The signing secret for the auto-registered endpoint above. Required only when `MOIMIO_WEBHOOK_URL` is set |

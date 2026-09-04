@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.services.webhook_url_policy import WebhookUrlRejected, check_webhook_url
 from app.models.outbound_webhook import (
     OutboundWebhookDelivery,
     OutboundWebhookEndpoint,
@@ -267,6 +268,29 @@ async def _attempt_delivery(
 
     started = time.monotonic()
     delivery.attempted_at = datetime.now(timezone.utc)
+
+    # v1.0.4a: re-check the target immediately before sending. The URL
+    # was checked when the endpoint was created, but its hostname may
+    # have been re-pointed at a private address since (DNS rebinding).
+    # SaaS-managed endpoints are exempt: the control plane's receiver
+    # sits on the private network by design and admins cannot edit it.
+    if endpoint.managed_by == WebhookEndpointManagedBy.USER:
+        try:
+            check_webhook_url(endpoint.url)
+        except WebhookUrlRejected as exc:
+            delivery.duration_ms = 0
+            _record_failure(
+                delivery, endpoint,
+                response_status=None, error="url_not_allowed",
+            )
+            await db.commit()
+            log.warning(
+                "outbound_webhook.url_not_allowed",
+                endpoint_id=str(endpoint.id),
+                event_id=str(delivery.event_id),
+                reason=exc.reason,
+            )
+            return
 
     try:
         resp = await http_client.post(

@@ -57,9 +57,10 @@ services:
       LOG_LEVEL:    ${LOG_LEVEL:-INFO}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
       RATE_LIMIT_REGISTRATION: ${RATE_LIMIT_REGISTRATION:-10}
-      # SMTP — the SaaS provisioner injects Mailjet credentials by
-      # default. Self-hoster overrides via tenant-specific .env are
-      # supported once admin-UI per-tenant overrides ship (SAAS-3).
+      # SMTP — the SaaS provisioner injects Scaleway TEM credentials
+      # (send.moimio.app) by default. Self-hoster overrides via
+      # tenant-specific .env are supported once admin-UI per-tenant
+      # overrides ship (SAAS-3).
       SMTP_HOST:       ${SMTP_HOST:?SMTP_HOST must be set}
       SMTP_PORT:       ${SMTP_PORT:-587}
       SMTP_USER:       ${SMTP_USER:?SMTP_USER must be set}
@@ -70,7 +71,12 @@ services:
       SMTP_SSL:        ${SMTP_SSL:-false}
       # Capability flags + outbound webhook config (v1.0.0g-3 lineage).
       FEATURE_ALLOCATION:                ${FEATURE_ALLOCATION:?FEATURE_ALLOCATION must be set}
-      FEATURE_OUTBOUND_WEBHOOKS:         ${FEATURE_OUTBOUND_WEBHOOKS:-true}
+      # v1.0.4a: default OFF. A capability must be switched on explicitly;
+      # a dropped variable must never grant more than was configured.
+      FEATURE_OUTBOUND_WEBHOOKS:         ${FEATURE_OUTBOUND_WEBHOOKS:-false}
+      # v1.0.4a: outbound webhooks refuse private/internal targets unless
+      # this is set. Self-hosters only; the SaaS never sets it.
+      WEBHOOK_ALLOW_PRIVATE_TARGETS:     ${WEBHOOK_ALLOW_PRIVATE_TARGETS:-false}
       FEATURE_CREATE_EVENT_CONFIRMATION: ${FEATURE_CREATE_EVENT_CONFIRMATION:-false}
       # v1.0.2b: managed-instance signal (see docker-compose.yml note).
       # Defaults false so a missing value merely hides hosted-only UI.
