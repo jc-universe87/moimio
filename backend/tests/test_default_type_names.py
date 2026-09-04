@@ -136,3 +136,20 @@ async def test_reports_payload_carries_the_markers(db):
     by_name = {c["name"]: c for c in per_cat}
     assert by_name["Rooms"]["name_key"] == "rooms"
     assert by_name["Small Groups"]["name_key"] == "small_groups"
+
+
+def test_a_previously_shipped_default_name_is_not_a_rename():
+    """v1.0.4a renamed the `rooms` default. A browser tab opened before the
+    upgrade still holds the OLD name and sends it back on save. Without the
+    legacy list that save looks like an organiser typing a name of their
+    own, and the group type stops being translated permanently, from
+    nothing but a stale tab. Every name ever shipped must stay recognised.
+    """
+    from app.core.default_type_names import matches_default
+
+    for shipped in ("Rooms", "Zimmer", "방", "Habitaciones", "Chambres", "Quartos"):
+        assert matches_default("rooms", shipped), shipped
+    assert matches_default("rooms", "Room Allocation")
+    assert matches_default("rooms", "Zimmerbelegung")
+    assert matches_default("rooms", "  zimmerbelegung  ")   # case and whitespace
+    assert not matches_default("rooms", "Chalets")           # a real rename still clears

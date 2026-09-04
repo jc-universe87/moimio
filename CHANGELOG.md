@@ -10,6 +10,12 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ## [Unreleased]
 
+## [1.0.4a] — 2026-09-04
+
+A security fix for outbound webhooks, a rename of the built-in Rooms
+group type so it names the activity rather than the things, and a guard
+that keeps that rename from surprising anyone mid-session.
+
 ### Security
 
 - **Outbound webhooks can no longer target the server's own network.**
@@ -27,6 +33,25 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
   `FEATURE_OUTBOUND_WEBHOOKS` as `false` when the variable is absent,
   so a dropped setting can no longer switch a capability on. The
   self-hosting `docker-compose.yml` keeps its previous default.
+
+### Changed
+
+- **The built-in "Rooms" group type is now called "Room Allocation".**
+  In every interface language the name describes what the organiser is
+  doing (for example "Zimmerbelegung" in German, "방 배정" in Korean)
+  rather than the plain noun, which read oddly on its own in several
+  languages. The type remains renameable; a name you have chosen
+  yourself is never touched. "Small Groups" keeps its name.
+
+### Fixed
+
+- **A browser tab opened before this upgrade can no longer silently
+  un-translate the Rooms type.** Such a tab still holds the old name and
+  sends it back on the next save. Without a guard that would look like
+  an organiser typing a name of their own, and the type would stop
+  following the reader's language, permanently, from nothing but a stale
+  tab. Every name this type has ever shipped with is now recognised as
+  "not a rename".
 
 ## [1.0.4] — 2026-09-03
 
