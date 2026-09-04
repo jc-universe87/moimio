@@ -10,6 +10,52 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ## [Unreleased]
 
+## [1.0.4c] — 2026-09-04
+
+A notice for demonstration workspaces, a fix for renaming built-in group
+types, version markers that can no longer drift, and a read-only webhook
+API on hosted workspaces.
+
+### Added
+
+- **Demonstration workspaces can show a standing notice.** When an
+  operator sets `FEATURE_DEMO_NOTICE=true`, every admin page and the
+  public registration form carry a non-dismissable notice saying the
+  workspace is a demonstration, that emails are captured in a public
+  inbox on the server and never leave it, and that no real personal
+  data should be entered. `MOIMIO_DEMO_MAIL_URL` turns the "/mail/" in
+  that text into a link to the inbox. Both are off by default; a
+  self-hosted instance never shows the notice.
+
+### Fixed
+
+- **Built-in group types can be renamed to any name, including a former
+  default.** Renaming Room Allocation to "Zimmer" (or Rooms, 방,
+  Habitaciones...) used to be silently ignored: those words were still
+  on a list of previously shipped defaults kept to protect browser tabs
+  opened before an upgrade, so the save looked like a no-op and the
+  translated name came back. The edit form now sends a name only when
+  you actually changed it, which makes that list unnecessary, so any
+  name you type sticks. And the reverse now works too: type one of the
+  built-in names back (Room Allocation, Zimmerbelegung, 방 배정, Small
+  Groups, Kleingruppen...) into a built-in type and it becomes
+  translated again. Group types you created yourself are never affected.
+
+- **`/health` and the startup log report the real version.** Both had
+  been left behind at earlier numbers. The backend now has a single
+  version file, the sidebar marker is checked against it in CI, and a
+  release tag whose markers or changelog heading disagree fails the
+  build instead of shipping.
+
+### Security
+
+- **On a hosted workspace the webhook API is read-only.** The Webhooks
+  page was already hidden on hosted workspaces, but the API behind it
+  still accepted requests. Adding, changing, deleting, rotating the
+  secret of, re-enabling or test-firing a webhook endpoint now returns
+  a clear "managed by Moimio" refusal there; listing still works.
+  Self-hosted instances are unaffected.
+
 ## [1.0.4b] — 2026-09-04
 
 ### Fixed

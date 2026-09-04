@@ -44,6 +44,9 @@ jobs:
       - name: Validate i18n keys and built-in group type names
         run: python3 frontend/scripts/validate-i18n-keys.py
 
+      - name: Version markers agree (backend, frontend, tag, CHANGELOG)
+        run: python3 scripts/check-version-markers.py
+
   build:
     needs: checks
     runs-on: ubuntu-latest

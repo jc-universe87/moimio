@@ -35,6 +35,7 @@ from app.api.streams import router as streams_router
 from app.api.outbound_webhooks import router as outbound_webhooks_router
 from app.api.billing_info import router as billing_info_router
 from app.api.danger_zone import router as danger_zone_router
+from app.version import __version__
 
 settings = get_settings()
 logger = get_logger(__name__)
@@ -46,7 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     setup_logging()
     logger.info(
         "moimio_starting",
-        version="1.0.2",
+        version=__version__,
         log_level=settings.log_level,
         feature_allocation=settings.feature_allocation,
         feature_outbound_webhooks=settings.feature_outbound_webhooks,
@@ -83,7 +84,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title="Moimio",
     description="Participant allocation platform — register, organise, allocate.",
-    version="1.0.2",
+    version=__version__,
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",

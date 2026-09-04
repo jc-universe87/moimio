@@ -29,3 +29,29 @@ export function typeItemLabel(cat, t, fallback = 'Item') {
   if (cat.item_label_key) return t(`organise.default_type.${cat.item_label_key}`);
   return cat.item_label || fallback;
 }
+
+/**
+ * v1.0.4c: state for the inline edit form. Remembers what the two text
+ * boxes SHOWED when the form opened, so the save can tell an edited box
+ * from an untouched one.
+ */
+export function editStateFor(cat, t) {
+  const name = typeName(cat, t);
+  const item_label = typeItemLabel(cat, t, '');
+  return { ...cat, name, item_label, _shownName: name, _shownItemLabel: item_label };
+}
+
+/**
+ * v1.0.4c: the PATCH body for the inline edit form. `name` and
+ * `item_label` are sent only when the organiser changed the text in the
+ * box. An untouched box sends nothing, so the backend never has to guess
+ * whether "Zimmer" is our translation echoed back or a name they chose.
+ * This is what lets a stale browser tab save safely across an upgrade,
+ * and what lets "Zimmer" be used as a real name at all.
+ */
+export function updatePayloadFor(editing) {
+  const { _shownName, _shownItemLabel, ...payload } = editing;
+  if (payload.name === _shownName) delete payload.name;
+  if ((payload.item_label || '') === (_shownItemLabel || '')) delete payload.item_label;
+  return payload;
+}

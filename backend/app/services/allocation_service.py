@@ -14,7 +14,9 @@ from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import MoimioAppError
-from app.core.default_type_names import matches_default
+from app.core.default_type_names import (
+    ITEM_LABEL_KEYS, NAME_KEYS, key_for_default, matches_default,
+)
 from app.core.logging import get_logger
 from app.models.allocation_category import AllocationCategory
 from app.models.allocation_unit import AllocationUnit
@@ -141,7 +143,16 @@ async def update_category(db: AsyncSession, category_id: uuid.UUID, **kwargs) ->
     #
     # Deliberately not in the API layer: this has to hold for every writer,
     # including copy-event, layout import and any future API client.
-    for field, key_field in (("name", "name_key"), ("item_label", "item_label_key")):
+    #
+    # v1.0.4c: the reverse as well. A built-in group type that lost its key
+    # through a rename gets it back when the organiser types one of our
+    # current default names again, in any language. Only built-in types
+    # (is_default): a type the organiser created and happened to call
+    # "Rooms" is theirs and must never start translating itself.
+    for field, key_field, keys in (
+        ("name", "name_key", NAME_KEYS),
+        ("item_label", "item_label_key", ITEM_LABEL_KEYS),
+    ):
         incoming = kwargs.get(field)
         if incoming is None:
             continue                      # field not being touched at all
@@ -151,6 +162,11 @@ async def update_category(db: AsyncSession, category_id: uuid.UUID, **kwargs) ->
             # Setting a key to None cannot go through the loop below, which
             # skips None on purpose, so apply it directly.
             setattr(cat, key_field, None)
+            current_key = None
+        if not current_key and cat.is_default:
+            restored = key_for_default(incoming, keys)
+            if restored:
+                kwargs[key_field] = restored
 
     for k, v in kwargs.items():
         if v is not None and hasattr(cat, k):

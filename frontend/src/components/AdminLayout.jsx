@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, getPermsForEvent, getRoleForEvent } from '../hooks/useAuth';
 import { useCapabilities } from '../hooks/useCapabilities';
+import DemoNotice from './DemoNotice';
 import UserPreferencesPanel from './UserPreferencesPanel';
 import WelcomePanel from './WelcomePanel';
 import ThemeToggle from './ThemeToggle';
@@ -696,6 +697,9 @@ export default function AdminLayout() {
             ≡
           </button>
         )}
+        {/* v1.0.4c: demo-workspace notice, non-dismissable, on every
+            admin page. Renders nothing unless capabilities.demo_notice. */}
+        <DemoNotice />
         <Outlet />
       </main>
 

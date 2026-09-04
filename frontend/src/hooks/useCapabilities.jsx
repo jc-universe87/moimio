@@ -44,6 +44,12 @@ const DEFAULT_CAPABILITIES = {
   // were dead). Fail-closed like the two flags above: hosted-only UI
   // must never flash for a self-hoster on a fetch flicker.
   account_portal: false,
+  // v1.0.4c: demo-workspace notice. Fail-closed like the flags above: a
+  // self-hoster must never see a "demonstration workspace" banner because
+  // of a fetch flicker. demo_mail_url is a value, not a flag; empty means
+  // the "/mail/" in the notice text is plain text rather than a link.
+  demo_notice: false,
+  demo_mail_url: '',
 };
 
 const CapabilitiesContext = createContext({
@@ -77,6 +83,9 @@ export function CapabilitiesProvider({ children }) {
             // create_event_confirmation — this line was the missing half
             // of the e-6 feature (see DEFAULT_CAPABILITIES note).
             account_portal: data.account_portal === true,
+            // v1.0.4c: missing-means-off, string passthrough (see defaults).
+            demo_notice: data.demo_notice === true,
+            demo_mail_url: typeof data.demo_mail_url === 'string' ? data.demo_mail_url : '',
           });
         }
       })

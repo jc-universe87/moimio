@@ -36,6 +36,12 @@ class CapabilitiesResponse(BaseModel):
     # not a mode flag — CE renders the link if given one. Non-sensitive
     # (the portal itself is behind its own magic-link sign-in).
     account_url: str = ""
+    # v1.0.4c: demo-workspace notice. When true the frontend shows a
+    # non-dismissable "this is a demonstration workspace" notice on every
+    # admin page and above the public registration form. demo_mail_url is
+    # where the captured mail can be read; empty means no link.
+    demo_notice: bool = False
+    demo_mail_url: str = ""
 
 
 @router.get("/api/capabilities", response_model=CapabilitiesResponse)
@@ -47,4 +53,6 @@ async def get_capabilities() -> CapabilitiesResponse:
         account_portal=settings.feature_account_portal,
         create_event_confirmation=settings.feature_create_event_confirmation,
         account_url=settings.account_url,
+        demo_notice=settings.feature_demo_notice,
+        demo_mail_url=settings.moimio_demo_mail_url,
     )

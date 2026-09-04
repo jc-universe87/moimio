@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { participants } from '../services/api';
 import { I18nProvider, useI18n, SUPPORTED_LANGS } from '../hooks/useI18n';
 import TranslatedError from '../components/TranslatedError';
+import DemoNotice from '../components/DemoNotice';
 
 // v1.0.1d grouping v2: mirror the backend group-code rules so the live
 // preview matches exactly what the server will store.
@@ -436,6 +437,9 @@ function RegisterForm() {
 
           <div id="register-error-banner"><TranslatedError err={error} className="text-sm rounded-lg p-3 mb-4" /></div>
 
+          {/* v1.0.4c: demo-workspace notice above the public form. Renders
+              nothing unless capabilities.demo_notice. */}
+          <DemoNotice />
           <form id="register-form" onSubmit={handleSubmit} className="moimio-form space-y-4">
             {/* Required: name + email */}
             <div className="grid grid-cols-2 gap-4">

@@ -72,17 +72,20 @@ def resolve(key: str | None, fallback: str | None, lang: str = DEFAULT_LANG) -> 
     return per_lang.get(lang) or per_lang[DEFAULT_LANG]
 
 
-# Names we have shipped in the past and have since changed. They still count
-# as "not a rename", because a browser tab opened before an upgrade will send
-# back the OLD name on save. Without this, that save would look like an
-# organiser typing a name of their own, and the group type would silently and
-# permanently stop being translated.
-#
-# v1.0.4 shipped `rooms` as the plain noun in every language; v1.0.4a changed
-# it to name the activity. Never remove entries from this map.
-LEGACY_DEFAULT_NAMES: dict[str, tuple[str, ...]] = {
-    "rooms": ("Rooms", "Zimmer", "방", "Habitaciones", "Chambres", "Quartos"),
-}
+# Which keys may sit in which field. The name of a group type and the label
+# of one thing inside it are separate fields with separate keys, and a
+# default typed into one must never attach the other's key.
+NAME_KEYS: tuple[str, ...] = ("rooms", "small_groups")
+ITEM_LABEL_KEYS: tuple[str, ...] = ("room", "group")
+
+
+# v1.0.4a kept a list of previously shipped default names ("Rooms", "Zimmer",
+# "방"...) and treated them as "not a rename", to protect a browser tab that
+# was opened before the upgrade and sent the old name back on save. That
+# made those words impossible to use as real names: an organiser typing
+# "Zimmer" was told nothing had changed. From v1.0.4c the interface only
+# sends a name the organiser actually edited, so a stale tab sends nothing
+# and the list is gone. Only CURRENT defaults count as "not a rename".
 
 
 def matches_default(key: str | None, text: str | None) -> bool:
@@ -103,5 +106,21 @@ def matches_default(key: str | None, text: str | None) -> bool:
     if not per_lang:
         return False
     needle = text.strip().casefold()
-    candidates = list(per_lang.values()) + list(LEGACY_DEFAULT_NAMES.get(key, ()))
-    return any(v.strip().casefold() == needle for v in candidates)
+    return any(v.strip().casefold() == needle for v in per_lang.values())
+
+
+def key_for_default(text: str | None, keys: tuple[str, ...]) -> str | None:
+    """The key whose current default name (in any language) is `text`.
+
+    v1.0.4c. Used to restore translation: a built-in group type that lost
+    its key through a rename gets it back when the organiser types one of
+    our default names again. Only the given keys are considered, so a
+    type name cannot pick up an item-label key or the other way round.
+    Same case and whitespace tolerance as matches_default.
+    """
+    if text is None:
+        return None
+    for key in keys:
+        if matches_default(key, text):
+            return key
+    return None

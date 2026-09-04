@@ -69,6 +69,10 @@ services:
       # from .env when set — without this line the var is ignored, same as
       # the capability flags above.
       ACCOUNT_URL: ${ACCOUNT_URL:-}
+      # v1.0.4c: demo-workspace notice. Off by default; the SaaS sets it for
+      # demo tenants only. Listed here so Compose forwards it from .env.
+      FEATURE_DEMO_NOTICE: ${FEATURE_DEMO_NOTICE:-false}
+      MOIMIO_DEMO_MAIL_URL: ${MOIMIO_DEMO_MAIL_URL:-}
     ports:
       - "${BACKEND_PORT:-6121}:8000"
     volumes:

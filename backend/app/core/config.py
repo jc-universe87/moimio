@@ -89,6 +89,18 @@ class Settings(BaseSettings):
     # stays mode-agnostic and simply renders a link if it's given one.
     account_url: str = ""
 
+    # ─── Demo notice (v1.0.4c) ───
+    #
+    # When true, the frontend shows a non-dismissable notice on every admin
+    # page and above the public registration form saying this is a
+    # demonstration workspace, mail is captured locally, and no real
+    # personal data should be entered. The SaaS sets this per demo tenant;
+    # self-hosters never do. Capability, not a mode: CE just renders it.
+    feature_demo_notice: bool = False
+    # Where the captured mail can be read (the demo's Mailpit inbox). When
+    # non-empty the "/mail/" in the notice text becomes a link to it.
+    moimio_demo_mail_url: str = ""
+
     # DEPRECATED (pre-v1.0.0w charge-on-creation model, superseded by the
     # prepaid-credit model in product policy v1). No longer read by the
     # billing-info endpoint. Retained as recognised settings so existing

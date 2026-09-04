@@ -98,6 +98,10 @@ services:
       # The SaaS injects its portal URL here per tenant. Surfaced to the
       # frontend via GET /api/capabilities.
       ACCOUNT_URL: ${ACCOUNT_URL:-}
+      # v1.0.4c: demo-workspace notice. Defaults false so a missing value
+      # merely hides the notice; the SaaS sets it for demo tenants only.
+      FEATURE_DEMO_NOTICE:  ${FEATURE_DEMO_NOTICE:-false}
+      MOIMIO_DEMO_MAIL_URL: ${MOIMIO_DEMO_MAIL_URL:-}
     networks:
       - internal
     depends_on:

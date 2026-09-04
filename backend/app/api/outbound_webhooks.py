@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.outbound_webhook import (
     OutboundWebhookDelivery,
@@ -52,6 +53,23 @@ def _require_super_admin(user: User) -> None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"key": "errors.users.insufficient_permissions"},
+        )
+
+
+def _require_not_hosted() -> None:
+    """403 on a hosted (managed) instance (v1.0.4c, item 32).
+
+    On a hosted tenant the only endpoint that should exist is the SaaS
+    control plane's own phone-home receiver, registered at boot. The
+    admin page is already hidden there (v1.0.2a); this closes the API
+    as well, so a direct call or a typed URL cannot add, change, delete,
+    rotate, re-enable or test-fire a user-managed endpoint. Listing stays
+    open. Self-hosters (feature_account_portal false) are unaffected.
+    """
+    if get_settings().feature_account_portal:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"key": "errors.webhooks.hosted_managed"},
         )
 
 
@@ -117,6 +135,7 @@ async def create_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     _require_super_admin(current_user)
+    _require_not_hosted()
 
     # Validate event_types — must be non-empty list of strings
     event_types = body.event_types or ["*"]
@@ -191,6 +210,7 @@ async def update_endpoint(
     current_user: User = Depends(get_current_user),
 ) -> OutboundWebhookEndpoint:
     _require_super_admin(current_user)
+    _require_not_hosted()
     ep = await _get_user_endpoint(db, endpoint_id)
     if body.name is not None:
         ep.name = body.name
@@ -223,6 +243,7 @@ async def delete_endpoint(
     current_user: User = Depends(get_current_user),
 ) -> None:
     _require_super_admin(current_user)
+    _require_not_hosted()
     ep = await _get_user_endpoint(db, endpoint_id)
     await db.delete(ep)
     # Commit cascades — delivery rows go too via ondelete=CASCADE.
@@ -239,6 +260,7 @@ async def rotate_secret(
 ):
     """Regenerate the signing secret. Returns the new plaintext once."""
     _require_super_admin(current_user)
+    _require_not_hosted()
     ep = await _get_user_endpoint(db, endpoint_id)
     new_secret = webhook_service.generate_secret()
     ep.secret = new_secret
@@ -277,6 +299,7 @@ async def reenable_endpoint(
     countdown to degradation.
     """
     _require_super_admin(current_user)
+    _require_not_hosted()
     ep = await _get_user_endpoint(db, endpoint_id)
     ep.state = WebhookEndpointState.ACTIVE
     ep.consecutive_failures = 0
@@ -310,6 +333,7 @@ async def send_test_event(
     won't block the response longer than the per-delivery timeout.
     """
     _require_super_admin(current_user)
+    _require_not_hosted()
     ep = await _get_user_endpoint(db, endpoint_id)
 
     from datetime import datetime, timezone

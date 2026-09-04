@@ -4,7 +4,7 @@ import { useConfirmOverlay } from './ConfirmOverlay';
 import { EditIconButton, DeleteIconButton } from './RowActions';
 import { useI18n } from '../hooks/useI18n';
 import TranslatedError from './TranslatedError';
-import { typeName, typeItemLabel } from '../utils/groupTypeLabel';
+import { typeName, editStateFor, updatePayloadFor } from '../utils/groupTypeLabel';
 
 // v0.61c-1: detect a pointer device with a fine-grained pointer (mouse,
 // trackpad). Touch-only devices report `coarse` and report `pointer:
@@ -94,7 +94,7 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
     if (!initialEditCatId || categories.length === 0) return;
     const target = categories.find(c => c.id === initialEditCatId);
     if (target) {
-      setEditingCat({ ...target, name: typeName(target, t), item_label: typeItemLabel(target, t, '') });
+      setEditingCat(editStateFor(target, t));
     }
   }, [initialEditCatId, categories]);
 
@@ -119,7 +119,8 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
     // v1.0.3: there is no capacity toggle any more. Capacity lives on the
     // unit, where 0 means no limit.
     try {
-      await allocationCategories.update(eventId, editingCat.id, editingCat);
+      // v1.0.4c: send name / item_label only if the text was edited.
+      await allocationCategories.update(eventId, editingCat.id, updatePayloadFor(editingCat));
       setEditingCat(null);
       await loadCategories();
       notifyChange();
@@ -315,7 +316,7 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
                         internal list's Edit/Delete text links become the
                         app-standard pen/trash icons (same as MarksPanel,
                         FormConfigPanel, Users). Reorder arrows unchanged. */}
-                    <EditIconButton onClick={() => setEditingCat({ ...cat, name: typeName(cat, t), item_label: typeItemLabel(cat, t, '') })}
+                    <EditIconButton onClick={() => setEditingCat(editStateFor(cat, t))}
                       title={t('common.edit')} className="ml-1" />
                     <DeleteIconButton onClick={() => handleDeleteCat(cat.id)}
                       title={t('common.delete')} />

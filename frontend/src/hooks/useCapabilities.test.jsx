@@ -234,4 +234,30 @@ describe('useCapabilities', () => {
     expect(caps.create_event_confirmation).toBe(false);
     expect(screen.getByTestId('loading').textContent).toBe('true');
   });
+  // v1.0.4c: demo-workspace notice. Same regression-pin as the fields above.
+  it('exposes demo_notice and demo_mail_url when the API returns them', async () => {
+    capabilitiesApi.get.mockResolvedValue({
+      allocation: true,
+      outbound_webhooks: true,
+      create_event_confirmation: false,
+      account_url: '',
+      account_portal: false,
+      demo_notice: true,
+      demo_mail_url: 'https://demo.moimio.app/mail/',
+    });
+    render(<CapabilitiesProvider><HookProbe /></CapabilitiesProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
+    const caps = JSON.parse(screen.getByTestId('caps').textContent);
+    expect(caps.demo_notice).toBe(true);
+    expect(caps.demo_mail_url).toBe('https://demo.moimio.app/mail/');
+  });
+
+  it('keeps demo_notice off and demo_mail_url empty when the API omits them', async () => {
+    capabilitiesApi.get.mockResolvedValue({ allocation: true, outbound_webhooks: true });
+    render(<CapabilitiesProvider><HookProbe /></CapabilitiesProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
+    const caps = JSON.parse(screen.getByTestId('caps').textContent);
+    expect(caps.demo_notice).toBe(false);
+    expect(caps.demo_mail_url).toBe('');
+  });
 });

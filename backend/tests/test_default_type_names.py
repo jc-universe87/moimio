@@ -50,9 +50,9 @@ def test_resolve_falls_back_to_stored_text_without_a_key():
 
 
 def test_matches_default_recognises_any_language():
-    assert matches_default("rooms", "Rooms")
-    assert matches_default("rooms", "Zimmer")
-    assert matches_default("rooms", "  habitaciones ")     # trimmed, case-folded
+    assert matches_default("rooms", "Room Allocation")
+    assert matches_default("rooms", "Zimmerbelegung")
+    assert matches_default("rooms", "  asignación de habitaciones ")     # trimmed, case-folded
     assert not matches_default("rooms", "Chalets")
     assert not matches_default(None, "Rooms")
 
@@ -79,18 +79,21 @@ async def test_renaming_makes_the_name_theirs(db):
 
 
 async def test_saving_without_renaming_keeps_the_translation(db):
-    """The German organiser sees 'Zimmer' and saves. That is not a rename.
+    """The German organiser sees 'Zimmerbelegung' and saves. Not a rename.
 
     This is the case a naive "did the text change?" check gets wrong: the
     interface sends back the translated name, which differs from the stored
     English, and the group type would silently stop being translated.
+    (From v1.0.4c the interface omits an untouched name altogether; this
+    is what a tab from before v1.0.4c still sends.)
     """
     event = await make_event(db)
     await create_default_categories(db, event.id)
     cat_id = (await list_categories(db, event.id))[0]["id"]
 
-    cat = await update_category(db, cat_id, name="Zimmer", rule_type="exclusive")
+    cat = await update_category(db, cat_id, name="Zimmerbelegung", item_label="Zimmer", rule_type="exclusive")
     assert cat.name_key == "rooms", "saving an unchanged German name detached the translation"
+    assert cat.item_label_key == "room"
 
 
 async def test_name_and_item_label_are_independent(db):
@@ -138,18 +141,87 @@ async def test_reports_payload_carries_the_markers(db):
     assert by_name["Small Groups"]["name_key"] == "small_groups"
 
 
-def test_a_previously_shipped_default_name_is_not_a_rename():
-    """v1.0.4a renamed the `rooms` default. A browser tab opened before the
-    upgrade still holds the OLD name and sends it back on save. Without the
-    legacy list that save looks like an organiser typing a name of their
-    own, and the group type stops being translated permanently, from
-    nothing but a stale tab. Every name ever shipped must stay recognised.
+def test_a_previously_shipped_default_name_is_a_real_name_again():
+    """v1.0.4a kept old defaults ("Rooms", "Zimmer", "방"...) as "not a
+    rename" to protect stale tabs. That made "Zimmer" impossible to use as
+    a name: the rename silently reverted. From v1.0.4c the interface only
+    sends an edited name, so only CURRENT defaults are recognised.
     """
     from app.core.default_type_names import matches_default
 
-    for shipped in ("Rooms", "Zimmer", "방", "Habitaciones", "Chambres", "Quartos"):
-        assert matches_default("rooms", shipped), shipped
+    for old in ("Rooms", "Zimmer", "방", "Habitaciones", "Chambres", "Quartos"):
+        assert not matches_default("rooms", old), old
     assert matches_default("rooms", "Room Allocation")
     assert matches_default("rooms", "Zimmerbelegung")
     assert matches_default("rooms", "  zimmerbelegung  ")   # case and whitespace
     assert not matches_default("rooms", "Chalets")           # a real rename still clears
+
+
+def test_key_for_default_respects_field():
+    from app.core.default_type_names import (
+        ITEM_LABEL_KEYS, NAME_KEYS, key_for_default,
+    )
+
+    assert key_for_default("Zimmerbelegung", NAME_KEYS) == "rooms"
+    assert key_for_default("방 배정", NAME_KEYS) == "rooms"
+    assert key_for_default("Kleingruppen", NAME_KEYS) == "small_groups"
+    assert key_for_default("Zimmer", ITEM_LABEL_KEYS) == "room"
+    assert key_for_default("Grupo", ITEM_LABEL_KEYS) == "group"
+    # a type name cannot pick up an item-label key, nor the other way round
+    assert key_for_default("Zimmer", NAME_KEYS) is None
+    assert key_for_default("Zimmerbelegung", ITEM_LABEL_KEYS) is None
+    assert key_for_default("Chalets", NAME_KEYS) is None
+    assert key_for_default(None, NAME_KEYS) is None
+
+
+async def test_renaming_to_zimmer_sticks(db):
+    """The bug of session 69: a German organiser renames Rooms to "Zimmer"
+    and it silently reverts to "Zimmerbelegung"."""
+    event = await make_event(db)
+    await create_default_categories(db, event.id)
+    cat_id = (await list_categories(db, event.id))[0]["id"]
+
+    cat = await update_category(db, cat_id, name="Zimmer")
+    assert cat.name == "Zimmer"
+    assert cat.name_key is None, "'Zimmer' was treated as our own default and the rename reverted"
+
+
+async def test_retyping_a_default_restores_translation(db):
+    """Rename away, then type the default back: translation returns."""
+    event = await make_event(db)
+    await create_default_categories(db, event.id)
+    cat_id = (await list_categories(db, event.id))[0]["id"]
+
+    cat = await update_category(db, cat_id, name="Chalets")
+    assert cat.name_key is None
+    cat = await update_category(db, cat_id, name="Zimmerbelegung")
+    assert cat.name_key == "rooms", "typing the German default back did not restore translation"
+    cat = await update_category(db, cat_id, item_label="Chalet")
+    assert cat.item_label_key is None
+    cat = await update_category(db, cat_id, item_label="Zimmer")
+    assert cat.item_label_key == "room"
+
+
+async def test_organiser_created_type_never_starts_translating(db):
+    """A type the organiser made themselves and called "Rooms" is theirs.
+    Typing one of our default names into it must not attach a key."""
+    from app.services.allocation_service import create_category
+
+    event = await make_event(db)
+    cat = await create_category(db, event.id, name="Tables", item_label="Table", rule_type="exclusive")
+    assert not cat.is_default
+    cat = await update_category(db, cat.id, name="Room Allocation", item_label="Room")
+    assert cat.name_key is None
+    assert cat.item_label_key is None
+
+
+async def test_save_without_name_fields_keeps_everything(db):
+    """What a v1.0.4c tab sends when the name boxes were not touched."""
+    event = await make_event(db)
+    await create_default_categories(db, event.id)
+    cat_id = (await list_categories(db, event.id))[0]["id"]
+
+    cat = await update_category(db, cat_id, rule_type="exclusive", exclusive_group_codes=True)
+    assert cat.name_key == "rooms"
+    assert cat.item_label_key == "room"
+    assert cat.exclusive_group_codes is True
