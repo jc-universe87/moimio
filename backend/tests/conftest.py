@@ -11,7 +11,9 @@ Two flavours of fixture live here:
 The `db` path requires a Postgres instance reachable via
 TEST_DATABASE_URL (default assumes a local socket as used in the
 build sandbox). In the Docker compose setup, point this at the
-test schema on the `db` service. Tests that use `db` are skipped
+test database on the `db` service, and point DATABASE_URL at the
+same database for the pytest process: the app engine is built from
+DATABASE_URL, and the two must agree. Tests that use `db` are skipped
 gracefully if the DB isn't reachable.
 """
 
@@ -29,6 +31,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.core.config import get_settings
 from app.core.database import Base
 from app.main import app as fastapi_app
 
@@ -40,6 +43,26 @@ TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
     "postgresql+asyncpg://postgres@/moimio_test?host=/var/run/postgresql",
 )
+
+
+def _db_name(url: str) -> str:
+    """Database name only, so the message never shows credentials."""
+    return url.rsplit("/", 1)[-1].split("?", 1)[0] or "?"
+
+
+def _refuse_if_app_db_differs(app_url: str, test_url: str) -> None:
+    """The app (DATABASE_URL) and the `db` fixture (TEST_DATABASE_URL)
+    must use the same database, or every test that writes a row with
+    `db` and then calls the API fails with a 404 that looks like a bug.
+    """
+    if app_url != test_url:
+        pytest.exit(
+            "conftest: DATABASE_URL and TEST_DATABASE_URL differ "
+            f"({_db_name(app_url)!r} vs {_db_name(test_url)!r}). "
+            "Export both, identically, to the test database before pytest; "
+            "see CONTRIBUTING.md, Running tests.",
+            returncode=2,
+        )
 
 
 @pytest.fixture
@@ -63,6 +86,7 @@ async def db_engine():
     """Session-scoped engine + schema. Creates all tables once at start,
     drops and recreates public schema to guarantee a clean slate.
     """
+    _refuse_if_app_db_differs(get_settings().database_url, TEST_DATABASE_URL)
     engine = create_async_engine(TEST_DATABASE_URL, future=True)
     try:
         async with engine.begin() as conn:

@@ -65,9 +65,17 @@ For non-Docker setups (running backend and frontend natively for faster iteratio
 
 ### Running tests
 
+The tests need a dedicated `moimio_test` database on the `db` service,
+and both `DATABASE_URL` (the app) and `TEST_DATABASE_URL` (the fixtures)
+must point at it for the pytest process. Without `TEST_DATABASE_URL`
+every database test is skipped and the run looks green; with only one of
+the two set, the suite refuses to start and says so.
+
 ```bash
-docker compose exec backend pytest
+docker compose exec backend sh -c 'T="${DATABASE_URL%/*}/moimio_test"; export DATABASE_URL="$T" TEST_DATABASE_URL="$T"; pytest -q'
 ```
+
+The running backend is not affected; the export lives only in that shell.
 
 ### Linting the frontend
 
