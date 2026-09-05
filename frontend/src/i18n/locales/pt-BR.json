@@ -337,7 +337,7 @@
   "errors.validation": "Alguns campos precisam de atenção.",
   "errors.webhooks.endpoint_not_found": "Endpoint de webhook não encontrado.",
   "errors.webhooks.event_types_invalid": "Os tipos de evento devem ser uma lista não vazia.",
-  "errors.webhooks.hosted_managed": "Os endpoints de webhook de um workspace hospedado são gerenciados pelo Moimio e não podem ser alterados aqui.",
+  "errors.webhooks.hosted_managed": "Os endpoints de webhook de um workspace hospedado são gerenciados pela Moimio e não podem ser alterados aqui.",
   "errors.webhooks.url_not_allowed": "Esta URL não é permitida. Os webhooks só podem ser enviados para endereços acessíveis publicamente pela internet.",
   "event.admin_pill.label": "Admin",
   "event.admin_pill.title": "Você tem acesso de administrador neste evento.",
