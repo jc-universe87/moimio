@@ -10,6 +10,28 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ## [Unreleased]
 
+### Changed
+
+- **Korean webhook screens say 이벤트 for events.** The Korean text on
+  the Webhooks page and in webhook messages now uses 이벤트 consistently;
+  the German text uses "Event" throughout the same screens.
+
+- **The review step counts in the singular.** One outstanding item now
+  reads "1 item to review" instead of "1 items to review".
+
+- **The item label hint is translated.** The example text in the group
+  type editor ("e.g. Room, Team, Session") appears in the workspace
+  language instead of always in English.
+
+- **Reviewed the hosted-workspace webhook message in all six languages.**
+  The text shown when webhooks are managed by the hosting provider was
+  checked by native review and adjusted where needed.
+
+- **For contributors: the backend test suite refuses to start unless
+  `DATABASE_URL` and `TEST_DATABASE_URL` both point at the test
+  database.** Tests can no longer run against a live database by
+  accident. CONTRIBUTING.md documents the compose command.
+
 ## [1.0.4c] — 2026-09-04
 
 A notice for demonstration workspaces, a fix for renaming built-in group
