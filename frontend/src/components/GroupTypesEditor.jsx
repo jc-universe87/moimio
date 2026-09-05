@@ -213,7 +213,7 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
                             {t('organise.item_label.hint')}
                           </span>
                         </label>
-                        <input type="text" placeholder="e.g. Room, Team, Session" value={editingCat.item_label || ''}
+                        <input type="text" placeholder={t('organise.item_label_placeholder')} value={editingCat.item_label || ''}
                           onChange={e => setEditingCat(p => ({ ...p, item_label: e.target.value }))}
                           className="w-full rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]" />
                       </div>
@@ -369,7 +369,7 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
                     {t('organise.item_label.hint')}
                   </span>
                 </label>
-                <input type="text" placeholder="e.g. Room, Team" value={newCat.item_label}
+                <input type="text" placeholder={t('organise.item_label_placeholder')} value={newCat.item_label}
                   onChange={e => setNewCat(p => ({ ...p, item_label: e.target.value }))}
                   className="w-full rounded-card border bg-[var(--app-bg)] border-[var(--card-border)] text-[var(--text-primary)] px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--io-accent)]" />
               </div>

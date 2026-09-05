@@ -76,7 +76,7 @@ export default function CategoryHintsStrip({ markSplits, unallocatedCount }) {
             transform: open ? 'rotate(90deg)' : 'none',
             transition: 'transform 0.15s',
           }}>▶</span>
-          {t('organise.review.header', { n: totalCount })}
+          {t(totalCount === 1 ? 'organise.review.header_one' : 'organise.review.header', { n: totalCount })}
         </span>
       </button>
       {open && (
