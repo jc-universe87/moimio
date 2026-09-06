@@ -450,3 +450,13 @@ provider switch) will force B eventually.
 
 **No deadline.** Needs to land before tenant count exceeds ~10,
 beyond which manual reprovisioning becomes painful.
+
+---
+
+## CE-3 — Next CE zip: inner wrapper folder becomes `moimio/`
+
+**Status:** Note only. Happens when the next CE zip is cut, not before.
+
+The next CE zip renames the inner wrapper folder from `moimio-ce/` to
+`moimio/`, removing the scratch-copy step in the CE pipeline. When the rename
+happens, the README Quick start gains the unpack step for archive recipients.
