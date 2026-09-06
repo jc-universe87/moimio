@@ -4,12 +4,12 @@ All notable changes to Moimio CE are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0e/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Consistent event terminology on the Korean and German webhook screens, singular counts in the review step, a translated item label hint, a native-reviewed hosted-webhook message, and a guard that keeps the backend test suite off live databases.
 This is the public, user-facing changelog. Detailed per-development-iteration history is kept internally and is not published.
 
 ---
 
-## [Unreleased]
+## [1.0.4d] — 2026-09-06
+Consistent event terminology on the Korean and German webhook screens, singular counts in the review step, a translated item label hint, a native-reviewed hosted-webhook message, and a guard that keeps the backend test suite off live databases.
 
 ### Changed
 
