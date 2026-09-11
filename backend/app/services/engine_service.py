@@ -27,17 +27,23 @@ PASS 1 — Group_code clusters
   one" has no togetherness to preserve. They flow into PASS 4b
   alongside uncoded individuals.
 
-PASS 2 — Mark "together" clusters
-  For each mark in mark_priorities order with
-  cluster_behaviour='together': form sub-cluster from participants
-  with this primary mark (priority order resolves overlaps;
-  group_code wins over marks). Place using same packing logic as
-  PASS 1 but never trigger exclusive claim.
+PASS 2/3 — Marks, in mark_priorities order
+  ONE walk of mark_priorities (v1.0.4e; previously two consecutive
+  loops, which made pass order override the organiser's priority
+  order). Each mark is dispatched by its cluster_behaviour:
 
-PASS 3 — Mark "split-evenly" pre-distribution
-  For each mark in mark_priorities order with cluster_behaviour='split':
-  find unplaced participants with this primary mark. Distribute
-  evenly across eligible units (gender-permitting).
+    'together' — form a sub-cluster from participants with this
+      primary mark (priority order resolves overlaps; group_code
+      wins over marks) and place it with the PASS 1 packing logic,
+      saturating one unit at a time so at most one unit ends mixed.
+      Never triggers an exclusive claim.
+
+    'split' — distribute participants with this primary mark
+      round-robin across eligible units (gender-permitting).
+
+  split_oversized_groups is NOT consulted for marks: a keep-together
+  mark always splits as far as capacity requires. The setting is
+  group_code only, by decision (v1.0.4e).
 
 PASS 4a — Drain gender-restricted units
   For each restricted unit (cap ASC): pull eligible-gender
@@ -168,8 +174,9 @@ async def run_engine(
 
       PASS 1 — Group_code clusters (largest first, smallest fitting set,
                even split if no single-unit fit, exclusive flag respected)
-      PASS 2 — Mark "together" clusters (priority order, same packing)
-      PASS 3 — Mark "split-evenly" pre-distribution
+      PASS 2/3 — Marks in mark_priorities order, dispatched by
+               behaviour: 'together' packs like PASS 1 but saturating,
+               'split' distributes round-robin
       PASS 4a — Drain gender-restricted units with eligible-gender pool
       PASS 4b — Round-robin remaining individuals
                 (per-eligibility-class cursor, cap ASC visit order)
@@ -547,45 +554,53 @@ async def run_engine(
                 break
         primary_mark[pid] = chosen
 
-    # ── PASS 2: mark "together" clusters in priority order ──
+    # ── PASS 2/3: marks in priority order, dispatched by behaviour ──
+    # v1.0.4e: ONE loop over mark_priorities. Before 1.0.4e this was two
+    # consecutive loops — every "together" mark, then every "split" mark —
+    # so pass order silently overrode the organiser's priority order: a
+    # "keep together" mark at priority 2 always placed before a "spread
+    # evenly" mark at priority 1, saturating units that the spread pass
+    # then skipped (its eligible list filters on remaining_cap > 0),
+    # doubling members up in the units that were left.
     mark_clusters_count = 0
     for prio_mid in mark_priorities:
-        if mark_behaviours.get(prio_mid) != "together":
-            continue
-        # Gather participants whose primary mark is this one.
-        members = [
-            p for p in participants
-            if str(p.id) not in placed_ids
-            and primary_mark.get(str(p.id)) == prio_mid
-        ]
-        if not members:
-            continue
-        mark_clusters_count += 1
-        _place_cluster(
-            cluster_members=members,
-            cluster_id=f"mark:{prio_mid}",
-            cluster_kind="mark_together",
-            units=units,
-            unit_slots=unit_slots,
-            exclusive_units=exclusive_units,
-            exclusive_flag=False,  # marks never trigger exclusive
-            split_groups=split_groups,
-            placed_ids=placed_ids,
-            placement_reasons=placement_reasons,
-            unplaced_reasons=unplaced_reasons,
-            held_back=held_back,
-            gender_eligible=gender_eligible,
-            cluster_gender_eligible=cluster_gender_eligible,
-            mark_eligible=mark_eligible,
-            cluster_mark_eligible=cluster_mark_eligible,
-            remaining_cap=remaining_cap,
-            units_by_id={str(u.id): u for u in units},
-        )
+        behaviour = mark_behaviours.get(prio_mid)
 
-    # ── PASS 3: mark "split-evenly" pre-distribution ──
-    for prio_mid in mark_priorities:
-        if mark_behaviours.get(prio_mid) != "split":
+        if behaviour == "together":
+            # Gather participants whose primary mark is this one.
+            members = [
+                p for p in participants
+                if str(p.id) not in placed_ids
+                and primary_mark.get(str(p.id)) == prio_mid
+            ]
+            if not members:
+                continue
+            mark_clusters_count += 1
+            _place_cluster(
+                cluster_members=members,
+                cluster_id=f"mark:{prio_mid}",
+                cluster_kind="mark_together",
+                units=units,
+                unit_slots=unit_slots,
+                exclusive_units=exclusive_units,
+                exclusive_flag=False,  # marks never trigger exclusive
+                split_groups=split_groups,
+                placed_ids=placed_ids,
+                placement_reasons=placement_reasons,
+                unplaced_reasons=unplaced_reasons,
+                held_back=held_back,
+                gender_eligible=gender_eligible,
+                cluster_gender_eligible=cluster_gender_eligible,
+                mark_eligible=mark_eligible,
+                cluster_mark_eligible=cluster_mark_eligible,
+                remaining_cap=remaining_cap,
+                units_by_id={str(u.id): u for u in units},
+            )
             continue
+
+        if behaviour != "split":
+            continue
+
         members = [
             p for p in participants
             if str(p.id) not in placed_ids
@@ -811,6 +826,14 @@ async def run_engine(
     # ── PASS 5: classify unplaced ──
     all_ids = {str(p.id) for p in participants}
     unplaced_ids = list(all_ids - placed_ids)
+
+    # v1.0.4e: drop stale tags. The cluster path tags members it could not
+    # seat, but a later pass may still place them; the tag then survives
+    # into the result and the (i) panel reads it as fact. unplaced_reasons
+    # must only ever describe people who are actually unplaced.
+    for pid in list(unplaced_reasons):
+        if pid in placed_ids:
+            del unplaced_reasons[pid]
 
     if unplaced_ids:
         participant_by_id = {str(p.id): p for p in participants}
@@ -1069,12 +1092,15 @@ def _place_cluster(
     for n in range(2, len(candidate_units) + 1):
         combo = _smallest_set_that_fits(candidate_units, cluster_size, n, remaining_cap)
         if combo:
-            # Split cluster evenly across combo.
-            shares = _even_split(cluster_size, len(combo))
+            # v1.0.4e: shares are capacity-aware and behaviour-aware.
+            # See _split_across. mark_together saturates each unit in
+            # turn; group_code keeps the even split it has always had.
+            shares = _split_across(
+                combo, cluster_size, remaining_cap,
+                concentrate=(cluster_kind == "mark_together"),
+            )
             idx = 0
             for u, share in zip(combo, shares):
-                # Cap share to actual remaining capacity (defensive)
-                share = min(share, remaining_cap(str(u.id)))
                 for _ in range(share):
                     if idx >= cluster_size:
                         break
@@ -1160,6 +1186,57 @@ def _smallest_set_that_fits(units, cluster_size, n, remaining_cap):
                 best = list(combo)
                 best_total = total
     return best
+
+
+def _split_across(combo, cluster_size, remaining_cap, *, concentrate: bool):
+    """Per-unit shares for a cluster spread over `combo`, capacity-aware.
+
+    v1.0.4e. Replaces a bare ``_even_split`` whose shares were then
+    clamped with ``min(share, remaining_cap)``, silently discarding the
+    clamped remainder: a cluster of 15 over units of 6 and 12 placed
+    6 + 7 and dropped 2 members while the second unit still had 5 free
+    slots. Those members then re-entered through PASS 4b as anonymous
+    fill, carrying the wrong placement reason and becoming movable by
+    the PASS 4c equalising sweep.
+
+    ``concentrate=True`` (mark "keep together") saturates each unit in
+    turn, so at most ONE unit ends partially filled and therefore mixed
+    with non-holders. Even-splitting a keep-together mark leaves every
+    unit it touches partly empty and PASS 4b fills every one of those
+    holes, which is the opposite of what the mark asks for.
+
+    ``concentrate=False`` (group_code) keeps the documented even split
+    unchanged, and only redistributes a capacity-clamped remainder into
+    units of the combo that still have room.
+
+    Returns a list of ints, same length and order as `combo`, each no
+    greater than that unit's remaining capacity, summing to
+    ``min(cluster_size, total remaining capacity of combo)``.
+    """
+    caps = [remaining_cap(str(u.id)) for u in combo]
+
+    if concentrate:
+        shares, left = [], cluster_size
+        for c in caps:
+            take = min(c, left)
+            shares.append(take)
+            left -= take
+        return shares
+
+    shares = [min(s, c) for s, c in zip(_even_split(cluster_size, len(combo)), caps)]
+    left = cluster_size - sum(shares)
+    while left > 0:
+        progressed = False
+        for i, c in enumerate(caps):
+            if left == 0:
+                break
+            if shares[i] < c:
+                shares[i] += 1
+                left -= 1
+                progressed = True
+        if not progressed:
+            break
+    return shares
 
 
 def _even_split(total, parts):

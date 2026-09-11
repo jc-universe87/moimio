@@ -24,6 +24,9 @@ const HAS_FINE_POINTER = typeof window !== 'undefined'
 export default function OrganiseDashboard({ eventId, eventName, participantList, noteCounts, isAdmin, staffPerms, onDataChange }) {
   const [categories, setCategories] = useState([]);
   const [selectedCatId, setSelectedCatId] = useState(null);
+  // v1.0.4e: null, or { active, requestBack } published by AllocationBoard
+  // while a proposal is on screen. Drives the header back button's target.
+  const [boardProposal, setBoardProposal] = useState(null);
   // v0.74a: openSettingsOnNav + triggerSuggestMode + showModePicker
   // state vars removed. Pre-v0.74a they were set by the per-row
   // Auto-Allocate split button on the group-type overview. The button
@@ -255,7 +258,16 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
         {/* Board header */}
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div className="flex items-center gap-3">
-            <button onClick={() => setSelectedCatId(null)}
+            {/* v1.0.4e: while a proposal is on screen this button goes
+                back to THIS board, via the same always-confirm discard
+                dialog. It only leaves the group type when no proposal
+                is open. Previously it always left the group type, so
+                dismissing a proposal cost two extra clicks to get back
+                in. */}
+            <button onClick={() => {
+                if (boardProposal?.active) boardProposal.requestBack();
+                else setSelectedCatId(null);
+              }}
               className="text-sm text-steel-blue hover:text-mid-navy inline-flex items-center gap-1">
               {t('organise.back')}
             </button>
@@ -332,6 +344,7 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
           isAdmin={effectiveIsAdmin}
           marksPerm={staffPerms?.marks || ''}
           onDataChange={() => { loadCategories(); if (onDataChange) onDataChange(); }}
+          onProposalStateChange={setBoardProposal}
         />
         <ConfirmOverlay />
         <ToastHost />

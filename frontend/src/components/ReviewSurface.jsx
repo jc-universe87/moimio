@@ -58,6 +58,13 @@ import { useI18n } from '../hooks/useI18n';
  *   onDiscard        — ()=>void, parent clears proposal state.
  *                      ALWAYS called via the confirm dialog below
  *                      (per R1 Q1 resolution — always-confirm).
+ *   discardConfirm      — boolean, controlled by the parent (v1.0.4e).
+ *   setDiscardConfirm   — setter, so the board header's back button can
+ *                      open the SAME always-confirm dialog rather than
+ *                      growing a second copy of it. Both are optional:
+ *                      omit them and the component falls back to its
+ *                      own local state, so existing call sites are
+ *                      unaffected.
  */
 export default function ReviewSurface({
   proposal,
@@ -67,9 +74,14 @@ export default function ReviewSurface({
   committing,
   onCommit,
   onDiscard,
+  discardConfirm: discardConfirmProp,
+  setDiscardConfirm: setDiscardConfirmProp,
 }) {
   const { t } = useI18n();
-  const [discardConfirm, setDiscardConfirm] = useState(false);
+  const [discardConfirmLocal, setDiscardConfirmLocal] = useState(false);
+  const controlled = typeof setDiscardConfirmProp === 'function';
+  const discardConfirm = controlled ? discardConfirmProp : discardConfirmLocal;
+  const setDiscardConfirm = controlled ? setDiscardConfirmProp : setDiscardConfirmLocal;
 
   // Index participants by id for O(1) name/number lookup inside
   // the busy render path below.

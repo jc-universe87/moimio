@@ -8,6 +8,51 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4e] — 2026-09-11
+Marks now do what they say: a mark set to keep people together fills one group at a time instead of spreading them thinly, mark priority order is honoured, and nobody is dropped from a group code that had room for them. The back button no longer leaves the group type while a proposal is on screen, the auto-allocate menu closes when you click elsewhere, and text you type into a field is visible again in dark mode.
+
+### Fixed
+
+- **A mark set to keep people together now fills one group at a time.**
+  Previously the people carrying the mark were spread evenly over as
+  many groups as it took, which left free space in every one of them
+  and other participants were then placed into that space. The result
+  was several mixed groups rather than one. Now each group is filled to
+  capacity in turn, so at most one group ends up mixed.
+
+- **Mark priority order is honoured.** The order you set in the mark
+  list now decides which mark is applied first. Previously every
+  keep-together mark was applied before every spread-evenly mark,
+  whatever the order on screen, so a spread-evenly mark at the top of
+  the list could find its groups already full and double people up.
+
+- **Nobody is dropped from a group that still had room.** When a group
+  code had to be split across several groups and the first one could
+  not take its full share, the people who did not fit were left out of
+  the group code entirely and placed later as if they had arrived on
+  their own. They are now passed to the next group instead. Group codes
+  are still split evenly; this only stops people falling out of them.
+
+- **Placement explanations no longer report people as unplaced when
+  they were placed.** A stale note could survive into the result and
+  the details panel read it as fact.
+
+- **The back button stays inside the group type while a proposal is on
+  screen.** It now returns to the groups you were working on, via the
+  same confirmation as the Discard button. It only leaves the group
+  type when no proposal is open.
+
+- **The auto-allocate menu closes when you click elsewhere,** matching
+  the engine settings menu next to it.
+
+- **Text typed into a field is visible in dark mode.** Fields were
+  painted white while the text took the dark theme's near-white colour,
+  so anything typed was invisible until the field lost focus. Fields,
+  dropdown panels, date pickers, scrollbars and autofilled values now
+  all follow the active theme.
+
+---
+
 ## [1.0.4d] — 2026-09-06
 Consistent event terminology on the Korean and German webhook screens, singular counts in the review step, a translated item label hint, a native-reviewed hosted-webhook message, and a guard that keeps the backend test suite off live databases.
 

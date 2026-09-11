@@ -31,7 +31,7 @@ const HAS_FINE_POINTER = typeof window !== 'undefined'
   && typeof window.matchMedia === 'function'
   && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
-export default function AllocationBoard({ eventId, eventName, category, allCategories, onSelectCategory, participantList, noteCounts, isAdmin, marksPerm, onDataChange, isOverview, includeNotes, openSettings, onSettingsOpened, triggerSuggestMode, onSuggestTriggered }) {
+export default function AllocationBoard({ eventId, eventName, category, allCategories, onSelectCategory, participantList, noteCounts, isAdmin, marksPerm, onDataChange, isOverview, includeNotes, openSettings, onSettingsOpened, triggerSuggestMode, onSuggestTriggered, onProposalStateChange }) {
   // v0.50f-1: mark modal opens for everyone on desktop. Only canAssign is
   // gated by marksPerm. Mobile still suppresses the onManage handler for
   // ergonomics (small hitboxes + finger gestures conflict with drag).
@@ -284,6 +284,14 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   const [showModePicker, setShowModePicker] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const overflowMenuRef = useRef(null);
+  const modePickerRef = useRef(null);   // v1.0.4e: popover
+  const modeButtonRef = useRef(null);   // v1.0.4e: split-button trigger
+
+  // v1.0.4e: the always-confirm discard dialog lives in ReviewSurface but
+  // is opened from two places now — its own Discard button and the board
+  // header's back button, which sits in OrganiseDashboard. Holding the
+  // boolean here keeps ONE dialog with one copy string.
+  const [discardConfirm, setDiscardConfirm] = useState(false);
 
   // Local mirror of category.settings.engine for optimistic UI updates.
   // Synced from prop when category changes; updated immediately on user action.
@@ -453,6 +461,34 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showOverflowMenu]);
+
+  // v1.0.4e: publish proposal state so the board header's back button
+  // (rendered by OrganiseDashboard) can go back to THIS board instead of
+  // leaving the group type. requestBack opens the same always-confirm
+  // discard dialog the Discard button uses.
+  useEffect(() => {
+    if (!onProposalStateChange) return;
+    onProposalStateChange(
+      proposal ? { active: true, requestBack: () => setDiscardConfirm(true) } : null
+    );
+    // Clear on unmount so a stale handler cannot outlive the board.
+    return () => onProposalStateChange(null);
+  }, [proposal, onProposalStateChange]);
+
+  // v1.0.4e: close the auto-allocate mode picker on outside click, to
+  // match the engine-settings and overflow menus. The popover is a
+  // sibling of the split button rather than a child, so two refs are
+  // needed: clicking the trigger itself must not close-then-reopen.
+  useEffect(() => {
+    if (!showModePicker) return;
+    const handler = (e) => {
+      const inPopover = modePickerRef.current && modePickerRef.current.contains(e.target);
+      const inTrigger = modeButtonRef.current && modeButtonRef.current.contains(e.target);
+      if (!inPopover && !inTrigger) setShowModePicker(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showModePicker]);
 
   // ─── Engine: suggest ───
   const handleSuggest = async (mode = 'replace') => {
@@ -1194,6 +1230,8 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
             committing={committing}
             onCommit={handleCommit}
             onDiscard={() => setProposal(null)}
+            discardConfirm={discardConfirm}
+            setDiscardConfirm={setDiscardConfirm}
           />
           <ConfirmOverlay />
         </>
@@ -1308,6 +1346,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
             <div className="flex rounded-card shadow-sm relative" style={{ border: '1px solid #FFD700' }}>
               {/* Left half — opens mode picker */}
               <button
+                ref={modeButtonRef}
                 disabled={suggesting || units.length === 0}
                 onClick={() => setShowModePicker(p => !p)}
                 className="bg-gold text-deep-navy font-bold text-sm px-4 py-2 hover:bg-gold/80 disabled:opacity-40 transition-colors flex items-center gap-2"
@@ -1521,6 +1560,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
             {/* Mode picker popover */}
             {showModePicker && (
               <div
+                ref={modePickerRef}
                 className="card-surface-solid absolute top-14 left-3 z-40 rounded-card p-3 w-64"
                 style={{ border: '1px solid var(--card-border)', boxShadow: '0 12px 32px rgba(0,0,0,0.25)' }}>
                 <p className="text-[10px] font-semibold uppercase tracking-caps mb-2" style={{ color: 'var(--text-subtle)' }}>

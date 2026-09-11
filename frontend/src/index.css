@@ -182,6 +182,67 @@ html, body {
   overscroll-behavior: none;
 }
 
+/*
+  v1.0.4e — dark-mode form controls.
+
+  The bug: nothing here declared `color-scheme`, so the browser painted
+  every text input with its default white `field` background even in
+  dark mode, while Tailwind preflight's `color: inherit` gave the typed
+  text `--text-primary` (#F7F5F2). White on white — about 1.03:1.
+  Placeholders survived only because preflight hard-codes them to
+  gray-400, which is why this went unnoticed: the field looks fine
+  until someone types in it. 125 of 126 text-entry controls in the app
+  declare no background of their own. RegisterPage strips `.dark`, so
+  the public form was never affected.
+
+  Two parts, both needed:
+
+  1. `color-scheme` fixes what CSS cannot reach — the native <select>
+     dropdown panel, date-picker panels, scrollbars, the text caret,
+     and Chrome's autofill styling.
+  2. The base rule gives fields a brand surface instead of the
+     browser's generic dark grey. It sits in @layer base so any
+     component that sets its own `bg-*` utility still wins.
+
+  Checkboxes and radios are excluded: they are styled with
+  `accent-steel-blue` / `dark:accent-gold` and a background override
+  breaks the tick rendering.
+*/
+:root { color-scheme: light; }
+.dark { color-scheme: dark; }
+
+/* Field surface sits slightly darker than --card-bg (#1a2c40) so an
+   input reads as recessed rather than flush with its card. */
+:root { --input-bg: #FFFFFF; }
+.dark { --input-bg: #12202f; }
+
+@layer base {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']),
+  textarea,
+  select {
+    background-color: var(--input-bg);
+    color: var(--text-primary);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-subtle);
+    opacity: 1;
+  }
+
+  /* Chrome paints autofilled fields from its own palette and ignores
+     background-color. The inset shadow is the only way to override it.
+     Matters on the login page. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--text-primary);
+    -webkit-box-shadow: 0 0 0 1000px var(--input-bg) inset;
+    caret-color: var(--text-primary);
+    transition: background-color 9999s ease-in-out 0s;
+  }
+}
+
 @layer utilities {
   .scrollbar-hide {
     -ms-overflow-style: none;

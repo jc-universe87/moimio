@@ -8,8 +8,10 @@ from the spec.
 Spec recap (full detail in v0.74 algorithm doc):
   PASS 1: group_code clusters (largest first, smallest fitting set,
           even split if no single-unit fit, exclusive flag respected)
-  PASS 2: mark "together" clusters (priority order, same packing)
-  PASS 3: mark "split-evenly" pre-distribution
+  PASS 2/3: marks in mark_priorities order, dispatched by behaviour
+          (v1.0.4e; one loop, so priority order wins over pass order).
+          'together' packs like PASS 1 but saturates one unit at a
+          time; 'split' distributes round-robin
   PASS 4a: drain gender-restricted units with eligible-gender pool
   PASS 4b: round-robin remaining individuals (per-eligibility-class
            cursor, cap ASC visit order)
@@ -188,11 +190,13 @@ async def test_v074_a4_oversized_cluster_split_evenly(db):
     capacity overflows.
 
     v1.0.0i: assertion relaxed from the original "smallest-set-even-split
-    4+4 across A+B only" expectation. The engine now splits across 3 units
-    (typically 4+3+1) rather than the original 2-unit even split. Both
-    are valid; the underlying contract being tested here is "no
-    participant goes unplaced when split is enabled, and no unit
-    exceeds its capacity." Test name preserved for continuity with
+    4+4 across A+B only" expectation. v1.0.4e: the shape moved again, to
+    5+3 across two units, because a capacity-clamped share is now handed
+    to the next unit in the combo instead of being discarded (the
+    discarded member used to reappear via PASS 4b as a third, unrelated
+    placement). All three shapes are valid; the contract being tested
+    here is "no participant goes unplaced when split is enabled, and no
+    unit exceeds its capacity." Test name preserved for continuity with
     the v0.74 Semantics A spec it was originally aimed at.
     """
     event = await make_event(db)
@@ -333,7 +337,10 @@ async def test_v074_b1_marks_together_cluster(db):
     assert result["stats"]["placed"] == 24
 
     # Korean cluster: 6 across 2 groups (cluster_size=6, cap=5 means split).
-    # Smallest 2-unit set fits 6: any 2 groups, sum 10. Even split: 3+3.
+    # Smallest 2-unit set fits 6: any 2 groups, sum 10. v1.0.4e: a
+    # mark_together cluster SATURATES rather than even-splits, so this is
+    # 5+1, not the 3+3 it was before. Neither shape is asserted here —
+    # this test pins the totals and the priority resolution.
     # Quiet cluster: 3 unplaced Quiet (the 1 dual-marked is in Korean).
     #   Smallest single-unit fit: any group cap=5 (or partly-filled if
     #   smallest "perfect-fit" is the partly-filled Korean group).
