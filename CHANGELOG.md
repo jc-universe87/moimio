@@ -8,6 +8,23 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4g] — 2026-09-12
+The printed rosters now use the same words as the screen. A group is
+called a group, and the gender column is headed the same way the app
+labels it.
+
+### Changed
+
+- **Roster PDFs say "group" where they said "unit".** The message shown
+  for a group type with nothing in it was the last place the old word
+  survived. Korean already read correctly and is unchanged.
+
+- **The gender column header matches the app.** Spanish, French and
+  Portuguese rosters printed a different word from the one the app uses.
+  German and Korean already agreed and are unchanged.
+
+---
+
 ## [1.0.4f] — 2026-09-12
 The allocation engine now speaks the same language everywhere: the settings, the placement explanations and the error messages use "group" and "group code" consistently in all six languages, and the engine settings are listed in the order the engine applies them. "Split group codes if needed" is greyed out while "Keep group codes together" is off, because it has no effect in that state.
 
