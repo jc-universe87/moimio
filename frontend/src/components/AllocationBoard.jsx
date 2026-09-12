@@ -1366,54 +1366,16 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                 </button>
                 {showEngineSettings && (
                   <div
-                    className="card-surface-solid absolute top-full left-0 mt-1 rounded-card p-4 z-30 w-72"
+                    className="card-surface-solid absolute top-full left-0 mt-1 rounded-card p-4 z-30 w-80 sm:w-96 max-h-[70vh] overflow-y-auto"
                     style={{ border: '1px solid var(--card-border)', boxShadow: '0 12px 32px rgba(0,0,0,0.25)' }}>
                     <p className="text-[10px] font-semibold uppercase tracking-caps mb-3" style={{ color: 'var(--text-subtle)' }}>
                       {t('engine.settings.title')}
                     </p>
+                    {/* v1.0.4f: toggles listed in the order the engine applies
+                        them. split_oversized_groups is only read inside the
+                        use_group_codes pass, so it is greyed out and disabled
+                        while that toggle is off; the stored value is kept. */}
                     <div className="space-y-2.5">
-                      <label className="flex items-start gap-2 cursor-pointer">
-                        <input type="checkbox"
-                          checked={engineSettings.use_group_codes ?? true}
-                          onChange={e => handleEngineSettingChange('use_group_codes', e.target.checked)}
-                          className="h-3.5 w-3.5 rounded mt-0.5 accent-steel-blue dark:accent-gold" />
-                        <div>
-                          <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-                            {t('engine.settings.use_group_codes')}
-                          </span>
-                          <p className="text-[10px]" style={{ color: 'var(--text-subtle)' }}>
-                            {t('engine.settings.use_group_codes.hint')}
-                          </p>
-                        </div>
-                      </label>
-                      <label className="flex items-start gap-2 cursor-pointer">
-                        <input type="checkbox"
-                          checked={engineSettings.group_remaining_by_gender ?? true}
-                          onChange={e => handleEngineSettingChange('group_remaining_by_gender', e.target.checked)}
-                          className="h-3.5 w-3.5 rounded mt-0.5 accent-steel-blue dark:accent-gold" />
-                        <div>
-                          <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-                            {t('engine.settings.group_by_gender')}
-                          </span>
-                          <p className="text-[10px]" style={{ color: 'var(--text-subtle)' }}>
-                            {t('engine.settings.group_by_gender.hint')}
-                          </p>
-                        </div>
-                      </label>
-                      <label className="flex items-start gap-2 cursor-pointer">
-                        <input type="checkbox"
-                          checked={engineSettings.split_oversized_groups ?? true}
-                          onChange={e => handleEngineSettingChange('split_oversized_groups', e.target.checked)}
-                          className="h-3.5 w-3.5 rounded mt-0.5 accent-steel-blue dark:accent-gold" />
-                        <div>
-                          <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-                            {t('engine.settings.split_groups')}
-                          </span>
-                          <p className="text-[10px]" style={{ color: 'var(--text-subtle)' }}>
-                            {t('engine.settings.split_groups.hint')}
-                          </p>
-                        </div>
-                      </label>
                       {/* v0.73b: include_pending_in_allocation toggle.
                           Default ON; ?? true matches the convention of
                           the other toggles so categories with no engine
@@ -1432,23 +1394,32 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                           </p>
                         </div>
                       </label>
-                      {/* v1.0.0e: equalise_after_allocation toggle. After
-                          all rule-based passes, the engine moves whole
-                          clusters between units to make occupancies more
-                          even (proportional to capacity). Default ON;
-                          ?? true so categories with no engine settings
-                          block read as if the toggle is on. */}
                       <label className="flex items-start gap-2 cursor-pointer">
                         <input type="checkbox"
-                          checked={engineSettings.equalise_after_allocation ?? true}
-                          onChange={e => handleEngineSettingChange('equalise_after_allocation', e.target.checked)}
+                          checked={engineSettings.use_group_codes ?? true}
+                          onChange={e => handleEngineSettingChange('use_group_codes', e.target.checked)}
                           className="h-3.5 w-3.5 rounded mt-0.5 accent-steel-blue dark:accent-gold" />
                         <div>
                           <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-                            {t('engine.settings.equalise')}
+                            {t('engine.settings.use_group_codes')}
                           </span>
                           <p className="text-[10px]" style={{ color: 'var(--text-subtle)' }}>
-                            {t('engine.settings.equalise.hint')}
+                            {t('engine.settings.use_group_codes.hint')}
+                          </p>
+                        </div>
+                      </label>
+                      <label className={`flex items-start gap-2 cursor-pointer ${(engineSettings.use_group_codes ?? true) ? '' : 'opacity-60'}`}>
+                        <input type="checkbox"
+                          checked={engineSettings.split_oversized_groups ?? true}
+                          disabled={!(engineSettings.use_group_codes ?? true)}
+                          onChange={e => handleEngineSettingChange('split_oversized_groups', e.target.checked)}
+                          className="h-3.5 w-3.5 rounded mt-0.5 accent-steel-blue dark:accent-gold" />
+                        <div>
+                          <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                            {t('engine.settings.split_groups')}
+                          </span>
+                          <p className="text-[10px]" style={{ color: 'var(--text-subtle)' }}>
+                            {t('engine.settings.split_groups.hint')}
                           </p>
                         </div>
                       </label>
@@ -1473,10 +1444,10 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                     </div>
                     {/* Mark priorities */}
                     <div className="pt-3 mt-3" style={{ borderTop: '1px solid var(--card-border)' }}>
-                      <p className="text-[10px] font-semibold uppercase tracking-caps mb-1" style={{ color: 'var(--text-subtle)' }}>
+                      <p className="text-xs font-medium mb-1 pl-[22px]" style={{ color: 'var(--text-primary)' }}>
                         {t('engine.settings.mark_priorities')}
                       </p>
-                      <p className="text-[10px] mb-2" style={{ color: 'var(--text-subtle)' }}>
+                      <p className="text-[10px] mb-2 pl-[22px]" style={{ color: 'var(--text-subtle)' }}>
                         {t('engine.settings.mark_priorities.hint')}
                       </p>
                       {markDefs.length === 0 ? (
@@ -1512,7 +1483,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                                 <span className="text-[10px] select-none" style={{ color: 'var(--text-subtle)', opacity: 0.5 }}>⠿</span>
                                 <span className="text-[10px] font-bold w-4 text-center" style={{ color: 'var(--io-accent)' }}>{idx + 1}</span>
                                 <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: def.colour }} />
-                                <span className="text-xs font-medium flex-1 truncate" style={{ color: 'var(--text-primary)' }}>{def.name}</span>
+                                <span className="text-xs font-medium flex-1 truncate" title={def.name} style={{ color: 'var(--text-primary)' }}>{def.name}</span>
                                 {/* v1.0-pre #23: per-category behaviour select.
                                     Stops propagation so changing the dropdown
                                     doesn't accidentally start a drag. */}
@@ -1551,6 +1522,43 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                           ))}
                         </div>
                       )}
+                    </div>
+                    {/* v1.0.4f: passes that run after mark priorities. */}
+                    <div className="space-y-2.5 pt-3 mt-3" style={{ borderTop: '1px solid var(--card-border)' }}>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox"
+                          checked={engineSettings.group_remaining_by_gender ?? true}
+                          onChange={e => handleEngineSettingChange('group_remaining_by_gender', e.target.checked)}
+                          className="h-3.5 w-3.5 rounded mt-0.5 accent-steel-blue dark:accent-gold" />
+                        <div>
+                          <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                            {t('engine.settings.group_by_gender')}
+                          </span>
+                          <p className="text-[10px]" style={{ color: 'var(--text-subtle)' }}>
+                            {t('engine.settings.group_by_gender.hint')}
+                          </p>
+                        </div>
+                      </label>
+                      {/* v1.0.0e: equalise_after_allocation toggle. After
+                          all rule-based passes, the engine moves whole
+                          clusters between groups to make occupancies more
+                          even (proportional to capacity). Default ON;
+                          ?? true so categories with no engine settings
+                          block read as if the toggle is on. */}
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox"
+                          checked={engineSettings.equalise_after_allocation ?? true}
+                          onChange={e => handleEngineSettingChange('equalise_after_allocation', e.target.checked)}
+                          className="h-3.5 w-3.5 rounded mt-0.5 accent-steel-blue dark:accent-gold" />
+                        <div>
+                          <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                            {t('engine.settings.equalise')}
+                          </span>
+                          <p className="text-[10px]" style={{ color: 'var(--text-subtle)' }}>
+                            {t('engine.settings.equalise.hint')}
+                          </p>
+                        </div>
+                      </label>
                     </div>
                   </div>
                 )}

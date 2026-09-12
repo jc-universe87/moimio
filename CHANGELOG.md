@@ -8,6 +8,29 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4f] — 2026-09-12
+The allocation engine now speaks the same language everywhere: the settings, the placement explanations and the error messages use "group" and "group code" consistently in all six languages, and the engine settings are listed in the order the engine applies them. "Split group codes if needed" is greyed out while "Keep group codes together" is off, because it has no effect in that state.
+
+### Changed
+
+- **Engine wording revised in all six languages.** 36 strings were
+  reworded: the engine settings and their hints, the placement
+  explanations in the history and details panel, the reasons shown for
+  unplaced people, and the allocation error messages. A container is
+  called a group in these screens.
+
+- **Engine settings are listed in the order they are applied.** The
+  settings panel now reads, top to bottom: Include unconfirmed people •
+  Keep group codes together • Split group codes if needed • A group code
+  takes a whole group to itself • Apply marks in this order • Keep the
+  same gender together • Even out group sizes. This is the order the
+  engine runs, so reading down the panel is reading the allocation.
+
+- **"Split group codes if needed" is greyed out while "Keep group codes
+  together" is off.** The setting only applies when group codes are in
+  use, so it is disabled until they are. Your stored choice is kept and
+  comes back as it was when you turn group codes on again.
+
 ## [1.0.4e] — 2026-09-11
 Marks now do what they say: a mark set to keep people together fills one group at a time instead of spreading them thinly, mark priority order is honoured, and nobody is dropped from a group code that had room for them. The back button no longer leaves the group type while a proposal is on screen, the auto-allocate menu closes when you click elsewhere, and text you type into a field is visible again in dark mode.
 
