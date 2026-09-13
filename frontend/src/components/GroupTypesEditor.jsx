@@ -199,7 +199,7 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
                       <div>
                         <label className="block text-[10px] uppercase tracking-caps font-semibold mb-1"
                           style={{ color: 'var(--text-subtle)' }}>
-                          {t('common.name')}
+                          {t('organise.group_type_name')}
                         </label>
                         <input type="text" value={editingCat.name}
                           onChange={e => setEditingCat(p => ({ ...p, name: e.target.value }))}
@@ -337,7 +337,7 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
         </button>
       ) : (
         <div
-          className="card-surface-solid rounded-card p-3"
+          className="bg-neutral-tint rounded-card p-3"
           style={{ border: '1px solid var(--card-border)' }}
         >
           <form onSubmit={handleCreateCat} className="space-y-2">
@@ -355,7 +355,7 @@ export default function GroupTypesEditor({ eventId, isAdmin, onChange, onDone, i
               <div>
                 <label className="block text-[10px] uppercase tracking-caps font-semibold mb-1"
                   style={{ color: 'var(--text-subtle)' }}>
-                  {t('common.name')}
+                  {t('organise.group_type_name')}
                 </label>
                 <input type="text" placeholder={t('organise.group_type_name_placeholder')} value={newCat.name}
                   onChange={e => setNewCat(p => ({ ...p, name: e.target.value }))} required

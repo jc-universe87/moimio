@@ -8,6 +8,36 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4h] — 2026-09-13
+The group type editor is clearer about what each field is for, and the
+warning shown before a group type is deleted says plainly what goes with
+it.
+
+### Changed
+
+- **The two fields in the group type editor say what they are.** The
+  first field was labelled "Name" and the second "Item label", which
+  left it unclear which name was meant. They now read "Group type name"
+  and "Name" (with the existing "e.g. Room, Team" hint), in all six
+  languages.
+
+- **The delete warning covers everything that goes.** It now says that
+  the group type, everything in it and every participant assignment
+  within it are removed permanently, in all six languages.
+
+### Fixed
+
+- **A group type with no label of its own no longer shows an English
+  word in other languages.** Where no label was set, the app fell back
+  to the untranslated word "Item". It now falls back to the translated
+  word for "Group".
+
+- **The create form is set off from the list.** The form for adding a
+  new group type has a shaded background so it reads as a form rather
+  than as another entry in the list.
+
+---
+
 ## [1.0.4g] — 2026-09-12
 The printed rosters now use the same words as the screen. A group is
 called a group, and the gender column is headed the same way the app

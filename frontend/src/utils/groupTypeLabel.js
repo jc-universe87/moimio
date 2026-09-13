@@ -24,7 +24,7 @@ export function typeName(cat, t) {
 }
 
 /** Singular label for one thing inside a group type ("Room", "Group"). */
-export function typeItemLabel(cat, t, fallback = 'Item') {
+export function typeItemLabel(cat, t, fallback = t('organise.default_type.group')) {
   if (!cat) return fallback;
   if (cat.item_label_key) return t(`organise.default_type.${cat.item_label_key}`);
   return cat.item_label || fallback;
