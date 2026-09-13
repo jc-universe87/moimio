@@ -93,3 +93,6 @@ tmp/
 # Local Claude Code instructions. Kept untracked on purpose; delete this
 # line deliberately if the file is ever meant to be committed.
 CLAUDE.md
+
+# local PDF render checks (never commit — contains participant PII)
+.pdfcheck/

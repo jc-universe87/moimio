@@ -460,3 +460,59 @@ beyond which manual reprovisioning becomes painful.
 The next CE zip renames the inner wrapper folder from `moimio-ce/` to
 `moimio/`, removing the scratch-copy step in the CE pipeline. When the rename
 happens, the README Quick start gains the unpack step for archive recipients.
+
+---
+
+## PDF-1 — Detailed roster gender column is narrower than its header
+
+**Status:** Open. Pre-existing; measured during v1.0.4g ship.
+
+`render_detailed` allots 10mm (28.35pt) to the gender column. At
+7.5pt bold, two headers overrun it:
+
+| Locale | Header | Fit |
+|---|---|---|
+| EN | `GENDER` | overruns 2.605pt |
+| DE | `GESCHL.` | overruns 3.362pt |
+| FR | `GENRE` | 3.110pt clear |
+| ES / PT-BR | `GÉN.` / `GÊN.` | 10.872pt clear |
+| KO | `성별` | 14.540pt clear |
+
+German has overrun since before v1.0.4g and is unchanged by it.
+English inherited the condition when `SEX` became `GENDER`, and
+overruns slightly less than German does. The headers touch the
+following column rather than overlapping its text, which is why this
+has gone unnoticed.
+
+Columns sum to 248mm against ≈267mm usable on landscape A4, so
+roughly 19mm is spare. Widening `sex` to 14mm is the obvious fix and
+costs nothing elsewhere. Shortening both headers is the alternative
+but loses the German abbreviation dot.
+
+Measured on page 1 of six rendered rosters; glyph extents taken from
+the content stream, since the merged header words defeat `pdftotext`.
+
+---
+
+## PDF-2 — `units.empty` is unreachable through the export API
+
+**Status:** Open. Surfaced during v1.0.4g ship.
+
+All three renderers print `units.empty` when a group type has no
+groups — `render_compact`, `render_detailed`, `render_signin`. None
+of those branches can be reached: the pre-flight in `api/export.py`
+returns 400 `errors.allocation.no_units` for exactly that case,
+before `generate_category_pdf` is called. `export.py` is its only
+caller.
+
+Five of the nine string values changed in v1.0.4g are therefore
+source-only and cannot be observed in the product. The strings are
+correct and should stay; if the pre-flight is ever relaxed they are
+already right.
+
+The v1.0.4g `CHANGELOG` entry describes this message as the last
+place the old vocabulary survived. That is true of the source, not of
+anything a user sees.
+
+Decide one of: relax the pre-flight and let the renderers speak, or
+delete the three branches and the six strings.
