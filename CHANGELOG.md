@@ -8,6 +8,20 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4i] — 2026-09-13
+Groundwork for keeping a participant out of one group type. Backend only;
+nothing changes on screen in this release.
+
+### Added
+
+- **Exclusions are stored and reported.** A new table records which
+  participants an organiser has excluded from a group type, with
+  endpoints to add, remove and list them under the existing group type
+  routes. Each add or remove writes a history entry (`exclude` /
+  `include`). The group type list carries `excluded_count`. The
+  allocation engine does not read exclusions yet, and no screen shows
+  them.
+
 ## [1.0.4h] — 2026-09-13
 The group type editor is clearer about what each field is for, and the
 warning shown before a group type is deleted says plainly what goes with

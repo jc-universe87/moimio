@@ -19,6 +19,7 @@ from app.services.allocation_service import (
     create_unit, list_units, get_unit, delete_unit, update_unit,
     assign_participant, move_participant, unassign_participant,
     get_allocations_by_category, get_all_allocations,
+    list_excluded_participant_ids, add_exclusion, remove_exclusion,
 )
 
 logger = get_logger(__name__)
@@ -391,6 +392,71 @@ async def api_commit_proposal(
     )
     await _publish_organise_change(event_id, "proposal_committed")
     return result
+
+
+# ─── v1.0.4i: exclusions ───
+#
+# Keep a participant out of one group type. Same auth as the other
+# category-level writes above (event admin + writable event); the read
+# matches api_list_units. The engine does not read exclusions yet.
+
+class ExclusionRequest(BaseModel):
+    participant_id: uuid.UUID
+
+
+@router.get("/allocation-categories/{category_id}/exclusions/")
+async def api_list_exclusions(
+    event_id: uuid.UUID,
+    category_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Participant ids excluded from this group type, as strings."""
+    ids = await list_excluded_participant_ids(db, category_id)
+    return {"excluded_ids": [str(pid) for pid in ids]}
+
+
+@router.post("/allocation-categories/{category_id}/exclusions/", status_code=201)
+async def api_add_exclusion(
+    event_id: uuid.UUID,
+    category_id: uuid.UUID,
+    data: ExclusionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_event_admin_dep()),
+):
+    await ensure_event_writable(db, event_id, current_user)
+    row = await add_exclusion(
+        db, category_id, data.participant_id, actor_user_id=current_user.id
+    )
+    await _publish_organise_change(
+        event_id, "participant_excluded",
+        category_id=str(category_id), participant_id=str(data.participant_id),
+    )
+    return {
+        "id": str(row.id),
+        "category_id": str(row.allocation_category_id),
+        "participant_id": str(row.participant_id),
+    }
+
+
+@router.delete("/allocation-categories/{category_id}/exclusions/{participant_id}", status_code=204)
+async def api_remove_exclusion(
+    event_id: uuid.UUID,
+    category_id: uuid.UUID,
+    participant_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_event_admin_dep()),
+):
+    """Lifting an exclusion that does not exist is a no-op, not a 404:
+    the state the caller asked for already holds."""
+    await ensure_event_writable(db, event_id, current_user)
+    await remove_exclusion(
+        db, category_id, participant_id, actor_user_id=current_user.id
+    )
+    await _publish_organise_change(
+        event_id, "participant_included",
+        category_id=str(category_id), participant_id=str(participant_id),
+    )
 
 
 # ─── Units ───

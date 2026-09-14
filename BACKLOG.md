@@ -516,3 +516,38 @@ anything a user sees.
 
 Decide one of: relax the pre-flight and let the renderers speak, or
 delete the three branches and the six strings.
+
+---
+
+## DASH-1 — Dashboard "unassigned" is derived by subtraction and can go negative
+
+**Status:** Open. Pre-existing; found in session 84 while reading the line for the exclusion work (v1.0.4i). Not fixed there.
+
+`OrganiseDashboard.jsx:470` computes the tile's unassigned figure as
+`totalParticipants - allocated_count`. `allocated_count` comes from
+`list_categories()` and counts allocation rows, not distinct people. In
+an overlapping group type one participant placed in several units is
+counted once per unit, so the subtraction under-reports the unassigned
+and, once the row count passes the participant count, goes negative.
+
+The distinct figure already exists on the backend: `api/stats.py`
+computes `participants_placed` per category from the by-category payload.
+Either expose a distinct count from `list_categories()` or have the tile
+read the stats payload. File only; no change in v1.0.4i.
+
+---
+
+## DASH-2 — Create and update category return the raw ORM row, so a tile fed from it shows blanks
+
+**Status:** Open. Pre-existing; found in session 84 while reading the endpoints for the exclusion work (v1.0.4i). Not fixed there.
+
+`api_create_category` and `api_update_category` return the
+`AllocationCategory` ORM object as the response. That shape omits the
+aggregates `list_categories()` adds (`unit_count`, `allocated_count`,
+`total_capacity`, and from v1.0.4i `excluded_count`). A tile rendered
+from that response shows blanks for those fields until the next list
+refetch.
+
+Fix is to have both endpoints answer with the matching entry from
+`list_categories()` (one extra query) or with the same dict shape built
+for the single row. File only; no change in v1.0.4i.

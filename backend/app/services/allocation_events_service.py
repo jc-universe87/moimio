@@ -47,7 +47,7 @@ async def record_allocation_event(
     *,
     event_id: uuid.UUID,
     participant_id: uuid.UUID,
-    unit_id: uuid.UUID,
+    unit_id: uuid.UUID | None,  # v1.0.4i: None for exclude / include, which involve no unit
     category_id: uuid.UUID,
     unit_name_snapshot: str,
     category_name_snapshot: str,

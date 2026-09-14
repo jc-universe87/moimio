@@ -9,6 +9,7 @@ from app.models.note import Note  # noqa: F401
 from app.models.allocation_category import AllocationCategory  # noqa: F401
 from app.models.allocation_unit import AllocationUnit  # noqa: F401
 from app.models.allocation import Allocation  # noqa: F401
+from app.models.allocation_category_exclusion import AllocationCategoryExclusion  # noqa: F401
 from app.models.allocation_event import (  # noqa: F401
     AllocationEvent,
     AllocationEventType,

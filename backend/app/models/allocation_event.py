@@ -65,8 +65,13 @@ from app.core.database import Base
 class AllocationEventType:
     ASSIGN = "assign"
     UNASSIGN = "unassign"
+    # v1.0.4i: organiser excluded a participant from a group type, or
+    # lifted that exclusion. No unit is involved, so rows carry
+    # unit_id NULL and an empty unit_name_snapshot.
+    EXCLUDE = "exclude"
+    INCLUDE = "include"
 
-    ALL = frozenset({ASSIGN, UNASSIGN})
+    ALL = frozenset({ASSIGN, UNASSIGN, EXCLUDE, INCLUDE})
 
 
 class AllocationEventSource:

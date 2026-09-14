@@ -21,6 +21,7 @@ from app.core.logging import get_logger
 from app.models.allocation_category import AllocationCategory
 from app.models.allocation_unit import AllocationUnit
 from app.models.allocation import Allocation
+from app.models.allocation_category_exclusion import AllocationCategoryExclusion
 from app.models.allocation_event import AllocationEventSource, AllocationEventType
 from app.models.participant import Participant
 from app.services.allocation_events_service import record_allocation_event
@@ -45,6 +46,7 @@ async def list_categories(db: AsyncSession, event_id: uuid.UUID) -> list[dict]:
         1. Fetch categories.
         2. One aggregate for unit stats (unit_count, total_capacity).
         3. One aggregate for allocation counts.
+        4. One aggregate for exclusion counts (v1.0.4i).
 
     Why the two aggregates are kept SEPARATE (and not folded into a single
     join): joining AllocationUnit to Allocation would multiply each unit
@@ -93,6 +95,19 @@ async def list_categories(db: AsyncSession, event_id: uuid.UUID) -> list[dict]:
     )
     alloc_counts = {row.category_id: row.allocated_count for row in allocs_q.all()}
 
+    # Aggregate 3 (v1.0.4i): excluded participants per category. Kept as
+    # its own query for the same reason as the other two: joining it in
+    # would multiply rows.
+    excl_q = await db.execute(
+        select(
+            AllocationCategoryExclusion.allocation_category_id,
+            func.count(AllocationCategoryExclusion.id).label("excluded_count"),
+        )
+        .where(AllocationCategoryExclusion.allocation_category_id.in_(cat_ids))
+        .group_by(AllocationCategoryExclusion.allocation_category_id)
+    )
+    excl_counts = {row.allocation_category_id: row.excluded_count for row in excl_q.all()}
+
     out = []
     for cat in cats:
         us = units_stats.get(cat.id)
@@ -112,6 +127,7 @@ async def list_categories(db: AsyncSession, event_id: uuid.UUID) -> list[dict]:
             "sort_order": cat.sort_order, "is_default": cat.is_default,
             "confirmed": cat.confirmed,
             "unit_count": unit_count, "allocated_count": allocated,
+            "excluded_count": excl_counts.get(cat.id, 0),
             "total_capacity": total_capacity if has_total else None,
             # v1.0.4: present means "this name is ours, render it translated".
             "name_key": cat.name_key,
@@ -241,6 +257,115 @@ async def create_default_categories(db: AsyncSession, event_id: uuid.UUID):
         name_key="small_groups", item_label_key="group",
         has_capacity=True, has_gender_restriction=True, sort_order=1, is_default=True,  # v1.0.3: was False/False — the cause of the silent capacity-1 cap
     )
+
+
+# ─── v1.0.4i: exclusions ───
+#
+# An exclusion keeps one participant out of one group type. This release
+# stores and reports them; the engine does not read them yet, and adding
+# one does not touch any allocation the participant already holds.
+
+async def list_excluded_participant_ids(db: AsyncSession, category_id: uuid.UUID) -> list[uuid.UUID]:
+    """Participant ids excluded from this category, oldest exclusion first."""
+    result = await db.execute(
+        select(AllocationCategoryExclusion.participant_id)
+        .where(AllocationCategoryExclusion.allocation_category_id == category_id)
+        .order_by(AllocationCategoryExclusion.created_at, AllocationCategoryExclusion.id)
+    )
+    return list(result.scalars().all())
+
+
+async def _get_exclusion(
+    db: AsyncSession, category_id: uuid.UUID, participant_id: uuid.UUID
+) -> AllocationCategoryExclusion | None:
+    result = await db.execute(
+        select(AllocationCategoryExclusion).where(
+            AllocationCategoryExclusion.allocation_category_id == category_id,
+            AllocationCategoryExclusion.participant_id == participant_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def add_exclusion(
+    db: AsyncSession,
+    category_id: uuid.UUID,
+    participant_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None = None,
+) -> AllocationCategoryExclusion:
+    """Exclude a participant from a category. Emits an `exclude` event.
+
+    Idempotent: excluding someone who is already excluded returns the
+    existing row and writes no second history entry, so the unique
+    constraint is never hit from this path. The participant must belong
+    to the category's event; otherwise they are reported as not found.
+    """
+    cat = await get_category(db, category_id)
+    if not cat:
+        raise MoimioAppError("errors.allocation.group_type_not_found", status_code=404)
+    participant = await db.execute(select(Participant).where(Participant.id == participant_id))
+    participant = participant.scalar_one_or_none()
+    if not participant or participant.event_id != cat.event_id:
+        raise MoimioAppError("errors.participant.not_found", status_code=404)
+
+    existing = await _get_exclusion(db, category_id, participant_id)
+    if existing:
+        return existing
+
+    row = AllocationCategoryExclusion(
+        allocation_category_id=category_id,
+        participant_id=participant_id,
+        created_by=actor_user_id,
+    )
+    db.add(row)
+    # No unit is involved: unit_id NULL, empty unit name snapshot.
+    await record_allocation_event(
+        db,
+        event_id=cat.event_id,
+        participant_id=participant_id,
+        unit_id=None,
+        category_id=cat.id,
+        unit_name_snapshot="",
+        category_name_snapshot=cat.name,
+        event_type=AllocationEventType.EXCLUDE,
+        source=AllocationEventSource.MANUAL,
+        actor_user_id=actor_user_id,
+    )
+    await db.flush()
+    await db.refresh(row)
+    return row
+
+
+async def remove_exclusion(
+    db: AsyncSession,
+    category_id: uuid.UUID,
+    participant_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None = None,
+) -> bool:
+    """Lift an exclusion. Emits an `include` event. Returns False, and
+    writes nothing, when there was no exclusion to lift."""
+    cat = await get_category(db, category_id)
+    if not cat:
+        raise MoimioAppError("errors.allocation.group_type_not_found", status_code=404)
+    existing = await _get_exclusion(db, category_id, participant_id)
+    if not existing:
+        return False
+
+    await record_allocation_event(
+        db,
+        event_id=cat.event_id,
+        participant_id=participant_id,
+        unit_id=None,
+        category_id=cat.id,
+        unit_name_snapshot="",
+        category_name_snapshot=cat.name,
+        event_type=AllocationEventType.INCLUDE,
+        source=AllocationEventSource.MANUAL,
+        actor_user_id=actor_user_id,
+    )
+    await db.delete(existing)
+    await db.flush()
+    return True
 
 
 # ─── Units ───
