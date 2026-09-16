@@ -116,6 +116,7 @@ from app.models.participant import Participant, RegistrationStatus
 from app.models.allocation_unit import AllocationUnit
 from app.models.allocation_category import AllocationCategory
 from app.models.allocation import Allocation
+from app.models.allocation_category_exclusion import AllocationCategoryExclusion
 from app.models.allocation_event import AllocationEventSource, AllocationEventType
 from app.models.mark import MarkAssignment
 from app.services.allocation_events_service import record_allocation_event
@@ -292,12 +293,36 @@ async def run_engine(
         .order_by(Participant.created_at, Participant.id)
     )
     participants = list(parts_q.scalars().all())
+
+    # v1.0.4j: exclusion overrides every other allocation rule. Excluded
+    # participants leave the pool here, before anything downstream reads
+    # it: before participant_by_id_all (the top-up eviction path re-adds
+    # violators from that map, so an excluded person must not be in it),
+    # before clusters, marks, every placement pass, the equalise sweep,
+    # backfill and the stats. `excluded_pids` is also honoured by the two
+    # seeding loops below, which read Allocation rows straight from the
+    # database. `excluded_count` is the number actually removed from the
+    # eligible list, so `total + excluded` reconciles with what was loaded.
+    excl_q = await db.execute(
+        select(AllocationCategoryExclusion.participant_id).where(
+            AllocationCategoryExclusion.allocation_category_id == category_id
+        )
+    )
+    excluded_pids: set[str] = {str(pid) for pid in excl_q.scalars().all()}
+    if excluded_pids:
+        before = len(participants)
+        participants = [p for p in participants if str(p.id) not in excluded_pids]
+        excluded_count = before - len(participants)
+    else:
+        excluded_count = 0
+
     # v1.0.1e-15: full id→participant map (before any top_up/kept filtering)
     # so evicted violators can be looked up and re-added to the pool below.
+    # Built from the exclusion-filtered list on purpose (v1.0.4j).
     participant_by_id_all = {str(p.id): p for p in participants}
 
     if not participants:
-        return _empty_return(units, mode, run_id)
+        return _empty_return(units, mode, run_id, excluded_count)
 
     cat_id_str = str(category_id)
 
@@ -389,6 +414,12 @@ async def run_engine(
         for existing in existing_q.scalars().all():
             uid = str(existing.unit_id)
             pid = str(existing.participant_id)
+            # v1.0.4j: never seed an excluded occupant, kept unit or not.
+            # add_exclusion vacates their units, so normally there is
+            # nothing here to skip; this guard holds the principle even
+            # if a row reached the table by some other route.
+            if pid in excluded_pids:
+                continue
             u = _unit_map.get(uid)
             if u is not None and not _seed_ok(u, pid):
                 continue  # violator: don't seed, leave in pool for re-placement
@@ -397,7 +428,9 @@ async def run_engine(
             already_allocated_pids.add(pid)
         participants = [p for p in participants if str(p.id) not in already_allocated_pids]
         if not participants:
-            return _everyone_already_allocated_return(unit_slots, already_allocated_pids, mode, run_id)
+            return _everyone_already_allocated_return(
+                unit_slots, already_allocated_pids, mode, run_id, excluded_count
+            )
 
     # v1.0.1e: kept ("keep as-is") units are frozen. Regardless of mode, seed
     # their existing occupants, take those occupants out of the pool so they
@@ -417,6 +450,8 @@ async def run_engine(
         for existing in kept_existing_q.scalars().all():
             uid = str(existing.unit_id)
             pid = str(existing.participant_id)
+            if pid in excluded_pids:
+                continue  # v1.0.4j: exclusion overrides the keep-as-is lock
             if uid in unit_slots and pid not in unit_slots[uid]:
                 unit_slots[uid].append(pid)
             already_allocated_pids.add(pid)
@@ -867,6 +902,9 @@ async def run_engine(
             "mark_clusters": mark_clusters_count,
             "mode": mode,
             "already_allocated": len(already_allocated_pids),
+            # v1.0.4j: excluded participants are outside `total`; this is
+            # their count, so total + excluded = eligible pool loaded.
+            "excluded": excluded_count,
             # v0.74: strict gender means 0 fallback placements; preserved
             # for backward-compat with stats consumers.
             "gender_unknown_placements": 0,
@@ -902,8 +940,14 @@ def _interleave(*pools):
     return out
 
 
-def _empty_return(units, mode, run_id):
-    """Stats dict shape for the no-participants early return."""
+def _empty_return(units, mode, run_id, excluded_count=0):
+    """Stats dict shape for the no-participants early return.
+
+    v1.0.4j: `excluded_count` is real here, not always zero. The exclusion
+    pre-filter runs before this exit, so an event whose every eligible
+    participant is excluded from the category lands here with total 0 and
+    excluded N.
+    """
     return {
         "proposed": {str(u.id): [] for u in units},
         "unplaced": [],
@@ -912,6 +956,7 @@ def _empty_return(units, mode, run_id):
             "clusters_total": 0, "clusters_kept_whole": 0,
             "clusters_split": 0, "mark_clusters": 0,
             "mode": mode, "already_allocated": 0,
+            "excluded": excluded_count,
             "gender_unknown_placements": 0,
             "gender_unknown_placement_ids": [],
         },
@@ -921,8 +966,14 @@ def _empty_return(units, mode, run_id):
     }
 
 
-def _everyone_already_allocated_return(unit_slots, already_allocated_pids, mode, run_id):
-    """Stats dict shape for the top_up everyone-allocated early return."""
+def _everyone_already_allocated_return(
+    unit_slots, already_allocated_pids, mode, run_id, excluded_count=0
+):
+    """Stats dict shape for the top_up everyone-allocated early return.
+
+    v1.0.4j: `excluded_count` carries the pre-filter's count through so the
+    figure does not vanish on the one exit a top-up user is most likely to
+    hit."""
     return {
         "proposed": unit_slots,
         "unplaced": [],
@@ -936,6 +987,7 @@ def _everyone_already_allocated_return(unit_slots, already_allocated_pids, mode,
             "mark_clusters": 0,
             "mode": mode,
             "already_allocated": len(already_allocated_pids),
+            "excluded": excluded_count,
             "gender_unknown_placements": 0,
             "gender_unknown_placement_ids": [],
         },
@@ -1512,8 +1564,14 @@ async def clear_category_allocations(
     actor_user_id: uuid.UUID | None = None,
     source: str = AllocationEventSource.CLEAR_CATEGORY,
     skip_kept: bool = False,
+    action_id: uuid.UUID | None = None,
 ) -> int:
     """Delete all allocations in a category. Returns count deleted.
+
+    v1.0.4j: every unassign row written here shares one `action_id`.
+    `commit_proposal` passes its own so the clear and the fill read as
+    one action; the manual clear endpoint passes nothing and one is
+    minted here for the burst.
 
     v0.60a: emits an `unassign` AllocationEvent per deleted row. The
     `source` parameter distinguishes the two callers:
@@ -1554,6 +1612,7 @@ async def clear_category_allocations(
     )
     rows = result.all()
     count = len(rows)
+    action_id = action_id or uuid.uuid4()
     for alloc, unit in rows:
         await record_allocation_event(
             db,
@@ -1566,6 +1625,7 @@ async def clear_category_allocations(
             event_type=AllocationEventType.UNASSIGN,
             source=source,
             actor_user_id=actor_user_id,
+            action_id=action_id,
         )
         await db.delete(alloc)
     await db.flush()
@@ -1601,6 +1661,14 @@ async def commit_proposal(
     matches pre-v0.60c behaviour exactly. The clear-pass unassigns
     don't carry meta; they're correlated to the assign burst via
     adjacent occurred_at timestamps and shared source=engine_commit.
+
+    v1.0.4j: every row this commit writes (clear-pass unassigns, assigns,
+    and any include rows) shares one `action_id`. Placing an excluded
+    participant is not refused: the engine itself never proposes one,
+    but the organiser may have dragged them into the proposal on the
+    review screen, and that override clears the exclusion for this
+    category. Only participants actually written are reconciled; pids
+    inside kept units are skipped by the guard below and left alone.
     """
     # Pre-fetch category + all target units for name snapshots. We
     # load every unit in the category (not just targets in the
@@ -1623,6 +1691,7 @@ async def commit_proposal(
     # Clear existing allocations — each emits an unassign event with
     # source=engine_commit so the engine commit reads as a paired
     # "clear + fill" in the timeline.
+    action_id = uuid.uuid4()
     cleared = await clear_category_allocations(
         db,
         event_id,
@@ -1630,9 +1699,17 @@ async def commit_proposal(
         actor_user_id=actor_user_id,
         source=AllocationEventSource.ENGINE_COMMIT,
         skip_kept=True,
+        action_id=action_id,
     )
 
     reasons = placement_reasons or {}
+
+    # v1.0.4j: load the category's exclusions once so the loop only calls
+    # remove_exclusion (two queries each) for pids that actually have one.
+    from app.services.allocation_service import list_excluded_participant_ids, remove_exclusion
+    still_excluded: set[str] = {
+        str(pid) for pid in await list_excluded_participant_ids(db, category_id)
+    }
 
     created = 0
     for unit_id_str, participant_ids in proposed.items():
@@ -1647,6 +1724,17 @@ async def commit_proposal(
         unit_name = unit.name if unit else "[unknown unit]"
         for pid_str in participant_ids:
             pid = uuid.UUID(pid_str)
+            # v1.0.4j: a written placement overrides the exclusion. Lift
+            # it before the assign row so the history reads in order.
+            # Discard from the set so an overlapping proposal that
+            # places one pid in several units lifts it once.
+            if pid_str in still_excluded:
+                await remove_exclusion(
+                    db, category_id, pid, actor_user_id,
+                    source=AllocationEventSource.ENGINE_COMMIT,
+                    action_id=action_id,
+                )
+                still_excluded.discard(pid_str)
             a = Allocation(
                 event_id=event_id,
                 unit_id=unit_id,
@@ -1679,6 +1767,7 @@ async def commit_proposal(
                 source=AllocationEventSource.ENGINE_COMMIT,
                 actor_user_id=actor_user_id,
                 meta=meta,
+                action_id=action_id,
             )
             created += 1
     # v1.0.0y: emit event.allocated — an engine allocation run was just

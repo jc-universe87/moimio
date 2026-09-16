@@ -551,3 +551,44 @@ refetch.
 Fix is to have both endpoints answer with the matching entry from
 `list_categories()` (one extra query) or with the same dict shape built
 for the single row. File only; no change in v1.0.4i.
+
+---
+
+## BACKUP-1 — Backup and restore do not know exclusions exist
+
+**Status:** Open. Found in session 85 phase 1 while tracing every write path to `Allocation` for the exclusion work (v1.0.4j). Deliberately not fixed there. Gates v1.0.5.
+
+The word "exclusion" does not appear in `backup_service.py`.
+`export_event_zip` writes no `allocation_category_exclusions.json`, and
+`confirm_restore` restores none. Export an event, restore it, and every
+exclusion is silently gone.
+
+The v1.0.4j invariant (no route places an excluded participant) still
+holds after a restore: with no exclusions restored there is nothing to
+violate, which is why j needs no change to `backup_service.py`. But this
+is silent data loss against the stated data-portability promise, and it
+must be closed before the feature ships publicly as v1.0.5.
+
+Its own small release after v1.0.4k, once the export format change can
+be assessed properly. Note for that release: `preview_restore` surfaces
+per-table counts and may carry user-facing strings. That was queued for
+checking when the phase 1 session dropped and is unverified.
+
+---
+
+## K-1 — Excluding out of a keep-as-is unit strands the vacated place
+
+**Status:** Open. Found in session 85 phase 1 while specifying the keep-as-is override for the exclusion work (v1.0.4j). Correct behaviour for j; needs surfacing in v1.0.4k.
+
+From v1.0.4j, exclusion overrides a keep-as-is lock: an excluded
+participant comes out of a locked unit like any other. The unit's
+`is_kept` flag is left unchanged on purpose, so the place they vacated
+stays locked and the engine will not refill it until the organiser
+unlocks the unit.
+
+Nothing on screen says this has happened. An organiser who excludes
+someone from a locked room sees the room keep its lock and a bed sit
+empty across engine runs, with no hint that the two are connected. The
+v1.0.4k exclusion UI should show it: at minimum, mark the unit as locked
+with a free place after an exclusion-driven removal, or prompt to
+unlock it.

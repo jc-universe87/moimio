@@ -55,6 +55,7 @@ async def record_allocation_event(
     source: str,
     actor_user_id: uuid.UUID | None = None,
     meta: dict | None = None,
+    action_id: uuid.UUID | None = None,  # v1.0.4j: shared by every row one action writes
 ) -> AllocationEvent:
     """Write a single audit row. Does NOT flush.
 
@@ -62,6 +63,11 @@ async def record_allocation_event(
     `source` must be one of AllocationEventSource.ALL.
     Invalid values raise ValueError — callers should never construct
     arbitrary labels.
+
+    v1.0.4j: `action_id` groups the rows one action wrote (an exclusion
+    that vacates three units writes four rows). Callers that write a
+    burst mint one uuid and pass it to every row; existing callers
+    that pass nothing write NULL, which readers treat as ungrouped.
     """
     if event_type not in AllocationEventType.ALL:
         raise ValueError(
@@ -85,6 +91,7 @@ async def record_allocation_event(
         unit_name_snapshot=unit_name_snapshot,
         category_name_snapshot=category_name_snapshot,
         meta=meta,
+        action_id=action_id,
     )
     db.add(ev)
     return ev

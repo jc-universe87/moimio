@@ -8,6 +8,48 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4j] — 2026-09-16
+Exclusions now take effect. Backend only; nothing changes on screen in
+this release, and there is still no way to create an exclusion from the
+app until the next one.
+
+### Changed
+
+- **Exclusion overrides every other allocation rule.** An excluded
+  participant is never placed in that group type by the engine, in
+  either replace or top-up mode, and is not counted when an engine run
+  seeds already placed people from existing allocations.
+
+- **Excluding a participant vacates every unit they hold in that group
+  type.** Only that group type: their places in other group types are
+  untouched. Each removal writes its own `unassign` history entry with
+  the new source `participant_excluded`, so the history does not present
+  these as manual drags. If the group type was confirmed, it re-opens.
+
+- **Exclusion overrides a keep-as-is lock.** A participant excluded from
+  a group type comes out of a locked unit like any other. The unit's
+  lock stays on, so the engine will not refill that place until the
+  organiser unlocks it.
+
+- **Placing an excluded participant lifts the exclusion.** Assigning or
+  moving them by hand, or committing an engine proposal that places
+  them, clears the exclusion for that group type and writes an `include`
+  history entry, rather than refusing the placement. Removing an
+  exclusion by itself does not restore a previous placement; the
+  participant simply becomes eligible again.
+
+- **Engine statistics show excluded participants separately.** Excluded
+  participants are left out of `total` and reported in a new `excluded`
+  figure beside it, so the numbers still add up.
+
+### Added
+
+- **History entries from one action are linked.** A new `action_id`
+  column on allocation history rows carries one value per action, shared
+  by every row that action writes, so a later release can show an
+  exclusion and the removals it caused as one entry. Existing rows are
+  left unlinked. Migration `104j00000`.
+
 ## [1.0.4i] — 2026-09-13
 Groundwork for keeping a participant out of one group type. Backend only;
 nothing changes on screen in this release.

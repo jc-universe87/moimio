@@ -102,7 +102,17 @@ class AllocationEventSource:
     # no longer occupy a spot anywhere.
     PARTICIPANT_CANCELLED = "participant_cancelled"
 
-    ALL = frozenset({MANUAL, MANUAL_CASCADE, CLEAR_CATEGORY, ENGINE_COMMIT, PARTICIPANT_CANCELLED})
+    # v1.0.4j: organiser excluded a participant from a group type while
+    # they held one or more units in it. Each vacated unit emits an
+    # unassign event with this source, so the audit trail reads them as
+    # the consequence of the exclusion rather than as manual drags.
+    # Mirrors PARTICIPANT_CANCELLED, which exists for the same reason.
+    PARTICIPANT_EXCLUDED = "participant_excluded"
+
+    ALL = frozenset({
+        MANUAL, MANUAL_CASCADE, CLEAR_CATEGORY, ENGINE_COMMIT,
+        PARTICIPANT_CANCELLED, PARTICIPANT_EXCLUDED,
+    })
 
 
 # ─── ORM model ────────────────────────────────────────────────────────
@@ -173,6 +183,20 @@ class AllocationEvent(Base):
     # unit at the time it fires; category name follows from the unit.
     unit_name_snapshot: Mapped[str] = mapped_column(String(100), nullable=False)
     category_name_snapshot: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    # v1.0.4j: groups the rows one action wrote. Excluding a participant
+    # who holds three units writes one exclude row plus three unassign
+    # rows; all four share this value so the history can collapse them
+    # on screen. Single-row actions get one too, for consistency. Plain
+    # UUID, no FK (there is no actions table), no index (a handful of
+    # rows per action and nothing queries on it yet). Not a timestamp
+    # fallback: occurred_at uses clock_timestamp(), which guarantees
+    # rows from one action have DIFFERENT timestamps (see below), so
+    # this column is the only grouping mechanism. Rows written before
+    # v1.0.4j keep NULL, meaning "ungrouped, render individually".
+    action_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
     # Reserved for engine reasoning (v0.60d+). Examples:
     #   {"reason": "preference_match", "matched_with": ["<uuid>"]}

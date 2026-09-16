@@ -261,9 +261,22 @@ async def create_default_categories(db: AsyncSession, event_id: uuid.UUID):
 
 # ─── v1.0.4i: exclusions ───
 #
-# An exclusion keeps one participant out of one group type. This release
-# stores and reports them; the engine does not read them yet, and adding
-# one does not touch any allocation the participant already holds.
+# An exclusion keeps one participant out of one group type. v1.0.4i stored
+# and reported them. v1.0.4j makes them take effect: exclusion overrides
+# every other allocation rule. The other rules answer WHERE a person goes
+# (capacity, gender, marks, keep-as-is locks, exclusive cascades, the
+# confirmed flag); exclusion answers WHETHER they are allocated in that
+# group type at all, and that question settles first. Concretely:
+#
+#   - the engine pre-filters excluded participants out of its pool and
+#     out of its top-up / kept-unit seeding (engine_service.run_engine)
+#   - adding an exclusion removes the participant from every unit they
+#     hold in that group type, kept units included (add_exclusion)
+#   - placing an excluded participant by hand or by engine commit clears
+#     the exclusion rather than being blocked (assign_participant,
+#     engine_service.commit_proposal)
+#   - lifting an exclusion makes the person eligible again and nothing
+#     more; it does not restore a previous placement
 
 async def list_excluded_participant_ids(db: AsyncSession, category_id: uuid.UUID) -> list[uuid.UUID]:
     """Participant ids excluded from this category, oldest exclusion first."""
@@ -299,6 +312,22 @@ async def add_exclusion(
     existing row and writes no second history entry, so the unique
     constraint is never hit from this path. The participant must belong
     to the category's event; otherwise they are reported as not found.
+
+    v1.0.4j: also removes the participant from EVERY unit they hold in
+    this category (overlapping categories allow several) and from this
+    category ONLY. Each removal goes through `unassign_participant`, so
+    it writes its own audit row (source participant_excluded) with the
+    unit name snapshotted, and re-opens the category if it was
+    confirmed. All rows written here share one `action_id`.
+
+    Deliberately NOT `unassign_all_for_participant`: that is the
+    participant-cancellation path and strips every category.
+
+    Keep-as-is locks are overridden: an excluded person comes out of a
+    locked unit too. `unassign_participant` does not check `is_kept`,
+    and no guard is added here on purpose. The unit's lock itself stays
+    on, so the engine will not refill the vacated place until the
+    organiser unlocks the unit.
     """
     cat = await get_category(db, category_id)
     if not cat:
@@ -312,6 +341,7 @@ async def add_exclusion(
     if existing:
         return existing
 
+    action_id = uuid.uuid4()
     row = AllocationCategoryExclusion(
         allocation_category_id=category_id,
         participant_id=participant_id,
@@ -330,8 +360,29 @@ async def add_exclusion(
         event_type=AllocationEventType.EXCLUDE,
         source=AllocationEventSource.MANUAL,
         actor_user_id=actor_user_id,
+        action_id=action_id,
     )
     await db.flush()
+
+    # v1.0.4j: vacate every unit the participant holds in THIS category.
+    # Materialise the unit ids first; unassign_participant deletes rows
+    # from the table this query reads.
+    held_q = await db.execute(
+        select(Allocation.unit_id)
+        .join(AllocationUnit, Allocation.unit_id == AllocationUnit.id)
+        .where(
+            Allocation.participant_id == participant_id,
+            AllocationUnit.category_id == category_id,
+        )
+        .order_by(AllocationUnit.sort_order, AllocationUnit.created_at)
+    )
+    for held_unit_id in list(held_q.scalars().all()):
+        await unassign_participant(
+            db, held_unit_id, participant_id, actor_user_id,
+            source=AllocationEventSource.PARTICIPANT_EXCLUDED,
+            action_id=action_id,
+        )
+
     await db.refresh(row)
     return row
 
@@ -341,9 +392,21 @@ async def remove_exclusion(
     category_id: uuid.UUID,
     participant_id: uuid.UUID,
     actor_user_id: uuid.UUID | None = None,
+    source: str = AllocationEventSource.MANUAL,
+    action_id: uuid.UUID | None = None,
 ) -> bool:
     """Lift an exclusion. Emits an `include` event. Returns False, and
-    writes nothing, when there was no exclusion to lift."""
+    writes nothing, when there was no exclusion to lift.
+
+    Lifting makes the participant eligible again and nothing more; the
+    next engine run decides where they go. No previous placement is
+    restored.
+
+    v1.0.4j: `source` and `action_id` let a placement that overrides an
+    exclusion (assign_participant, engine_service.commit_proposal) file
+    the include row under its own source and action. Called directly,
+    the defaults mint a fresh action_id for the single row.
+    """
     cat = await get_category(db, category_id)
     if not cat:
         raise MoimioAppError("errors.allocation.group_type_not_found", status_code=404)
@@ -360,8 +423,9 @@ async def remove_exclusion(
         unit_name_snapshot="",
         category_name_snapshot=cat.name,
         event_type=AllocationEventType.INCLUDE,
-        source=AllocationEventSource.MANUAL,
+        source=source,
         actor_user_id=actor_user_id,
+        action_id=action_id or uuid.uuid4(),
     )
     await db.delete(existing)
     await db.flush()
@@ -466,7 +530,7 @@ async def assign_participant(
     unit_id: uuid.UUID,
     participant_id: uuid.UUID,
     actor_user_id: uuid.UUID | None = None,
-) -> Allocation:
+) -> tuple[Allocation, bool]:
     """Assign a participant to a unit, respecting rules.
 
     v0.60a: emits an `assign` AllocationEvent on success. For exclusive
@@ -477,6 +541,15 @@ async def assign_participant(
 
     ``actor_user_id`` is threaded into the audit row. Pass ``None``
     only from callers without user context (tests, batch jobs).
+
+    v1.0.4j: returns ``(allocation, exclusion_cleared)``. A manual
+    placement is not blocked by an exclusion; it overrides it, and the
+    exclusion for this category is lifted (an `include` row is written
+    under the same action_id as the assign). The second element says
+    whether that happened, so the caller can warn the organiser that a
+    drag-in overrode an exclusion. Note the API's post-write warning
+    (`compute_manual_move_warning`) runs after the exclusion is already
+    gone, so this return value is the only place the fact survives.
     """
     unit = await get_unit(db, unit_id)
     if not unit:
@@ -496,6 +569,10 @@ async def assign_participant(
     participant = participant.scalar_one_or_none()
     if not participant:
         raise MoimioAppError("errors.participant.not_found", status_code=404)
+
+    # v1.0.4j: one action_id for every row this call writes (cascade
+    # unassigns, the include if an exclusion is lifted, the assign).
+    action_id = uuid.uuid4()
 
     # Rule: exclusive category → remove from other units in same category.
     # v0.60a: for each cascaded deletion, emit an unassign audit event
@@ -524,6 +601,7 @@ async def assign_participant(
                 event_type=AllocationEventType.UNASSIGN,
                 source=AllocationEventSource.MANUAL_CASCADE,
                 actor_user_id=actor_user_id,
+                action_id=action_id,
             )
             await db.delete(old_alloc)
         await db.flush()
@@ -576,6 +654,16 @@ async def assign_participant(
     if dup.scalar_one_or_none():
         raise MoimioAppError("errors.allocation.already_assigned", status_code=409)
 
+    # v1.0.4j: placing an excluded participant overrides the exclusion.
+    # Lift it (writing the include row) before the assign row so the
+    # history reads in cause-and-effect order. False when there was
+    # nothing to lift, which is the common case.
+    exclusion_cleared = await remove_exclusion(
+        db, cat.id, participant_id, actor_user_id,
+        source=AllocationEventSource.MANUAL,
+        action_id=action_id,
+    )
+
     alloc = Allocation(event_id=event_id, participant_id=participant_id, unit_id=unit_id)
     db.add(alloc)
     # v0.60a: audit-log the assignment. Recorded in the same transaction
@@ -591,10 +679,11 @@ async def assign_participant(
         event_type=AllocationEventType.ASSIGN,
         source=AllocationEventSource.MANUAL,
         actor_user_id=actor_user_id,
+        action_id=action_id,
     )
     await db.flush()
     await db.refresh(alloc)
-    return alloc
+    return alloc, exclusion_cleared
 
 
 async def move_participant(
@@ -603,8 +692,11 @@ async def move_participant(
     to_unit_id: uuid.UUID,
     participant_id: uuid.UUID,
     actor_user_id: uuid.UUID | None = None,
-) -> Allocation:
-    """Move participant to a different unit (handles exclusive removal automatically)."""
+) -> tuple[Allocation, bool]:
+    """Move participant to a different unit (handles exclusive removal automatically).
+
+    v1.0.4j: same return shape as `assign_participant`, which it delegates
+    to: ``(allocation, exclusion_cleared)``."""
     return await assign_participant(db, event_id, to_unit_id, participant_id, actor_user_id)
 
 
@@ -613,6 +705,8 @@ async def unassign_participant(
     unit_id: uuid.UUID,
     participant_id: uuid.UUID,
     actor_user_id: uuid.UUID | None = None,
+    source: str = AllocationEventSource.MANUAL,
+    action_id: uuid.UUID | None = None,
 ) -> bool:
     """Remove a participant from a specific unit.
 
@@ -620,6 +714,16 @@ async def unassign_participant(
     successful deletion. Returns False (and emits no event) when the
     allocation didn't exist in the first place — a failed unassign is
     a no-op, not an audit-worthy action.
+
+    v1.0.4j: `source` and `action_id` follow the pattern of
+    `unassign_all_for_participant`, so `add_exclusion` can file the
+    removals it causes under source participant_excluded and its own
+    action_id. Called directly, the defaults keep the manual label and
+    mint a fresh action_id for the single row.
+
+    Does not check `is_kept` on purpose: a keep-as-is lock governs what
+    the engine may change, not what the organiser (or an exclusion, which
+    overrides every other rule) may remove.
     """
     result = await db.execute(
         select(Allocation).where(
@@ -653,8 +757,9 @@ async def unassign_participant(
         unit_name_snapshot=unit_name,
         category_name_snapshot=category_name,
         event_type=AllocationEventType.UNASSIGN,
-        source=AllocationEventSource.MANUAL,
+        source=source,
         actor_user_id=actor_user_id,
+        action_id=action_id or uuid.uuid4(),
     )
     await db.delete(alloc)
     await db.flush()
@@ -714,6 +819,8 @@ async def unassign_all_for_participant(
     if not allocations:
         return 0
 
+    # v1.0.4j: one cancellation, one action_id across every row it writes.
+    action_id = uuid.uuid4()
     removed = 0
     for alloc in allocations:
         unit = await get_unit(db, alloc.unit_id)
@@ -740,6 +847,7 @@ async def unassign_all_for_participant(
             event_type=AllocationEventType.UNASSIGN,
             source=source,
             actor_user_id=actor_user_id,
+            action_id=action_id,
         )
         await db.delete(alloc)
         removed += 1

@@ -398,7 +398,9 @@ async def api_commit_proposal(
 #
 # Keep a participant out of one group type. Same auth as the other
 # category-level writes above (event admin + writable event); the read
-# matches api_list_units. The engine does not read exclusions yet.
+# matches api_list_units. From v1.0.4j the exclusion takes effect: the
+# engine skips excluded participants and adding one vacates every unit
+# the participant holds in that group type (see allocation_service).
 
 class ExclusionRequest(BaseModel):
     participant_id: uuid.UUID
@@ -530,7 +532,10 @@ async def api_assign(
     if not unit:
         raise HTTPException(status_code=404, detail={"key": "errors.allocation.unit_not_found"})
     await _require_organise_write(db, current_user, event_id)
-    result = await assign_participant(
+    # v1.0.4j: the second element says whether this placement overrode
+    # an exclusion. Not surfaced yet; the warning for it, and the
+    # response field, arrive with the exclusion UI in a later release.
+    result, _exclusion_cleared = await assign_participant(
         db, event_id, data.unit_id, data.participant_id,
         actor_user_id=current_user.id,
     )
@@ -562,7 +567,8 @@ async def api_move(
     if not unit:
         raise HTTPException(status_code=404, detail={"key": "errors.allocation.unit_not_found"})
     await _require_organise_write(db, current_user, event_id)
-    result = await move_participant(
+    # v1.0.4j: see api_assign for the ignored second element.
+    result, _exclusion_cleared = await move_participant(
         db, event_id, data.to_unit_id, data.participant_id,
         actor_user_id=current_user.id,
     )
