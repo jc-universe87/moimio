@@ -554,6 +554,73 @@ for the single row. File only; no change in v1.0.4i.
 
 ---
 
+## DASH-3 — `excluded_count` counts exclusion rows for cancelled and removed participants, so the unassigned figure under-reports
+
+**Status:** Open. Pre-existing since v1.0.4i; found in session 85 while reading the dashboard tile for the exclusion UI (v1.0.4k). Not fixed there.
+
+`list_categories()` builds `excluded_count` from a bare count over
+`allocation_category_exclusions` (`allocation_service.py:101-109`). It
+never joins `Participant`, so the number includes exclusion rows
+belonging to people who are no longer in the roster. Nothing removes an
+exclusion row when a participant leaves: `participant_service.py` does
+not mention `AllocationCategoryExclusion` at all, and
+`soft_delete_participant` only stamps `deleted_at`, which leaves the
+foreign key's `ON DELETE CASCADE` unused.
+
+Two routes produce a stale row, and both are reachable from the
+organiser UI:
+
+- Cancellation — `registration_status` becomes `cancelled`, the row
+  survives.
+- Soft delete — `deleted_at` is set, the row survives.
+
+The two surfaces that subtract `excluded_count` from a total they have
+already filtered by status then take one off too many per stale row:
+
+- `OrganiseDashboard.jsx:479` — `totalParticipants` (line 358) drops
+  cancelled participants, and soft-deleted ones never reach the client
+  because the roster query filters `deleted_at IS NULL`. The tile's
+  unassigned count is low by the number of stale rows, and its
+  percentage complete is correspondingly high.
+- `EventDetailPage.jsx:853-855` — same subtraction against
+  `activeParts` (line 831). This feeds the "closest to done" pick, so a
+  group type can be chosen as the quickest win on a figure that is too
+  small, or drop out of the running entirely when the subtraction
+  reaches zero.
+
+### Scope
+
+Only those two subtractions are wrong. The two places that do the same
+job by filtering rather than by arithmetic are correct and need no
+change:
+
+- `AllocationBoard.jsx:854-855` filters `activeParticipants` against
+  `excludedIds`, so a stale exclusion simply matches nobody.
+- `engine_service.py:315` counts what the pre-filter actually removed
+  from a pool already restricted to eligible, non-deleted participants,
+  so a stale row is never counted.
+
+This narrows the fix: it is a count problem on one aggregate, not a
+problem with the exclusion feature.
+
+### Two possible fixes, both open
+
+- Option A — Filter the `excluded_count` aggregate in
+  `list_categories()`: join `Participant` and drop cancelled and
+  soft-deleted rows. Count-only change, no behaviour change, both
+  frontend surfaces untouched.
+- Option B — Clear exclusion rows when a participant is cancelled.
+  Conceptually cleaner, but it changes behaviour and raises its own
+  question: if the participant is later un-cancelled, do they come back
+  excluded? Today they do, because the row survives.
+
+Preference, not a decision: Option A. An exclusion records an
+organiser's intent about a person, and an unrelated change to that
+person's registration status should not destroy it. Whoever picks this
+up should still weigh Option B on its merits.
+
+---
+
 ## BACKUP-1 — Backup and restore do not know exclusions exist
 
 **Status:** Open. Found in session 85 phase 1 while tracing every write path to `Allocation` for the exclusion work (v1.0.4j). Deliberately not fixed there. Gates v1.0.5.
