@@ -841,7 +841,19 @@ export default function EventDetailPage() {
           for (const members of Object.values(unitMap)) {
             for (const m of members) placedIds.add(m.participant_id);
           }
-          const unassigned = activeParts.filter(p => !placedIds.has(p.id)).length;
+          // v1.0.4k: people excluded from this group type are not
+          // waiting to be placed in it. `excluded_ids` is not on the
+          // category payload, but `excluded_count` is, so subtract it —
+          // an excluded person can never be in `placedIds`, which makes
+          // the subtraction exact rather than an estimate.
+          // NOTE the String() casts: this loop compared raw p.id to the
+          // members' participant_id where the board casts both, and set
+          // membership silently misses without them.
+          const placedIdStrings = new Set([...placedIds].map(String));
+          const unassigned = Math.max(
+            0,
+            activeParts.filter(p => !placedIdStrings.has(String(p.id))).length - (cat.excluded_count || 0),
+          );
           if (unassigned > 0) {
             // Pick the category with the FEWEST unassigned — closest to done,
             // quickest actionable win. (Ties broken by whichever came first.)

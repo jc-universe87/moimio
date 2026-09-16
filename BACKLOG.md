@@ -592,3 +592,50 @@ empty across engine runs, with no hint that the two are connected. The
 v1.0.4k exclusion UI should show it: at minimum, mark the unit as locked
 with a free place after an exclusion-driven removal, or prompt to
 unlock it.
+
+---
+
+## STREAM-1 — Exclusion writes broadcast on the organise stream and nothing listens
+
+**Status:** Open. Found in session 85 while building the exclusion UI (v1.0.4k). Deliberately not picked up there.
+
+The two exclusion endpoints in `api/allocations.py` already publish
+`participant_excluded` and `participant_included` on the organise
+stream, and have done since v1.0.4i. Nothing subscribes to them
+specifically.
+
+v1.0.4k refetches the exclusion list after every write instead (it
+rides along with the units and allocations in `loadAll`). That is
+correct but coarser: a second organiser's exclusion only lands on this
+board when some other event triggers a refetch.
+
+Picking the two events up in `useEventStream` would remove the refetch
+and close the staleness window that the `exclusion_cleared` backstop
+warning exists to cover. It was left out of v1.0.4k on purpose: it
+widens the blast radius into `useEventStream.jsx` for a feature that
+had never been on screen.
+
+---
+
+## HIST-1 — `collapseMoves` is category-blind and can invent a cross-group-type "move"
+
+**Status:** Open. Pre-existing; found in session 85 while settling the exclusion phantom-move question for v1.0.4k. Only the exclusion-driven case was guarded there.
+
+`collapseMoves` in `AllocationHistory.jsx` collapses a consecutive
+{assign, unassign} pair in the newest-first feed into one "Moved from X
+to Y" line. The feed is scoped to one participant but spans every group
+type, and the function compares only unit names, never the category. So
+removing someone from Room A and later placing them in Team 1, two
+unrelated actions in two different group types, renders as "Moved from
+Room A to Team 1".
+
+v1.0.4k guarded the one route exclusions made easy to hit (the pair is
+not collapsed when the unassign carries `source =
+participant_excluded`), because an exclusion vacates units silently and
+a later placement elsewhere then sits adjacent to it. The general case
+is untouched and predates exclusions entirely.
+
+Fix is to require both rows to carry the same `category_id` before
+collapsing. `category_id` is already on the serialised row. Not done in
+v1.0.4k because it changes how existing, unrelated history reads and
+deserves its own before/after check.

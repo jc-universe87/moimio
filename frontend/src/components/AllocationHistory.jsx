@@ -183,7 +183,7 @@ export default function AllocationHistory({ eventId, participantId, isAdmin }) {
  * Exported shape per item:
  *   { kind: 'move'|'assign'|'unassign', key, ...fields }
  */
-function collapseMoves(rows) {
+export function collapseMoves(rows) {
   const out = [];
   let i = 0;
   while (i < rows.length) {
@@ -194,6 +194,18 @@ function collapseMoves(rows) {
       && next
       && next.event_type === 'unassign'
       && cur.unit_name !== next.unit_name
+      // v1.0.4k: never pair with an unassign the backend wrote as the
+      // consequence of an exclusion. Within one exclude action the
+      // exclude row is written first and the unassigns after, so
+      // newest-first the burst is [unassign…, exclude] with no assign
+      // to pair with — safe. Across actions it is not: exclude someone
+      // out of Room A, then place them in a unit of a DIFFERENT group
+      // type, and the two rows sit adjacent with no exclude row
+      // between them, inventing "Moved from Room A to Team 1". Same
+      // group type is already safe, because assign_participant writes
+      // the include row immediately before the assign and that row
+      // breaks the pair. See the test file for both sequences.
+      && next.source !== 'participant_excluded'
     );
     if (isMovePair) {
       out.push({
@@ -240,11 +252,21 @@ function HistoryItem({ item, t, lang, participantId }) {
     ? new Date(item.occurred_at).toLocaleString()
     : '';
 
+  // v1.0.4k: `exclude` and `include` rows have been written since
+  // v1.0.4i and reach this component already — list_allocation_events
+  // applies no event_type filter — where they fell into the catch-all
+  // below and rendered as "Removed from " with a blank unit name. They
+  // take {category}, never {unit}: these rows carry unit_id NULL and an
+  // empty unit_name_snapshot by design, because no unit is involved.
   let line;
   if (item.kind === 'move') {
     line = t('history.action.moved', { from: item.from_unit, to: item.to_unit });
   } else if (item.kind === 'assign') {
     line = t('history.action.assigned', { unit: item.unit_name });
+  } else if (item.kind === 'exclude') {
+    line = t('history.action.excluded', { category: item.category_name });
+  } else if (item.kind === 'include') {
+    line = t('history.action.included', { category: item.category_name });
   } else {
     line = t('history.action.unassigned', { unit: item.unit_name });
   }
@@ -259,6 +281,11 @@ function HistoryItem({ item, t, lang, participantId }) {
     attribution = t('history.by.engine', { name: actorName });
   } else if (item.source === 'clear_category') {
     attribution = t('history.by.cleared', { name: actorName });
+  } else if (item.source === 'participant_excluded') {
+    // v1.0.4k: the unassigns an exclusion cascades read as
+    // consequences of the exclusion rather than as manual drags —
+    // the same distinction clear_category already draws.
+    attribution = t('history.by.excluded', { name: actorName });
   } else {
     attribution = t('history.by.actor', { name: actorName });
   }

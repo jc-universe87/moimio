@@ -8,6 +8,7 @@ import MarkAssignModal from './MarkAssignModal';
 import InsightPanel from './InsightPanel';
 import ReviewSurface from './ReviewSurface';
 import CategoryHintsStrip from './CategoryHintsStrip';
+import ExcludedBlock from './ExcludedBlock';
 import { useI18n } from '../hooks/useI18n';
 import { useMarks } from '../hooks/useMarks';
 import { useToast } from '../hooks/useToast';
@@ -49,6 +50,18 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notesFor, setNotesFor] = useState(null);
+
+  // v1.0.4k: participants excluded from THIS group type, as a Set of
+  // id strings (the endpoint returns strings, matching the String(p.id)
+  // cast used throughout this file). Loaded with the rest of the board
+  // and refetched after every exclusion write.
+  //
+  // Deliberately NOT driven off the live stream. Both exclusion writes
+  // already broadcast participant_excluded / participant_included on
+  // the organise stream and nothing listens; picking those up is a real
+  // improvement but widens this release into useEventStream for a
+  // feature that has never been on screen. Filed as STREAM-1.
+  const [excludedIds, setExcludedIds] = useState(new Set());
 
   // Inline notes (shown in overview when includeNotes=true, always in board view)
   const [catNotes, setCatNotes] = useState([]);
@@ -406,12 +419,17 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   const loadAll = async () => {
     if (!category) return;
     try {
-      const [u, m] = await Promise.all([
+      // v1.0.4k: exclusions ride along with the units and allocations.
+      // Every path that already calls loadAll() after a write therefore
+      // refetches them too, which is the refetch-after-write contract.
+      const [u, m, ex] = await Promise.all([
         allocationUnits.list(eventId, category.id),
         allocApi.byCategory(eventId, category.id),
+        catApi.listExclusions(eventId, category.id),
       ]);
       setUnits(u);
       setAllMembers(m);
+      setExcludedIds(new Set((ex?.excluded_ids || []).map(String)));
       loadInlineNotes(u);
     } catch (err) { setError(err); }
     finally { setLoading(false); }
@@ -819,7 +837,23 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   const isOverlapping = category.rule_type === 'overlapping';
   const allAssignedIds = new Set();
   Object.values(allMembers).forEach(m => m.forEach(x => allAssignedIds.add(x.participant_id)));
-  const unassigned = activeParticipants.filter(p => !allAssignedIds.has(String(p.id)));
+
+  // v1.0.4k: "unassigned" and "eligible but unassigned" are two
+  // different quantities now. `activeParticipants` is everyone who
+  // still counts as registered; `eligible` removes the people excluded
+  // from THIS group type; `unassigned` is derived from `eligible`, so
+  // an excluded person is never counted as waiting to be placed.
+  //
+  // Without this split, a group type where everyone is excluded reports
+  // everyone assigned, fires the gate-flash and offers the confirm CTA
+  // — a silent false green on the one screen whose job is to say
+  // whether the organiser is done.
+  //
+  // String(p.id) is the house cast here; the excluded set is built from
+  // strings too, or the filter matches nothing and looks like it works.
+  const eligible = activeParticipants.filter(p => !excludedIds.has(String(p.id)));
+  const excludedPeople = activeParticipants.filter(p => excludedIds.has(String(p.id)));
+  const unassigned = eligible.filter(p => !allAssignedIds.has(String(p.id)));
 
   // v0.72: live-recomputed mark cluster splits for the hint strip.
   // useMemo keyed on the four data sources that affect the result —
@@ -849,9 +883,13 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     [allMembers, units, markAssignments, markDefs, activeMarkPriorityIds]
   );
 
-  const leftPanelPeople = isOverlapping ? activeParticipants : unassigned;
+  // v1.0.4k: `eligible`, not `activeParticipants`, in the overlapping
+  // branch too. In an overlapping group type every participant is
+  // listed in the panel; an excluded one must not be, or "not taking
+  // part" and "nobody got round to it" stay indistinguishable.
+  const leftPanelPeople = isOverlapping ? eligible : unassigned;
   const leftPanelLabel = isOverlapping ? t('organise.all_participants') : t('organise.unassigned_panel');
-  const leftPanelCount = isOverlapping ? activeParticipants.length : unassigned.length;
+  const leftPanelCount = isOverlapping ? eligible.length : unassigned.length;
 
   // v0.73b Q1/Q2/Q3: pending vs unassigned-confirmed split.
   // - Q1: each pending participant gets a "Wartet" pill (rendered inline).
@@ -897,7 +935,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   // confirm" state for the top progress row. Triggers when the
   // category is fully allocated but not yet confirmed. The
   // additional guards make sure we don't fire spuriously:
-  //   - activeParticipants.length > 0: don't celebrate empty
+  //   - eligible.length > 0: don't celebrate empty
   //     categories (a category with no participants would
   //     trivially have unassigned.length === 0 too)
   //   - !isOverview: read-only overview mode shouldn't show
@@ -917,7 +955,10 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     !isOverview
     && !isOverlapping
     && !category?.confirmed
-    && activeParticipants.length > 0
+    // v1.0.4k: eligible, not activeParticipants. A group type where
+    // every participant is excluded has unassigned.length === 0 for a
+    // reason that is the opposite of "done".
+    && eligible.length > 0
     && unassigned.length === 0
   );
   const prevReadyRef = useRef(isReadyToConfirm);
@@ -1008,6 +1049,9 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   const handleBulkAssign = async (unitId) => {
     setAssignDropdown(false);
     const ids = [...selectedPeople];
+    // v1.0.4k: same override confirmation as the drag path.
+    const proceed = await confirmExclusionOverride(ids);
+    if (!proceed) return;
     let ok = 0, fail = 0;
     let firstErr = null;
     for (const pid of ids) {
@@ -1063,10 +1107,158 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     else showToast(t('organise.toast.unassigned', { n: ids.length }), 'success');
   };
 
+  // ─── v1.0.4k: exclusions ───
+  //
+  // Exclusion overrides every other allocation rule; the frontend's job
+  // is to make it visible and reversible, never to second-guess it. The
+  // backend does the work — adding an exclusion vacates every unit the
+  // participant holds in THIS group type — so these handlers write,
+  // refetch (loadAll pulls the exclusion list too) and say what
+  // happened. One toast at a time, no detail line, no action link.
+
+  // Unit names the participant currently holds in this group type,
+  // captured BEFORE the write, because the backend will have vacated
+  // them by the time we refetch.
+  const unitNamesHeldBy = (pid) => units
+    .filter(u => (allMembers[String(u.id)] || []).some(m => String(m.participant_id) === String(pid)))
+    .map(u => u.name);
+
+  const handleExclude = async (participantId) => {
+    const pid = String(participantId);
+    const name = findName(pid);
+    const held = unitNamesHeldBy(pid);
+    try {
+      await catApi.addExclusion(eventId, category.id, pid);
+      setSelectedPeople(prev => {
+        if (!prev.has(pid)) return prev;
+        const next = new Set(prev);
+        next.delete(pid);
+        return next;
+      });
+      await loadAll();
+      if (onDataChange) onDataChange();
+      // No separate toast for the group type re-opening: that change is
+      // visible on this same screen (the confirm control reappears with
+      // its flash) and the one toast line is better spent on what the
+      // organiser actually did.
+      if (held.length > 0) {
+        showToast(t('organise.toast.excluded_removed', { name, units: held.join(', ') }), 'success');
+      } else {
+        showToast(t('organise.toast.excluded', { name }), 'success');
+      }
+    } catch (err) { showToast(err, 'error'); }
+  };
+
+  const handleInclude = async (participantId) => {
+    const pid = String(participantId);
+    const name = findName(pid);
+    try {
+      await catApi.removeExclusion(eventId, category.id, pid);
+      setSelectedPeople(prev => {
+        if (!prev.has(pid)) return prev;
+        const next = new Set(prev);
+        next.delete(pid);
+        return next;
+      });
+      await loadAll();
+      if (onDataChange) onDataChange();
+      showToast(t('organise.toast.included', { name }), 'success');
+    } catch (err) { showToast(err, 'error'); }
+  };
+
+  // Bulk exclude — the touch path, since a hover-revealed chip control
+  // does not exist on a phone, and on desktop the way to exclude a
+  // family of four in one action rather than four hovers.
+  const handleBulkExclude = async (ids) => {
+    const list = (ids && ids.length ? ids : [...selectedPeople]).map(String);
+    if (list.length === 0) return;
+    if (list.length === 1) { await handleExclude(list[0]); return; }
+    let ok = 0;
+    let firstErr = null;
+    for (const pid of list) {
+      try { await catApi.addExclusion(eventId, category.id, pid); ok++; }
+      catch (err) { if (!firstErr) firstErr = err; }
+    }
+    setSelectedPeople(new Set());
+    await loadAll();
+    if (onDataChange) onDataChange();
+    if (firstErr && ok === 0) showToast(firstErr, 'error');
+    else showToast(t('organise.toast.excluded_bulk', { n: ok }), 'success');
+  };
+
+  const handleBulkInclude = async (ids) => {
+    const list = (ids || []).map(String);
+    if (list.length === 0) return;
+    if (list.length === 1) { await handleInclude(list[0]); return; }
+    for (const pid of list) {
+      try { await catApi.removeExclusion(eventId, category.id, pid); } catch {}
+    }
+    setSelectedPeople(new Set());
+    await loadAll();
+    if (onDataChange) onDataChange();
+    showToast(t('organise.toast.included_bulk', { n: list.length }), 'success');
+  };
+
+  // Drop onto the Excluded block. The block stops propagation so this
+  // runs instead of handleDropUnassigned, never as well as it.
+  const handleDropExclude = async () => {
+    setDragOverUnit(null);
+    const dp = dragParticipant;
+    setDragParticipant(null);
+    setDragSource(null);
+    if (!dp) return;
+    if (dp.bulk && dp.bulk.length > 1) await handleBulkExclude(dp.bulk);
+    else await handleExclude(dp.id);
+  };
+
+  // v1.0.4k §4.8: confirm BEFORE the write when a placement would
+  // override an exclusion. The board holds the exclusion list, so the
+  // frontend knows without asking. Returns false when the organiser
+  // backs out. The cancel button is ConfirmOverlay's own, which is
+  // already t('common.cancel') — no new key.
+  const confirmExclusionOverride = async (pids) => {
+    const excluded = pids.map(String).filter(pid => excludedIds.has(pid));
+    if (excluded.length === 0) return true;
+    const names = excluded.map(pid => findName(pid)).join(', ');
+    return confirm({
+      title: t('organise.exclude.override_title'),
+      message: t('organise.exclude.override_body', {
+        name: names,
+        category: typeName(category, t),
+      }),
+      confirmLabel: t('organise.exclude.override_confirm'),
+      danger: true,
+    });
+  };
+
+  // Backstop for the race the dialog cannot catch: another organiser
+  // excludes someone while this board is open, so the local list is
+  // stale and no dialog appears. The backend's assign/move response
+  // reports that it lifted an exclusion, and that return value is the
+  // only signal. A warning after the fact, not an alternative to the
+  // dialog.
+  const warnIfExclusionCleared = (res, pid) => {
+    if (!res?.exclusion_cleared) return false;
+    showToast(t('organise.toast.included', { name: findName(pid) }), 'warning');
+    return true;
+  };
+
   // ─── Drag & Drop ───
   const handleDrop = async (targetUnitId) => {
     setDragOverUnit(null);
     if (!dragParticipant || targetUnitId === dragSource) { setDragParticipant(null); setDragSource(null); return; }
+
+    // v1.0.4k: placing an excluded participant overrides the exclusion,
+    // so ask first. Before the capacity question, because "should this
+    // person be in this group type at all" settles before "is there
+    // room".
+    {
+      const dropped = dragParticipant.bulk?.length > 1
+        ? dragParticipant.bulk
+        : [dragParticipant.id];
+      const proceed = await confirmExclusionOverride(dropped);
+      if (!proceed) { setDragParticipant(null); setDragSource(null); return; }
+    }
 
     // v0.55.1: if the drop would take the target unit over capacity, ask
     // the organiser to confirm first. Gender restriction (hard) is still
@@ -1156,7 +1348,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
         const w = res?.warning;
         if (w?.key) {
           showToast(t(w.key, w.params || {}), 'warning');
-        } else {
+        } else if (!warnIfExclusionCleared(res, dragParticipant.id)) {
           showToast(fromName ? `${pName}: ${fromName} → ${toName}` : `${pName} → ${toName}`, 'success');
         }
       }
@@ -1811,10 +2003,19 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
           <div className="flex items-center gap-4 flex-wrap">
             <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
               <span className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>{totalOccupied}</span>
-              <span style={{ color: 'var(--text-subtle)' }}>{isOverlapping ? ' ' + t('organise.assignments') : `/${activeParticipants.length} ` + t('organise.assigned')}</span>
+              {/* v1.0.4k: the denominator is `eligible`, not everyone.
+                  This is not a guard and does not look like one, which
+                  is exactly how it gets missed — leaving it would put
+                  "47/50 assigned" on the same line as the "✓ everyone
+                  assigned" pill immediately to its right. */}
+              <span style={{ color: 'var(--text-subtle)' }}>{isOverlapping ? ' ' + t('organise.assignments') : `/${eligible.length} ` + t('organise.assigned')}</span>
             </span>
             {!isOverlapping && unassigned.length > 0 && <span className="text-sm font-medium text-pending">{unassigned.length} {t('organise.unassigned')}</span>}
-            {!isOverlapping && unassigned.length === 0 && activeParticipants.length > 0 && <span className="text-sm font-medium" style={{ color: 'var(--io-accent)' }}>✓ {t('organise.everyone_assigned')}</span>}
+            {!isOverlapping && unassigned.length === 0 && eligible.length > 0 && <span className="text-sm font-medium" style={{ color: 'var(--io-accent)' }}>✓ {t('organise.everyone_assigned')}</span>}
+            {/* v1.0.4k: the excluded figure sits beside the others so
+                the readout still reconciles — assigned + unassigned +
+                excluded is the whole active list. */}
+            {excludedPeople.length > 0 && <span className="text-sm" style={{ color: 'var(--text-subtle)' }}>{t('organise.excluded_count', { n: excludedPeople.length })}</span>}
             <span className="text-xs" style={{ color: 'var(--text-subtle)' }}>{units.length} × {itemLabel}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -1833,8 +2034,11 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
           // both the fill width and the gradient's background-size. See
           // CheckInPanel for the same pattern — gradient stays anchored
           // to the full bar; <50% shows neutral, ≥50% reveals io-accent.
-          const pct = activeParticipants.length > 0
-            ? Math.min(100, Math.round((totalOccupied / activeParticipants.length) * 100))
+          // v1.0.4k: same denominator as the "X/Y assigned" readout
+          // directly above. Left on activeParticipants the bar would
+          // read 94% under a line reading "47/47 assigned".
+          const pct = eligible.length > 0
+            ? Math.min(100, Math.round((totalOccupied / eligible.length) * 100))
             : 0;
           return (
             <div className="w-full rounded-full h-2" style={{ background: 'var(--card-border)' }}>
@@ -1992,7 +2196,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                   } : undefined}
 
                   onClick={() => toggleSelect(pid)}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-card cursor-pointer transition-all text-xs hover:bg-black/5 dark:hover:bg-white/10"
+                  className="group flex items-center gap-2 px-2 py-1.5 rounded-card cursor-pointer transition-all text-xs hover:bg-black/5 dark:hover:bg-white/10"
                   style={{
                     color: 'var(--text-primary)',
                     ...(isSel
@@ -2039,10 +2243,45 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                     style={{ color: 'var(--text-subtle)' }}>
                     ⓘ
                   </button>
+                  {/* v1.0.4k: exclude from the pool chip. The house
+                      idiom for a destructive write on a chip is the
+                      hover-revealed, admin-gated icon button (the ✕ on
+                      the unit chip); this is the first member of that
+                      class in the pool. ⊘ rather than ✕ so the two
+                      actions stay distinguishable where they sit side
+                      by side on the unit chip. Hover is not a path on
+                      touch — the bulk bar carries the same action. */}
+                  {isAdmin && !isOverview && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleExclude(pid); }}
+                      aria-label={t('organise.exclude.action_title')}
+                      title={t('organise.exclude.action_title')}
+                      className="shrink-0 text-[12px] leading-none px-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      style={{ color: 'var(--text-subtle)' }}>
+                      ⊘
+                    </button>
+                  )}
                 </div>
               );
             })}
           </div>
+
+          {/* v1.0.4k: the Excluded block. A shrink-0 sibling AFTER the
+              scroll container above and before the resize grip, so it
+              stays pinned while the pool scrolls. It stops drag
+              propagation itself — the panel root carries "drop here to
+              unassign", and without that stop a drop here would
+              silently unassign instead of excluding. */}
+          <ExcludedBlock
+            people={excludedPeople}
+            canEdit={isAdmin && !isOverview}
+            selectedIds={selectedPeople}
+            onToggleSelect={toggleSelect}
+            onInclude={handleInclude}
+            onDropExclude={handleDropExclude}
+            onDragEnterBlock={() => setDragOverUnit(null)}
+          />
+
           {panelFloating && (
             <div onPointerDown={startPanelResize} aria-label={t('organise.panel_resize')} title={t('organise.panel_resize')}
               className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize" style={{ touchAction: 'none' }}>
@@ -2308,6 +2547,18 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                                   ⓘ
                                 </button>
                               )}
+                              {/* v1.0.4k: exclude sits beside remove.
+                                  ✕ takes them out of this unit; ⊘ takes
+                                  them out of the group type entirely,
+                                  which also vacates every unit they
+                                  hold in it. */}
+                              {isAdmin && !isOverview && !mSel && (
+                                <button onClick={(e) => { e.stopPropagation(); handleExclude(m.participant_id); }}
+                                  aria-label={t('organise.exclude.action_title')}
+                                  title={t('organise.exclude.action_title')}
+                                  className="text-[11px] leading-none opacity-0 group-hover:opacity-100 transition-opacity"
+                                  style={{ color: 'var(--text-subtle)' }}>⊘</button>
+                              )}
                               {isAdmin && !mSel && (
                                 <button onClick={(e) => { e.stopPropagation(); handleUnassign(unit.id, m.participant_id); }}
                                   className="text-[10px] opacity-0 group-hover:opacity-100 hover:underline"
@@ -2397,6 +2648,31 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}>
             {t('organise.unassign')}
           </button>
+          {/* v1.0.4k: Exclude on the bulk bar. This is the touch path —
+              hover does not exist there and drag is already disabled,
+              so a hover-only chip control does not exist on a phone at
+              all. On desktop it is also how a family of four is
+              excluded in one action rather than four hovers. */}
+          {isAdmin && !isOverview && (() => {
+            // One button, two directions. When every selected person is
+            // already excluded — which is what selecting chips in the
+            // Excluded block gives you — it lifts instead, so several
+            // exclusions can be reversed in one action. Mixed
+            // selections exclude, which is the no-op-safe direction
+            // (the backend treats a repeat exclusion as idempotent).
+            const ids = [...selectedPeople];
+            const allExcluded = ids.length > 0 && ids.every(pid => excludedIds.has(String(pid)));
+            return (
+              <button onClick={() => (allExcluded ? handleBulkInclude(ids) : handleBulkExclude())}
+                className="text-sm font-semibold px-4 py-1.5 rounded-card transition-colors"
+                title={allExcluded ? t('organise.exclude.undo_title') : t('organise.exclude.action_title')}
+                style={{ background: 'rgba(255,255,255,0.1)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}>
+                {allExcluded ? t('organise.exclude.undo') : t('organise.exclude.action')}
+              </button>
+            );
+          })()}
           <button onClick={() => { setSelectedPeople(new Set()); setAssignDropdown(false); }}
             className="text-xs transition-colors hover:opacity-100"
             style={{ color: 'rgba(255,255,255,0.5)' }}

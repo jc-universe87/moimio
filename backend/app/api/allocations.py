@@ -533,9 +533,13 @@ async def api_assign(
         raise HTTPException(status_code=404, detail={"key": "errors.allocation.unit_not_found"})
     await _require_organise_write(db, current_user, event_id)
     # v1.0.4j: the second element says whether this placement overrode
-    # an exclusion. Not surfaced yet; the warning for it, and the
-    # response field, arrive with the exclusion UI in a later release.
-    result, _exclusion_cleared = await assign_participant(
+    # an exclusion. v1.0.4k returns it on the response, as planned.
+    # `compute_manual_move_warning` below runs after the write, by which
+    # time the exclusion is already gone, so this is the only place the
+    # fact survives. The board normally asks before overriding; this
+    # field is the backstop for when another organiser excluded someone
+    # while this board was open and the local list is stale.
+    result, exclusion_cleared = await assign_participant(
         db, event_id, data.unit_id, data.participant_id,
         actor_user_id=current_user.id,
     )
@@ -552,7 +556,11 @@ async def api_assign(
         new_unit_id=data.unit_id,
     )
     await _publish_organise_change(event_id, "allocation_assigned")
-    return {"allocation_id": str(result.id), "warning": warning}
+    return {
+        "allocation_id": str(result.id),
+        "warning": warning,
+        "exclusion_cleared": exclusion_cleared,
+    }
 
 
 @router.post("/allocations/move")
@@ -567,8 +575,8 @@ async def api_move(
     if not unit:
         raise HTTPException(status_code=404, detail={"key": "errors.allocation.unit_not_found"})
     await _require_organise_write(db, current_user, event_id)
-    # v1.0.4j: see api_assign for the ignored second element.
-    result, _exclusion_cleared = await move_participant(
+    # v1.0.4k: see api_assign for the exclusion_cleared field.
+    result, exclusion_cleared = await move_participant(
         db, event_id, data.to_unit_id, data.participant_id,
         actor_user_id=current_user.id,
     )
@@ -581,7 +589,11 @@ async def api_move(
         new_unit_id=data.to_unit_id,
     )
     await _publish_organise_change(event_id, "allocation_moved")
-    return {"allocation_id": str(result.id), "warning": warning}
+    return {
+        "allocation_id": str(result.id),
+        "warning": warning,
+        "exclusion_cleared": exclusion_cleared,
+    }
 
 
 @router.delete("/allocations/unassign/{unit_id}/{participant_id}")

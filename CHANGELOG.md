@@ -8,6 +8,49 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4k] — 2026-09-16
+Exclusions can now be created from the app. This is the release that
+makes the feature usable: an organiser can keep a participant out of one
+group type, see who is excluded, and put them back.
+
+### Added
+
+- **Exclude a participant from a group type.** The action sits on the
+  participant chip in the unassigned panel and on the chip inside a
+  unit, and on the selection bar at the bottom of the screen, which
+  excludes everyone selected in one action. The selection bar is also
+  the way to do this on a phone, where there is no hover.
+
+- **An Excluded block under the unassigned panel.** Collapsed by
+  default, and absent entirely when nobody is excluded. It lists
+  everyone kept out of this group type, each with a control that puts
+  them back. A participant dragged onto the block is excluded.
+
+- **Excluded participants are no longer counted as waiting to be
+  placed.** The assigned counter, the progress bar, the "everyone
+  assigned" line, the confirm prompt and the group type tiles on the
+  overview all now count only the people eligible for that group type,
+  and show the excluded figure beside the others so the numbers still
+  add up. Before this, a group type where everyone was excluded reported
+  that everyone was assigned.
+
+- **A confirmation before overriding an exclusion.** Dragging or
+  assigning an excluded participant into a unit asks first, and says
+  that going ahead will lift the exclusion.
+
+### Fixed
+
+- **Exclusions in the participant history read correctly.** Exclusions
+  and re-inclusions have been recorded since v1.0.4i and were already
+  reaching the history panel, where they rendered as "Removed from"
+  followed by a blank name. They now name the group type, and the
+  removals an exclusion causes are shown as consequences of it rather
+  than as manual changes.
+
+- **No invented "moved" entry after an exclusion.** Excluding a
+  participant from one group type and later placing them in a different
+  one could be shown as a single move between the two.
+
 ## [1.0.4j] — 2026-09-16
 Exclusions now take effect. Backend only; nothing changes on screen in
 this release, and there is still no way to create an exclusion from the

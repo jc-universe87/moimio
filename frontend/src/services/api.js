@@ -264,6 +264,15 @@ export const allocationCategories = {
   // v50c-3: allocation lifecycle confirm/unconfirm
   confirm:   (eventId, catId) => request(`/events/${eventId}/allocation-categories/${catId}/confirm`,   { method: 'POST' }),
   unconfirm: (eventId, catId) => request(`/events/${eventId}/allocation-categories/${catId}/unconfirm`, { method: 'POST' }),
+  // v1.0.4k: exclusions — keep one participant out of one group type.
+  // The endpoints have existed since v1.0.4i; this is the first client.
+  // `listExclusions` returns { excluded_ids: [...] } as STRINGS, which
+  // pairs directly with the String(p.id) cast used on the board.
+  // `removeExclusion` is a no-op (204) when no exclusion exists, not a
+  // 404, so callers need no "does it exist" pre-check.
+  listExclusions: (eventId, catId) => request(`/events/${eventId}/allocation-categories/${catId}/exclusions/`),
+  addExclusion: (eventId, catId, participantId) => request(`/events/${eventId}/allocation-categories/${catId}/exclusions/`, { method: 'POST', body: JSON.stringify({ participant_id: participantId }) }),
+  removeExclusion: (eventId, catId, participantId) => request(`/events/${eventId}/allocation-categories/${catId}/exclusions/${participantId}`, { method: 'DELETE' }),
 };
 
 // ─── Allocation Units ───

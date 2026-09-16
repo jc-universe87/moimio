@@ -467,8 +467,23 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
         <div className="grid gap-4 pb-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
           {categories.map((cat, idx) => {
             const allocated = cat.allocated_count || 0;
-            const unassigned = totalParticipants - allocated;
-            const pct = totalParticipants > 0 ? Math.round((allocated / totalParticipants) * 100) : 0;
+            // v1.0.4k: this tile is arithmetic, not a filter. Excluded
+            // participants stay in `totalParticipants` and can never be
+            // in `allocated`, so before this every exclusion inflated
+            // the unassigned figure by one. `excluded_count` has been
+            // on the category list payload since v1.0.4i, and this tile
+            // is fed from that list response (loadCategories), never
+            // from a create/update response — so DASH-2 does not reach
+            // it.
+            const excludedCount = cat.excluded_count || 0;
+            const eligibleTotal = Math.max(0, totalParticipants - excludedCount);
+            // Deliberately NOT clamped: DASH-1 (this figure can go
+            // negative in an overlapping group type, because
+            // allocated_count counts rows, not people) is filed and
+            // stays filed. Clamping here would hide its symptom without
+            // fixing its cause.
+            const unassigned = eligibleTotal - allocated;
+            const pct = eligibleTotal > 0 ? Math.round((allocated / eligibleTotal) * 100) : 0;
             const isDragOver = dragOverCatId === cat.id && dragCatId !== cat.id;
             const canMoveUp = idx > 0;
             const canMoveDown = idx < categories.length - 1;
@@ -597,7 +612,13 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
                 <div className="mb-2">
                   <div className="flex justify-between text-xs text-gray-500 mb-1">
                     <span><span className="font-semibold text-body">{allocated}</span> {t('organise.assigned')}</span>
-                    <span className="text-pending">{unassigned} {t('organise.unassigned')}</span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-pending">{unassigned} {t('organise.unassigned')}</span>
+                      {/* v1.0.4k: shown so the tile still reconciles —
+                          assigned + unassigned + excluded is the whole
+                          active list. */}
+                      {excludedCount > 0 && <span>{t('organise.excluded_count', { n: excludedCount })}</span>}
+                    </span>
                   </div>
                   <div className="w-full bg-gray-100 dark:bg-white/10 rounded-full h-2">
                     <div className="bg-steel-blue dark:bg-gold rounded-full h-2 transition-all" style={{ width: `${pct}%` }} />
