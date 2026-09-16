@@ -8,4 +8,4 @@ tag or the CHANGELOG heading disagree with them. Bump both with
 `scripts/bump-version.py <version>`.
 """
 
-__version__ = "1.0.4k"
+__version__ = "1.0.4l"

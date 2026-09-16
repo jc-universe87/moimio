@@ -706,3 +706,74 @@ Fix is to require both rows to carry the same `category_id` before
 collapsing. `category_id` is already on the serialised row. Not done in
 v1.0.4k because it changes how existing, unrelated history reads and
 deserves its own before/after check.
+
+---
+
+## PANEL-1 — Popped-out participant panel resizes width but not height, and docks back too short
+
+**Status:** Open. Found in manual testing of v1.0.4k (2026-09-17).
+
+The resize grip on the floating participant panel (`AllocationBoard.jsx`,
+`startPanelResize`) writes both `panelSize.w` and `panelSize.h`, but only
+the width visibly changes. Dragging the grip downward does not make the
+panel taller.
+
+Docking it again then leaves the container too short for its contents and
+the participant list overflows the panel instead of scrolling inside it.
+
+Both halves point at the same place: the floating panel sets an explicit
+`height: panelSize.h` and the pool inside it is `flex: 1 1 0`, while the
+docked panel has no height at all and the pool is bounded by `minHeight
+24rem / maxHeight 70vh`. Whatever the resize writes has to survive the
+switch between those two sizing regimes, and at the moment the docked
+regime ignores it. Worth resolving together with the pool cap added in
+v1.0.4l, which is the third thing now writing to that height.
+
+---
+
+## NAV-1 — Sidebar active state is inconsistent: Einteilung, Backup and Webhooks never highlight
+
+**Status:** Open. Found in manual testing of v1.0.4k (2026-09-17).
+
+Selecting **Benutzer** in the sidebar highlights it as the active entry.
+Selecting **Einteilung**, **Backup** or **Webhooks** does not — the entry
+opens, but nothing in the sidebar shows where you are.
+
+Almost certainly one rule for deciding "is this entry active" that matches
+the path for some entries and not others (nested route, query-string tab,
+or a path prefix that does not match). One fix should cover all three, and
+the audit should check every sidebar entry rather than only the three
+reported.
+
+---
+
+## EXCL-1 — Cannot drag a participant out of the Excluded block
+
+**Status:** Open, accepted for now. Found in manual testing of v1.0.4k (2026-09-17).
+
+Dragging a participant **onto** the Excluded block excludes them. Dragging
+one **out** of it does nothing; the only way back is the undo control on
+the chip, or selecting the chip and using the selection bar.
+
+The chips inside `ExcludedBlock.jsx` are not draggable, and the block's
+own handlers call `stopPropagation` so a drag started there would not
+reach the board's drop targets anyway. Deliberate for v1.0.4k: the click
+route works and is reversible. Filed so the asymmetry is recorded, not
+because it blocks anything.
+
+---
+
+## EXCL-2 — Excluded names truncate at high counts because the undo label is long
+
+**Status:** Open. Found in manual testing of v1.0.4k (2026-09-17).
+
+Each chip in the Excluded block is `name + undo control` on one line, with
+the name truncating. The undo label is a word, not an icon
+(`organise.exclude.undo`), and in the longer locales it takes enough of a
+256px panel that the name is cut short. The more people are excluded, the
+more chips are affected at once, so it reads as a "high counts" problem
+even though every chip has it.
+
+Options, none picked: shorten the label, use an icon with the existing
+title text, put the control on a second line, or widen the panel while the
+block is open.

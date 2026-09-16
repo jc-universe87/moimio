@@ -166,6 +166,67 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     };
   }, [panelFloating]);
 
+  // v1.0.4l: the floating selection bar is fixed to the bottom of the
+  // viewport, and the Excluded block is the last thing in the docked
+  // panel, so the bar sat on top of the block and the chips under it
+  // could not be clicked. Measure the bar rather than assuming a
+  // height: it wraps to two or three rows exactly when the window is
+  // narrow, which is the case that needs the clearance most.
+  const selectionBarRef = useRef(null);
+  const [selectionBarH, setSelectionBarH] = useState(0);
+  const selectionBarUp = selectedPeople.size > 0;
+  useEffect(() => {
+    const el = selectionBarRef.current;
+    if (!el) { setSelectionBarH(0); return; }
+    const measure = () => setSelectionBarH(el.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [selectionBarUp]);
+  // Keep that much space free below the bar's own 1rem offset.
+  const BAR_GAP = 24;
+  // Cap the scrolling pool so everything under it — the Excluded block
+  // is the last thing in the panel — ends above the bar. Padding the
+  // panel's bottom is not enough on its own: the docked panel is
+  // pinned to the top of the viewport, so padding pushes its lower
+  // edge further down behind the bar instead of lifting the block.
+  // Taking the room out of the pool, which already scrolls, moves
+  // everything below it up by exactly the same amount.
+  const poolRef = useRef(null);
+  const [poolCapPx, setPoolCapPx] = useState(null);
+  useEffect(() => {
+    const pool = poolRef.current;
+    const panel = leftPanelRef.current;
+    if (!pool || !panel || !selectionBarUp || panelFloating || !selectionBarH) {
+      setPoolCapPx(null);
+      return;
+    }
+    let raf = null;
+    const apply = () => {
+      raf = null;
+      // Everything in the panel that is not the pool — header strip and
+      // the Excluded block — keeps its height whatever the pool does.
+      const nonPool = panel.offsetHeight - pool.offsetHeight;
+      const barTop = window.innerHeight - selectionBarH - BAR_GAP;
+      const room = barTop - panel.getBoundingClientRect().top - nonPool;
+      // Floor: on a short window the bar wraps to three rows and there
+      // is not enough room for both. A pool too small to work in helps
+      // nobody, so stop shrinking at 8rem and leave the rest to scroll.
+      setPoolCapPx(Math.max(128, Math.round(room)));
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    apply();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [selectionBarUp, panelFloating, selectionBarH]);
+
   const { confirm, ConfirmOverlay } = useConfirmOverlay();
   const { t, lang } = useI18n();
   const itemLabel = typeItemLabel(category, t);  // v1.0.4
@@ -2159,6 +2220,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
           </div>
 
           <div
+            ref={poolRef}
             className="p-1.5 space-y-0.5 transition-colors"
             style={{
               // v0.60b-1: minHeight keeps the column visually stable
@@ -2167,7 +2229,17 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
               // once it's genuinely crowded.
               ...(panelFloating
                 ? { flex: '1 1 0', minHeight: 0, overflowY: 'auto' }
-                : { minHeight: '24rem', maxHeight: '70vh', overflowY: 'auto' }),
+                : {
+                  // v1.0.4l: while the selection bar is up the pool
+                  // gives up the room the bar needs, so the Excluded
+                  // block below it stays reachable. The 24rem floor is
+                  // for visual steadiness when the pool is nearly empty
+                  // and yields to the cap, which is about reaching a
+                  // control that is otherwise behind the bar.
+                  minHeight: poolCapPx == null ? '24rem' : 0,
+                  maxHeight: poolCapPx == null ? '70vh' : `${poolCapPx}px`,
+                  overflowY: 'auto',
+                }),
               WebkitOverflowScrolling: 'touch',
               overscrollBehavior: 'contain',
               ...(dragOverUnit === 'unassigned' ? {
@@ -2561,6 +2633,8 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                               )}
                               {isAdmin && !mSel && (
                                 <button onClick={(e) => { e.stopPropagation(); handleUnassign(unit.id, m.participant_id); }}
+                                  aria-label={t('organise.unassign')}
+                                  title={t('organise.unassign')}
                                   className="text-[10px] opacity-0 group-hover:opacity-100 hover:underline"
                                   style={{ color: 'var(--alert-burgundy)' }}>✕</button>
                               )}
@@ -2606,6 +2680,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
           unchanged there. */}
       {selectedPeople.size > 0 && (
         <div
+          ref={selectionBarRef}
           className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-40 rounded-2xl px-5 py-3 flex items-center gap-3 flex-wrap justify-center"
           style={{
             background: '#0F1E2E',

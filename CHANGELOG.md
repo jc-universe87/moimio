@@ -8,6 +8,38 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4l] — 2026-09-17
+A fix release for three defects found in v1.0.4k.
+
+### Fixed
+
+- **Removing someone the engine had grouped by a mark no longer fails.**
+  When a mark set to "keep together" was too large for one unit, the
+  engine spread it across several. Assigning, moving or unassigning one
+  of those participants by hand then returned an error, even though the
+  change itself had gone through, so the board looked stuck until it was
+  reloaded. The soft warning that should have appeared ("this takes them
+  away from the others with the same mark") never did.
+
+- **A mark's behaviour set for one group type is now read back
+  correctly.** A mark can be set to "keep together" in one group type
+  and "spread evenly" in another. The check that decides whether a
+  manual change overrides the engine was reading the event-wide setting
+  instead of the one for that group type, so it could warn when it
+  should not, or stay silent when it should warn.
+
+- **The Excluded block is no longer covered by the selection bar.** With
+  participants selected, the bar at the bottom of the screen sat on top
+  of the Excluded block and the names under it could not be clicked. On
+  a narrow window the bar takes three rows and covered the block
+  entirely. The participant panel now gives up as much of its list as
+  the bar needs, so the block stays reachable.
+
+- **The remove control on a participant in a unit now says what it
+  does.** The red cross had no label, so it was silent to a screen
+  reader and had no tooltip, unlike the two controls beside it. It now
+  carries the same "Unassign" wording as the selection bar.
+
 ## [1.0.4k] — 2026-09-16
 Exclusions can now be created from the app. This is the release that
 makes the feature usable: an organiser can keep a participant out of one

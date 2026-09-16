@@ -937,6 +937,40 @@ async def get_all_allocations(db: AsyncSession, event_id: uuid.UUID) -> dict:
 # ── v1.0.0e: soft-warning computation for manual moves ─────────────────
 
 
+# v1.0.4l: the engine tags a mark cluster's id as "mark:<uuid>" when it
+# writes placement reasons (engine_service._place_cluster is called with
+# cluster_id=f"mark:{prio_mid}"). The prefix stays on the write side. It
+# is part of the persisted audit payload in allocation_event.meta, so
+# rows already in the database carry it whatever the engine does from
+# now on, and every consumer has to tolerate it regardless. Consumers
+# therefore peel it at their own use site rather than the reader peeling
+# it once for all of them: the group_code branch reads the same
+# cluster_id field, and a group code is free organiser text that may
+# legitimately begin with "mark:".
+_MARK_CLUSTER_PREFIX = "mark:"
+
+
+def _mark_id_from_cluster(cluster_id: str | None) -> str | None:
+    """Return the bare mark UUID behind a placement reason's cluster_id.
+
+    Accepts the prefixed form the engine writes ("mark:<uuid>") and a
+    bare UUID alike, and normalises to canonical UUID text so a
+    per-category override keyed on the bare id matches. Returns None
+    when the value is missing or is not a UUID at all, so a malformed
+    audit row degrades to "no warning" instead of raising ValueError
+    out of a write endpoint.
+    """
+    if not cluster_id:
+        return None
+    raw = str(cluster_id)
+    if raw.startswith(_MARK_CLUSTER_PREFIX):
+        raw = raw[len(_MARK_CLUSTER_PREFIX):]
+    try:
+        return str(uuid.UUID(raw))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
 # Reasons that bind a participant's placement to an engine-honoured
 # rule. When the latest engine commit for this participant carries
 # one of these reasons (peeled past any `equalise` wrapper), a
@@ -1012,7 +1046,13 @@ async def _mark_behaviour_for(
     """Return the effective cluster_behaviour for a mark in this
     category — honouring per-category overrides. Returns "none" if
     the mark or its definition has been removed.
+
+    v1.0.4l: accepts either a bare mark UUID or the engine's prefixed
+    cluster_id ("mark:<uuid>") and peels it here, at this consumer's
+    own entry. Both uses below — the override lookup, which is keyed on
+    the bare id, and the MarkDefinition parse — depend on that.
     """
+    mark_id = _mark_id_from_cluster(mark_id)
     if not mark_id:
         return "none"
     cat = await get_category(db, category_id)
@@ -1157,7 +1197,9 @@ async def compute_manual_move_warning(
 
     # ── Mark together rules ──
     if reason in ("mark_together", "mark_together_split"):
-        mark_id = binding.get("cluster_id")
+        # v1.0.4l: peel the engine's "mark:" prefix for this consumer's
+        # own use. `binding` still holds the persisted payload verbatim.
+        mark_id = _mark_id_from_cluster(binding.get("cluster_id"))
         behaviour = await _mark_behaviour_for(
             db, event_id=event_id, category_id=category_id, mark_id=mark_id,
         )
