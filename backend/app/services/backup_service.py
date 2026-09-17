@@ -25,6 +25,11 @@ from app.core.exceptions import MoimioAppError
 from app.models.allocation import Allocation
 from app.models.allocation_category import AllocationCategory
 from app.models.allocation_category_exclusion import AllocationCategoryExclusion
+from app.models.allocation_event import (
+    AllocationEvent,
+    AllocationEventSource,
+    AllocationEventType,
+)
 from app.models.allocation_unit import AllocationUnit
 from app.models.checkin_field import CheckInField
 from app.models.checkin_value import CheckInValue
@@ -383,6 +388,35 @@ BACKUP_REGISTER: dict[str, Table] = {
         "created_at": Col(True, "copied"),
         "updated_at": Col(True, "copied"),
     }),
+    # v1.0.4t: the history. Written last on restore, because a row can name
+    # a participant, a unit, a group type and — inside `meta` — a mark.
+    "allocation_events": Table("allocation_events.json", None, {
+        "id": Col(True, "ignored", "new_id"),
+        "event_id": Col(True, "parent"),
+        # A row whose participant does not resolve is skipped: history is
+        # about somebody, and export only carries rows about exported
+        # people in the first place.
+        "participant_id": Col(True, "remapped"),
+        # A unit or group type that does not resolve becomes NULL, which is
+        # what the database itself does when the row is deleted
+        # (ON DELETE SET NULL). The name snapshots keep the line readable.
+        "unit_id": Col(True, "remapped"),
+        "category_id": Col(True, "remapped"),
+        "event_type": Col(True, "copied"),
+        "source": Col(True, "copied"),
+        "unit_name_snapshot": Col(True, "copied"),
+        "category_name_snapshot": Col(True, "copied"),
+        "action_id": Col(True, "copied"),
+        "occurred_at": Col(True, "copied"),
+        # v1.0.4t: the ids inside `meta` are translated by the v1.0.4p
+        # rule. Written by hand because export also drops the names of
+        # people this backup does not carry (§4.5).
+        "meta": Col(True, "remapped", raw=True),
+        # The only true answer: that account does not exist here. The
+        # column is nullable by design and the history screen already
+        # renders a missing actor as a removed user.
+        "actor_user_id": Col(False, "defaulted", "not_meaningful_elsewhere"),
+    }),
 }
 
 # Event-scoped tables the backup does not carry at all.
@@ -391,7 +425,6 @@ NOT_CARRIED: dict[str, str] = {
     # change an event is decided on the receiving instance, by inviting the
     # team again; the restore screen says so (STRINGS-1).
     "event_user_assignments": "not_meaningful_elsewhere",
-    "allocation_events": "known_gap:BACKUP-5",
 }
 
 # Which tables belong to an event is computed by walking the foreign keys to
@@ -633,6 +666,143 @@ def _translate_mark_priorities(settings, mark_map: dict[str, uuid.UUID]):
     return out
 
 
+# ── Ids inside a history row's `meta` (v1.0.4t) ──────────────────────────────
+#
+# One writer fills `meta`: `commit_proposal` in engine_service, as
+# `{"run_id": <engine run>, "placement": <that person's placement reason>}`,
+# either key optional. The placement reason is whatever the engine recorded,
+# and these are the parts of it that hold an id:
+#
+#   unit_id, from_unit_id, to_unit_id     a unit
+#   mark_id, mark_restriction             a mark, bare, with no prefix
+#   cluster_members[].id                  a participant; the `name` beside
+#                                         it is a snapshot, left as it is
+#   previous                              any of the above again, nested
+#                                         (the equalising sweep wraps the
+#                                         original reason in it)
+#   run_id                                an engine run, not a row: left
+#
+# `cluster_id` needs the reason to decide, and it is the trap in this
+# column:
+#
+#   reason mark_together / mark_together_split  the value is
+#                                               "mark:<mark id>", so the id
+#                                               is translated and the
+#                                               prefix kept exactly
+#   reason group_code / group_code_split        the value IS the group code,
+#                                               free organiser text that may
+#                                               legitimately begin with
+#                                               "mark:". Never translated,
+#                                               and nothing stripped from it
+#   any other reason                            left alone
+#
+# The v1.0.4p rule applies throughout: translate every id the maps know, and
+# leave every other value exactly as the file has it.
+
+_META_UNIT_KEYS = ("unit_id", "from_unit_id", "to_unit_id")
+_META_MARK_KEYS = ("mark_id", "mark_restriction")
+_MARK_CLUSTER_REASONS = frozenset({"mark_together", "mark_together_split"})
+_MARK_CLUSTER_PREFIX = "mark:"
+
+
+def _translate_placement(
+    placement,
+    *,
+    participant_map: dict[str, uuid.UUID],
+    unit_map: dict[str, uuid.UUID],
+    mark_map: dict[str, uuid.UUID],
+):
+    """One placement reason, with every id the maps know translated."""
+    if not isinstance(placement, dict):
+        return placement
+    out = dict(placement)
+
+    for key in _META_UNIT_KEYS:
+        if key in out:
+            out[key] = _translate_id(out[key], unit_map)
+    for key in _META_MARK_KEYS:
+        if key in out:
+            out[key] = _translate_id(out[key], mark_map)
+
+    members = out.get("cluster_members")
+    if isinstance(members, list):
+        out["cluster_members"] = [
+            {**m, "id": _translate_id(m["id"], participant_map)}
+            if isinstance(m, dict) and isinstance(m.get("id"), str) else m
+            for m in members
+        ]
+
+    cluster_id = out.get("cluster_id")
+    if (
+        out.get("reason") in _MARK_CLUSTER_REASONS
+        and isinstance(cluster_id, str)
+        and cluster_id.startswith(_MARK_CLUSTER_PREFIX)
+    ):
+        bare = cluster_id[len(_MARK_CLUSTER_PREFIX):]
+        out["cluster_id"] = _MARK_CLUSTER_PREFIX + _translate_id(bare, mark_map)
+
+    if "previous" in out:
+        out["previous"] = _translate_placement(
+            out["previous"], participant_map=participant_map,
+            unit_map=unit_map, mark_map=mark_map,
+        )
+    return out
+
+
+def _translate_history_meta(
+    meta,
+    *,
+    participant_map: dict[str, uuid.UUID],
+    unit_map: dict[str, uuid.UUID],
+    mark_map: dict[str, uuid.UUID],
+):
+    """A history row's `meta`, with the ids inside it translated."""
+    if not isinstance(meta, dict) or "placement" not in meta:
+        return meta
+    return {
+        **meta,
+        "placement": _translate_placement(
+            meta["placement"], participant_map=participant_map,
+            unit_map=unit_map, mark_map=mark_map,
+        ),
+    }
+
+
+def _scrub_placement(placement, exported: set[str]):
+    """Drop cluster members this export does not carry.
+
+    `cluster_members` names everyone who was placed together, and some of
+    them may not be in this backup: removed people, or a structure-mode
+    export. Personal data travels with its person, so their names come out.
+
+    The counts beside the list — `cluster_size`, `cluster_placed_here` —
+    are left exactly as they are. They describe what happened. A line may
+    therefore say five and name three, which is truthful; changing the
+    numbers would not be.
+    """
+    if not isinstance(placement, dict):
+        return placement
+    out = dict(placement)
+    members = out.get("cluster_members")
+    if isinstance(members, list):
+        out["cluster_members"] = [
+            m for m in members
+            # An entry with no id names nobody, so there is nobody to drop.
+            if not (isinstance(m, dict) and isinstance(m.get("id"), str))
+            or m["id"] in exported
+        ]
+    if "previous" in out:
+        out["previous"] = _scrub_placement(out["previous"], exported)
+    return out
+
+
+def _scrub_history_meta(meta, exported: set[str]):
+    """A history row's `meta` as the file may carry it."""
+    if not isinstance(meta, dict) or "placement" not in meta:
+        return meta
+    return {**meta, "placement": _scrub_placement(meta["placement"], exported)}
+
+
 # ── Export ────────────────────────────────────────────────────────────────────
 
 # v1.0.4s: who may see a private note decides what a backup may carry.
@@ -712,6 +882,10 @@ async def export_event_zip(
                                  [] in structure mode, and which private
                                  notes it holds is the caller's choice
                                  (`private_notes`).
+        allocation_events.json — v1.0.4t: the history, for exported
+                                 participants only. [] in structure mode.
+                                 Optional on read, so pre-v1.0.4t files
+                                 still restore.
         checkin.json           — v1.0.4s: { fields, values }. The fields go
                                  in both modes, the values in full mode
                                  only, and only for exported participants.
@@ -884,6 +1058,27 @@ async def export_event_zip(
         )
         checkin_values = list(cv_result.scalars().all())
 
+    # ── Load history (v1.0.4t) ──
+    # A history row is about a person, so it travels with that person: only
+    # rows whose participant is in this export go in. `participant_id.in_()`
+    # also excludes a row whose participant_id is already NULL from an
+    # erasure, because NULL is never IN anything. Structure mode and removed
+    # people fall out of the same test, as they do for the exclusions.
+    #
+    # Ordered by when it happened, then by id, so two backups of the same
+    # event are comparable and the restored timeline reads in order.
+    allocation_events: list[AllocationEvent] = []
+    if participant_ids:
+        ae_result = await db.execute(
+            select(AllocationEvent)
+            .where(
+                AllocationEvent.event_id == event_id,
+                AllocationEvent.participant_id.in_(participant_ids),
+            )
+            .order_by(AllocationEvent.occurred_at, AllocationEvent.id)
+        )
+        allocation_events = list(ae_result.scalars().all())
+
     # ── Load notes (v1.0.4s) ──
     # A note travels with what it is about. Every note whose target is in
     # this export goes in: the event itself, an exported participant (so a
@@ -1004,6 +1199,13 @@ async def export_event_zip(
         for n in notes
     ]
 
+    exported_participant_ids = {str(p.id) for p in participants}
+    allocation_events_data = [
+        _row(ae, *_row_fields("allocation_events"))
+        | {"meta": _scrub_history_meta(ae.meta, exported_participant_ids)}
+        for ae in allocation_events
+    ]
+
     checkin_data = {
         "fields": [
             _row(f, *_row_fields("checkin_fields"))
@@ -1041,6 +1243,7 @@ async def export_event_zip(
             "notes": len(notes),
             "checkin_fields": len(checkin_fields),
             "checkin_values": len(checkin_values),
+            "allocation_events": len(allocation_events),
         },
     }
 
@@ -1060,6 +1263,7 @@ async def export_event_zip(
         zf.writestr("preferences.json", json.dumps(preferences_data, indent=2, ensure_ascii=False))
         zf.writestr("notes.json", json.dumps(notes_data, indent=2, ensure_ascii=False))
         zf.writestr("checkin.json", json.dumps(checkin_data, indent=2, ensure_ascii=False))
+        zf.writestr("allocation_events.json", json.dumps(allocation_events_data, indent=2, ensure_ascii=False))
 
     return buf.getvalue()
 
@@ -1075,6 +1279,7 @@ async def export_event_zip(
 _OPTIONAL_MEMBERS: dict[str, object] = {
     "allocation_exclusions.json": [],
     "checkin.json": {"fields": [], "values": []},
+    "allocation_events.json": [],
 }
 
 # v1.0.4o: the top-level shape every member must have. A member that cannot
@@ -1094,6 +1299,7 @@ _MEMBER_SHAPES: dict[str, str] = {
     "preferences.json": "array",
     "notes.json": "array",
     "checkin.json": "object",
+    "allocation_events.json": "array",
 }
 
 # Members that hold two tables: the keys inside them, and their shapes.
@@ -1275,7 +1481,8 @@ async def confirm_restore(
     unit_category_map: dict[uuid.UUID, uuid.UUID] = {}
 
     counts = {"participants": 0, "allocations": 0, "marks_assigned": 0,
-              "categories": 0, "units": 0, "allocation_exclusions": 0}
+              "categories": 0, "units": 0, "allocation_exclusions": 0,
+              "allocation_events": 0}
 
     # v1.0.4o: a damaged or hand-edited line costs that line and whatever
     # depends on it, never the whole file. Every such loss is counted here,
@@ -1392,6 +1599,9 @@ async def confirm_restore(
     #  13. preferences
     #  14. notes                     — v1.0.4s; a note names a participant,
     #                                  a group type, a unit or the event
+    #  15. history                   — v1.0.4t; LAST, because one row can
+    #                                  name a participant, a unit, a group
+    #                                  type and, inside `meta`, a mark
 
     # ── Create event ──
     new_event_id = uuid.uuid4()
@@ -1959,6 +2169,8 @@ async def confirm_restore(
         )
         db.add(pref)
 
+    seen_ae_ids: set[str] = set()
+
     # ── Notes ──
     # v1.0.4o: author_id is a real foreign key to users, so the stand-in id
     # written before that release made any note fail the whole restore. The
@@ -2010,6 +2222,99 @@ async def confirm_restore(
             **ts(note_src, "updated_at", "notes", "updated_at"),
         )
         db.add(note)
+
+    await db.flush()
+
+    # ── History (v1.0.4t) ──
+    # Last, because a row can name a participant, a unit, a group type and,
+    # inside `meta`, a mark, so every map it needs is full by now.
+    #
+    # The actor is not carried: that account does not exist on this
+    # instance, the column is nullable by design, and the history screen
+    # already renders a missing actor as a removed user.
+    for ae_src in data["allocation_events.json"]:
+        if not isinstance(ae_src, dict):
+            skip("allocation_events.json")
+            continue
+        old_id = _old_id(ae_src, "id")
+        if old_id is not None and old_id in seen_ae_ids:
+            skip("allocation_events.json")  # duplicate old id: the first wins
+            continue
+        # History is about somebody. A row whose participant does not
+        # resolve has nobody to be about, so the line goes.
+        new_p_id = participant_map.get(_old_id(ae_src, "participant_id"))
+        if not new_p_id:
+            skip("allocation_events.json")
+            continue
+        event_type = _field(
+            ae_src, "event_type", "allocation_events", "event_type")
+        source = _field(ae_src, "source", "allocation_events", "source")
+        unit_name = _field(
+            ae_src, "unit_name_snapshot",
+            "allocation_events", "unit_name_snapshot")
+        category_name = _field(
+            ae_src, "category_name_snapshot",
+            "allocation_events", "category_name_snapshot")
+        if _SKIP in (event_type, source, unit_name, category_name):
+            skip("allocation_events.json")
+            continue
+        # The app's own two sets, enforced by the write path
+        # (`record_allocation_event` raises on anything else). A label
+        # this instance does not know would be a line the history screen
+        # could not render, so it is not written.
+        if (event_type not in AllocationEventType.ALL
+                or source not in AllocationEventSource.ALL):
+            skip("allocation_events.json")
+            continue
+
+        # The two optional links. A value the maps do not know becomes
+        # NULL, which is what the database itself does when the row it
+        # named is deleted (ON DELETE SET NULL), and is counted. A row that
+        # never had one — every exclude and include row — is not counted:
+        # nothing was lost.
+        links: dict[str, uuid.UUID | None] = {}
+        for key, id_map in (("unit_id", unit_map),
+                            ("category_id", category_map)):
+            old_link = _old_id(ae_src, key)
+            links[key] = id_map.get(old_link) if old_link is not None else None
+            if old_link is not None and links[key] is None:
+                fell_back("allocation_events", key)
+
+        # Copied exactly as stored, NULL included. A value that is not a
+        # UUID at all cannot go in the column, so it falls back to the
+        # column's own default, which is NULL, and is counted.
+        action_id = None
+        raw_action_id = _old_id(ae_src, "action_id")
+        if raw_action_id is not None:
+            try:
+                action_id = uuid.UUID(raw_action_id)
+            except ValueError:
+                fell_back("allocation_events", "action_id")
+
+        if old_id is not None:
+            seen_ae_ids.add(old_id)
+        db.add(AllocationEvent(
+            event_id=new_event_id,
+            participant_id=new_p_id,
+            unit_id=links["unit_id"],
+            category_id=links["category_id"],
+            actor_user_id=None,
+            event_type=fit(event_type, "allocation_events", "event_type"),
+            source=fit(source, "allocation_events", "source"),
+            unit_name_snapshot=fit(
+                unit_name, "allocation_events", "unit_name_snapshot"),
+            category_name_snapshot=fit(
+                category_name, "allocation_events", "category_name_snapshot"),
+            action_id=action_id,
+            meta=_translate_history_meta(
+                ae_src.get("meta"),
+                participant_map=participant_map,
+                unit_map=unit_map,
+                mark_map=mark_map,
+            ),
+            **ts(ae_src, "occurred_at", "allocation_events", "occurred_at"),
+        ))
+        counts["allocation_events"] += 1
 
     await db.commit()
 

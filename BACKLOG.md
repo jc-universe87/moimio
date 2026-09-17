@@ -1163,7 +1163,48 @@ only, and only for people in the backup.
 
 ## BACKUP-5 — Allocation history is not in the backup
 
-**Status:** Open. Found in session 86 phase 1 while reading the backup path for BACKUP-1 (v1.0.4m). Not fixed there.
+**Status:** ✅ CLOSED in v1.0.4t (2026-09-18). The history is carried, and
+with it **the backup register holds no gaps at all**. Found in session 86
+phase 1 while reading the backup path for BACKUP-1 (v1.0.4m).
+
+**Resolution.** `allocation_events` joins the register in a new optional
+`allocation_events.json`, written last on restore because one row can name a
+participant, a unit, a group type and, inside `meta`, a mark. The three
+decisions this entry said were needed, as settled:
+
+- **The actor is not carried.** `actor_user_id` is always NULL on restore.
+  That account does not exist on the receiving instance, the column is
+  nullable by design, and the history screen already renders a missing actor
+  as a removed user, so no new string was needed.
+- **A row travels with its person.** Only rows whose participant is in the
+  export go in, which drops rows about removed people and rows whose
+  `participant_id` an erasure has already nulled. A row whose participant
+  does not resolve on restore is skipped and counted.
+- **The ids inside `meta` are translated** by the v1.0.4p rule: every id the
+  maps know, and everything else left exactly as the file has it. The trap is
+  `cluster_id`, which holds `mark:<mark id>` for a mark cluster and the group
+  code itself for a group-code cluster; a group code is free organiser text
+  that may legitimately begin with `mark:`, so it is never touched.
+
+Two further decisions the entry did not anticipate:
+
+- **Names of people the backup does not carry are dropped** from
+  `placement.cluster_members`, while `cluster_size` and
+  `cluster_placed_here` are left alone. The counts describe what happened, so
+  a line may say three and name two, which is truthful; changing the numbers
+  would not be.
+- **A unit or group type that does not resolve becomes NULL** and is counted,
+  which is what the database itself does when the row is deleted
+  (ON DELETE SET NULL). The name snapshots keep the line readable.
+
+**The register now holds no `known_gap` tag**, on a column or in
+`NOT_CARRIED`, and `test_v1_0_4t_history.py` test 13 fails if one is ever
+added: the check `BACKUP_REGISTER_DOC` has promised since v1.0.4n, which says
+v1.0.5 ships only when no gap remains. `event_user_assignments` stays
+uncarried under `not_meaningful_elsewhere`, which is a decision and not a
+gap: a permission must never come from a file.
+
+The original entry follows, as the record of what was found.
 
 `allocation_events` is not exported at all. After a restore an event has
 its exclusions and its placements in force and an empty history: no record

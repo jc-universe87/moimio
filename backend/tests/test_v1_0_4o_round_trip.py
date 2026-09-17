@@ -32,6 +32,11 @@ import app.models  # noqa: F401  — populate Base.metadata, as conftest does
 from app.models.allocation import Allocation
 from app.models.allocation_category import AllocationCategory
 from app.models.allocation_category_exclusion import AllocationCategoryExclusion
+from app.models.allocation_event import (
+    AllocationEvent,
+    AllocationEventSource,
+    AllocationEventType,
+)
 from app.models.allocation_unit import AllocationUnit
 from app.models.checkin_field import CheckInField
 from app.models.checkin_value import CheckInValue
@@ -75,6 +80,17 @@ T_PEOPLE = {
 }
 T_CHECKIN = datetime(2026, 6, 1, 16, 45, tzinfo=TZ)
 T_ROW = datetime(2026, 3, 3, 15, 0, tzinfo=TZ)
+# v1.0.4t: history rows are matched by `occurred_at`, so every one of them
+# has its own. Set by hand rather than left to clock_timestamp(), which
+# would give values no test could name.
+T_HIST = {
+    "exclusion-anna": datetime(2026, 3, 4, 9, 0, tzinfo=TZ),
+    "exclusion-bruno": datetime(2026, 3, 4, 9, 5, tzinfo=TZ),
+    "mark-cluster": datetime(2026, 3, 4, 10, 0, tzinfo=TZ),
+    "equalise": datetime(2026, 3, 4, 10, 5, tzinfo=TZ),
+    "mark-drain": datetime(2026, 3, 4, 10, 10, tzinfo=TZ),
+    "mark-split": datetime(2026, 3, 4, 10, 15, tzinfo=TZ),
+}
 
 
 # ─── The natural key each table is matched by ─────────────────────────
@@ -109,6 +125,8 @@ NATURAL_KEY = {
         "participant email (one assignment each in the fixture)",
     "participant_preference_requests": "participant email (one row each)",
     "notes": "content",
+    # v1.0.4t: unique per row, and not one of the references under test.
+    "allocation_events": "occurred_at",
 }
 
 # Deliberate transformations restore applies to a `copied` value. Each one
@@ -337,6 +355,25 @@ async def _build(db, extra_notes: bool = False) -> dict:
         row.created_at = T_ROW
     await db.flush()
 
+    # v1.0.4t: the two exclusion rows above already wrote history, with an
+    # `action_id` each and an empty unit name (no unit is involved). Their
+    # `occurred_at` comes from clock_timestamp(), which no test can name, so
+    # it is set by hand here. Safe, as the line above is: this table has no
+    # updated_at, so the UPDATE cannot trip an `onupdate`.
+    excluded_history = (await db.execute(
+        select(AllocationEvent)
+        .where(AllocationEvent.event_id == ev.id)
+        .order_by(AllocationEvent.occurred_at, AllocationEvent.id)
+    )).scalars().all()
+    assert len(excluded_history) == 2, (
+        f"add_exclusion should have written two history rows, wrote "
+        f"{len(excluded_history)}"
+    )
+    for row, key in zip(excluded_history,
+                        ("exclusion-anna", "exclusion-bruno")):
+        row.occurred_at = T_HIST[key]
+    await db.flush()
+
     # ── Mark assignments ──
     db.add(MarkAssignment(event_id=ev.id, mark_id=marks["Team leader"].id,
                           participant_id=people["anna@test.local"].id,
@@ -487,6 +524,103 @@ async def _build(db, extra_notes: bool = False) -> dict:
                 created_at=T_ROW, updated_at=T_ROW,
             ))
 
+    # ── History with `meta` (v1.0.4t) ──
+    # The two exclusion rows above carry no `meta`. These four do, in the
+    # shapes the one writer produces: `commit_proposal` in engine_service
+    # composes {"run_id": ..., "placement": <that person's placement
+    # reason>}, and the placement reason is whatever the engine recorded.
+    # Built directly rather than by running the engine, so the fixture can
+    # name the exact ids the resolver has to translate.
+    #
+    # Between them they cover every part of `meta` that holds an id: a unit,
+    # a mark bare and a mark behind the `mark:` prefix, cluster members, and
+    # a nested `previous`. Every id resolves, so a clean restore of this
+    # fixture stays free of skipped and defaulted lines, which
+    # test_v1_0_4o_damaged_files.py asserts exactly.
+    anna_id = str(people["anna@test.local"].id)
+    bruno_id = str(people["bruno@test.local"].id)
+    cluster_members = [
+        {"id": anna_id, "name": "Anna Alpha"},
+        {"id": bruno_id, "name": "Bruno Beta"},
+    ]
+    for key, email, unit, kind, source, meta in (
+        # A mark cluster: `cluster_id` is "mark:<mark id>", and the prefix
+        # has to survive with the id translated behind it.
+        ("mark-cluster", "anna@test.local", "Lakeside",
+         AllocationEventType.ASSIGN, AllocationEventSource.ENGINE_COMMIT, {
+             "run_id": "run-2026-06-01-0001",
+             "placement": {
+                 "reason": "mark_together",
+                 "cluster_id": f"mark:{marks['Team leader'].id}",
+                 "cluster_size": 2,
+                 "cluster_placed_here": 2,
+                 "unit_id": str(units["Lakeside"].id),
+                 "cluster_members": cluster_members,
+             },
+         }),
+        # The equalising sweep, which wraps the original reason in
+        # `previous`. That original is a GROUP CODE cluster whose code
+        # begins with "mark:" on purpose: a group code is free organiser
+        # text and must come back byte for byte.
+        ("equalise", "bruno@test.local", "Hillside",
+         AllocationEventType.ASSIGN, AllocationEventSource.ENGINE_COMMIT, {
+             "run_id": "run-2026-06-01-0001",
+             "placement": {
+                 "reason": "equalise",
+                 "from_unit_id": str(units["Lakeside"].id),
+                 "to_unit_id": str(units["Hillside"].id),
+                 "previous": {
+                     "reason": "group_code",
+                     "cluster_id": "mark:SMITH-100",
+                     "cluster_size": 2,
+                     "cluster_placed_here": 2,
+                     "unit_id": str(units["Lakeside"].id),
+                     "cluster_members": cluster_members,
+                 },
+             },
+         }),
+        # A restricted unit drained: `mark_restriction` is a bare mark id,
+        # with no prefix, beside values that are not ids at all.
+        ("mark-drain", "anna@test.local", "Pottery",
+         AllocationEventType.ASSIGN, AllocationEventSource.ENGINE_COMMIT, {
+             "run_id": "run-2026-06-01-0002",
+             "placement": {
+                 "reason": "mark_drain",
+                 "unit_id": str(units["Pottery"].id),
+                 "unit_name": "Pottery",
+                 "gender_restriction": "female",
+                 "mark_restriction": str(marks["Team leader"].id),
+             },
+         }),
+        # A mark spread across units: `mark_id`, also bare.
+        ("mark-split", "bruno@test.local", "Pottery",
+         AllocationEventType.ASSIGN, AllocationEventSource.ENGINE_COMMIT, {
+             "run_id": "run-2026-06-01-0002",
+             "placement": {
+                 "reason": "mark_split",
+                 "mark_id": str(marks["First aider"].id),
+             },
+         }),
+    ):
+        unit_row = units[unit]
+        cat_row = next(c for c in cats.values() if c.id == unit_row.category_id)
+        db.add(AllocationEvent(
+            event_id=ev.id,
+            participant_id=people[email].id,
+            unit_id=unit_row.id,
+            category_id=cat_row.id,
+            # Carried by the source event and deliberately not restored:
+            # the account does not exist on a receiving instance.
+            actor_user_id=author.id,
+            event_type=kind,
+            source=source,
+            unit_name_snapshot=unit_row.name,
+            category_name_snapshot=cat_row.name,
+            action_id=uuid.uuid4(),
+            meta=meta,
+            occurred_at=T_HIST[key],
+        ))
+
     await db.flush()
 
     return {
@@ -562,6 +696,9 @@ async def _snapshot(db, event_id: uuid.UUID) -> dict[str, dict]:
     note_targets = [event_id, *by_pid, *cat_ids, *[u.id for u in units]]
     notes = await rows(select(Note).where(Note.notable_id.in_(note_targets)))
 
+    history = await rows(select(AllocationEvent)
+                         .where(AllocationEvent.event_id == event_id))
+
     return {
         "events": {"the event": ev},
         "participants": {p.email: p for p in people},
@@ -590,6 +727,7 @@ async def _snapshot(db, event_id: uuid.UUID) -> dict[str, dict]:
             by_pid[r.participant_id]: r for r in prefs
         },
         "notes": {n.content: n for n in notes},
+        "allocation_events": {h.occurred_at: h for h in history},
     }
 
 
@@ -797,7 +935,70 @@ async def test_2_round_trip_is_faithful(db):
     def before_mark_name(mid):
         return {m.id: m.name for m in before["mark_definitions"].values()}[mid]
 
+    # v1.0.4t: the ids inside a history row's `meta`. The expected value is
+    # built by NAME through the source-to-restored correspondence, never
+    # through the ids under test, and anything the maps do not know is
+    # expected back exactly as it was.
+    unit_names = {str(u.id): u.name for u in before["allocation_units"].values()}
+    mark_names = {str(m.id): m.name for m in before["mark_definitions"].values()}
+    people_emails = {str(p.id): p.email for p in before["participants"].values()}
+
+    def restored_unit(value):
+        name = unit_names.get(value) if isinstance(value, str) else None
+        return str(after["allocation_units"][name].id) if name else value
+
+    def restored_mark(value):
+        name = mark_names.get(value) if isinstance(value, str) else None
+        return str(after["mark_definitions"][name].id) if name else value
+
+    def restored_person(value):
+        email = people_emails.get(value) if isinstance(value, str) else None
+        return str(after["participants"][email].id) if email else value
+
+    def expect_placement(placement):
+        if not isinstance(placement, dict):
+            return placement
+        out = dict(placement)
+        for key in ("unit_id", "from_unit_id", "to_unit_id"):
+            if key in out:
+                out[key] = restored_unit(out[key])
+        for key in ("mark_id", "mark_restriction"):
+            if key in out:
+                out[key] = restored_mark(out[key])
+        members = out.get("cluster_members")
+        if isinstance(members, list):
+            out["cluster_members"] = [
+                {**m, "id": restored_person(m["id"])}
+                if isinstance(m, dict) and isinstance(m.get("id"), str) else m
+                for m in members
+            ]
+        # The trap: a mark cluster's id keeps its prefix and gains the
+        # restored mark's id, while a group code is left alone even when it
+        # begins with "mark:".
+        cluster_id = out.get("cluster_id")
+        if (out.get("reason") in ("mark_together", "mark_together_split")
+                and isinstance(cluster_id, str)
+                and cluster_id.startswith("mark:")):
+            out["cluster_id"] = "mark:" + restored_mark(cluster_id[len("mark:"):])
+        if "previous" in out:
+            out["previous"] = expect_placement(out["previous"])
+        return out
+
+    def expect_meta(meta):
+        if not isinstance(meta, dict) or "placement" not in meta:
+            return meta
+        return {**meta, "placement": expect_placement(meta["placement"])}
+
     RESOLVE = {
+        ("allocation_events", "participant_id"):
+            lambda r: after["participants"][before_email(r.participant_id)].id,
+        ("allocation_events", "unit_id"):
+            lambda r: (after["allocation_units"][before_unit(r.unit_id)].id
+                       if r.unit_id else None),
+        ("allocation_events", "category_id"):
+            lambda r: (after["allocation_categories"][before_cat(r.category_id)].id
+                       if r.category_id else None),
+        ("allocation_events", "meta"): lambda r: expect_meta(r.meta),
         ("notes", "notable_id"): expect_notable_id,
         ("checkin_values", "participant_id"):
             lambda r: after["participants"][before_email(r.participant_id)].id,
@@ -897,6 +1098,6 @@ async def test_2_round_trip_is_faithful(db):
                     )
 
     assert not problems, "\n".join(problems)
-    assert len(checked) == len(BACKUP_REGISTER) == 15, (
+    assert len(checked) == len(BACKUP_REGISTER) == 16, (
         f"checked {len(checked)} of {len(BACKUP_REGISTER)} carried tables"
     )

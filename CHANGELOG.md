@@ -8,6 +8,29 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4t] — 2026-09-18
+A restored event now carries its own history.
+
+### Fixed
+
+- **History now comes back with a restore.** A restored event used to show
+  placements and exclusions with nothing behind them: no record of who was
+  moved where, when, or why. The timeline now comes back with the event,
+  each entry keeping the time it actually happened.
+
+### Changed
+
+- **Who did it is not carried.** Those accounts do not exist where the
+  backup is restored, so a restored entry says the person was removed.
+
+- **Names of people who are not in the backup are left out** of the "placed
+  together with" details. The numbers beside them are not changed, because
+  they describe what happened, so such an entry may name fewer people than
+  it counts.
+
+- **Templates carry no history.** A structure-only backup is the shape of an
+  event, and a history is a record of what people did.
+
 ## [1.0.4s] — 2026-09-17
 Check-in and notes now come back with a restore.
 
