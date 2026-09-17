@@ -836,9 +836,28 @@ Dropped today:
 - AllocationCategory: `name_key`, `item_label_key`,
   `exclusive_group_codes`, `confirmed`
 - AllocationUnit: `mark_restriction`, `is_kept`
-- MarkDefinition: `cluster_behaviour`
+- MarkDefinition: `cluster_behaviour`, `created_by_user_id`
+- MarkAssignment: `assigned_by_user_id`
+- CustomFieldDefinition: `show_in_form`
+- ParticipantPreferenceRequest: `resolved_note`
 - Participant: `override_group_room`, `checked_in_at`
   (`confirmation_token` is rightly excluded: it is a secret)
+- the `updated_at` family: not exported on eight tables, and exported but
+  ignored on Event
+
+`show_in_form` is the one with an outward-facing consequence. It is NOT
+NULL and defaults True, and False is the value that marks a field as
+admin-only (auto-created from a CSV import, meant for the People page and
+not for registrants). So a restore puts every such field back on the
+PUBLIC registration form.
+
+Two columns are exported and then overridden. `confirm_restore` forces
+`has_capacity` and `has_gender_restriction` to `True` with the comment
+"v1.0.3: ignored; always on". Phase 1 found no code path that can set
+either to False any more, so this may be correct rather than a gap; it is
+tagged as a gap in the v1.0.4n register until somebody proves the columns
+can only ever be True, at which point they become `derived` and the
+columns are candidates for removal.
 
 `confirm_restore` reads `name_key` and `item_label_key` when it builds a
 restored category, but export never writes either, so both are always
@@ -909,6 +928,25 @@ The hosted export runs CE's `app.cli.export_all`, which calls
 of this unchanged. Fixing it in CE fixes it for hosted tenants with no
 control-plane change.
 
+The notes gap is worse than "all but published event-level notes". **No
+screen creates an event-level note.** The three places that open the notes
+modal pass `participant` (`EventDetailPage.jsx`, `CheckinOverlayPage.jsx`),
+`category` and `unit` (`AllocationBoard.jsx`), and the export filter is
+`notable_id == event_id AND is_published`. So `notes.json` is always `[]`
+in any event built through the app, and the restore block that reads it has
+never run.
+
+Two consequences follow from that block never running:
+
+- Restore writes the new event's own id into `notes.author_id`, which is a
+  real foreign key to `users.id`. A file that did contain a note would
+  therefore fail the constraint and roll the whole restore back. The bug is
+  invisible only because the member is always empty.
+- The Backup page hint for a full backup claims "Everything:
+  participants, allocations, responses, notes"
+  (`backup.mode.full.hint`). The notes part is untrue today, and so is
+  "everything".
+
 ---
 
 ## BACKUP-5 — Allocation history is not in the backup
@@ -945,6 +983,14 @@ The natural shape is one column listing the group types each participant
 is excluded from, matching how the existing `Marks` column flattens mark
 names into one comma-separated cell.
 
+The per-person GDPR export omits them too.
+`data_export_service.export_participant_data` returns ten keys covering
+custom fields, marks, preferences, allocations, allocation history, notes
+and check-in values, resolving every foreign key to a readable name, and an
+exclusion is the one recorded decision about that individual that is
+missing. An `exclusions` key of `[{category_name, created_at}, ...]` would
+match how `allocations` becomes `{unit_name, category_name, created_at}`.
+
 ---
 
 ## VERSION-1 — `check-version-markers.py` does not read the `version.py` docstring
@@ -963,3 +1009,197 @@ Two ways to close it, neither picked: have `bump-version.py` rewrite the
 docstring alongside `__version__`, or have `check-version-markers.py` read
 it as a fourth marker so a mismatch fails the CI `checks` job. The second
 is the stronger guard, but it only works if the first exists too.
+
+---
+
+## BACKUP-7 — The units loop records a unit before checking it
+
+**Status:** Open. Found in session 86 phase 1 while reading the restore path for BACKUP-1 (v1.0.4m). Not fixed there.
+
+In `confirm_restore`, the units loop fills `unit_map` before the guard that
+skips a unit whose group type is missing from the file:
+
+```
+unit_map[unit_src["id"]] = new_unit_id
+new_cat_id = category_map.get(unit_src["category_id"])
+if not new_cat_id:
+    continue
+```
+
+So a unit whose group type is absent lands in the map although no row is
+ever created for it. An allocation naming that unit then passes the
+`if not new_p_id or not new_unit_id` test, and the insert violates the
+foreign key to `allocation_units.id`, which rolls back the entire restore.
+One bad line costs the whole file.
+
+Reachable only from a hand-edited or truncated file, which is expected
+input: a backup is a plain unsigned ZIP.
+
+The fix is to move the map write below the `continue`. That changes the
+failure mode rather than removing it: an allocation naming a skipped unit
+would then be skipped silently, which is the intended behaviour, but it
+means a file with a missing group type quietly loses those placements. Say
+so in the release notes.
+
+Every other block was checked for the same pattern and is safe: the custom
+field, participant, category and mark loops all write their map entry with
+no guard following, and the v1.0.4m `unit_category_map` is deliberately
+written after the guard.
+
+---
+
+## BACKUP-8 — Restore re-dates every row
+
+**Status:** Open. Found in session 86 phase 1 while reading the restore path for BACKUP-1 (v1.0.4m). Not fixed there.
+
+Every restore block omits the timestamp columns from its insert, so the
+server default supplies the value and every row is dated to the moment of
+the restore. `created_at` is exported for eleven tables and restored for
+none of them; `updated_at` is not exported at all except on Event, where it
+is exported and ignored. v1.0.4m followed the same pattern for exclusions,
+for consistency rather than because it is right.
+
+This is not cosmetic. The columns are read on screen:
+
+- `participants.created_at` is the "Registered at" column on the People
+  table and the check-in desk, a sort key, the insight panel's registration
+  date, the "recent sign-ups" list, and the registration sparkline.
+- `events.created_at` orders the events list, and is the sparkline's
+  origin.
+- `notes.created_at` is shown on every note.
+- `participants.checked_in_at` is the check-in time column (and is not
+  exported at all: see BACKUP-2).
+- `allocation_events.occurred_at` is the entire history timeline (see
+  BACKUP-5).
+
+So a restored event shows every participant registering in the same second
+on the day of the restore, a sparkline collapsed to one spike, and a
+meaningless "recent sign-ups".
+
+All of these can be set on insert. Each is a `server_default`, which
+applies only when the INSERT omits the column, and there are no database
+triggers anywhere in the schema. `occurred_at` uses `clock_timestamp()`
+specifically so rows written in one transaction get distinct ordered
+values, so if history is ever restored, passing the original values is
+required and not merely preferable.
+
+`_parse_date` truncates to ten characters and returns a `date`, so it needs
+a datetime sibling before this can be done.
+
+---
+
+## BACKUP-9 — A damaged or hand-edited file can still fail the whole restore
+
+**Status:** Open. Found in session 86 phase 1 while reading the restore path for BACKUP-1 (v1.0.4m). Not fixed there.
+
+A backup is a plain unsigned ZIP, so a hand-edited file is expected input,
+and the rule is that what does not map is skipped and one bad line never
+rolls back the whole restore. Today it can, six ways:
+
+- **Bracket reads raise `KeyError`.** Eighteen of them, across the custom
+  field, field config, participant, category, unit, allocation and mark
+  blocks. `row["id"]` on the participant CSV is the sharpest: a CSV missing
+  the `id` column raises rather than skipping.
+- **Duplicate allocation lines** break `UNIQUE (participant_id, unit_id)`.
+  Exactly the case v1.0.4m fixed for exclusions and left standing in the
+  adjacent block. `mark_assignments` has no unique constraint, so duplicates
+  there insert silently instead.
+- **Explicit nulls reach NOT NULL columns.** `unit_src.get("capacity")` has
+  no default and `capacity` has been NOT NULL since v0.74; the four name and
+  label fields have the same exposure once a key is present but null.
+- **A member of the wrong JSON type.** A member that parses but is a dict
+  where a list is expected iterates its keys as strings, and the first
+  bracket read then raises `TypeError`.
+- **Strings too long for their columns** raise `DataError` at flush: group
+  type and unit names are `String(100)`, labels and participant names
+  `String(255)`. Nothing truncates.
+
+Two related defects belong here:
+
+- `_safe_enum` falls back to `CONFIRMED` for an unrecognised
+  `registration_status`, where the model's own default is `PENDING`. A bad
+  value silently promotes someone into the active roster.
+- `_OPTIONAL_MEMBERS` copies its defaults with `list(default)`. Correct for
+  the list default it has today; for a dict default it would silently yield
+  a list of the keys. Use `copy.deepcopy` and widen the annotation when the
+  second optional member is added.
+
+`_parse_date`, `_parse_int` and `_parse_json_field` already degrade instead
+of raising, and are the pattern the rest of the restore should follow.
+
+---
+
+## BACKUP-10 — There is no whole-workspace restore
+
+**Status:** Open. Found in session 86 phase 1 while tracing the hosted leaving path for BACKUP-1 (v1.0.4m). Not a data-loss bug.
+
+`app.cli.export_all` writes an outer archive holding `manifest.json` plus
+`events/<event_id>.zip` per event, and the hosted control plane runs exactly
+that command inside the tenant container to produce the leaving export.
+**Nothing reads it back.** There is no endpoint, command or script in CE or
+on the control plane that opens the outer archive or its manifest.
+
+So a customer with twenty events unzips the bundle themselves and uploads
+twenty files one at a time through the restore modal, as Super Admin, each
+arriving as a separate draft renamed "(Restored)", in whatever order they
+happen to click.
+
+The workspace shape lives only in the outer manifest, which nothing reads:
+which events existed, their order, and their archived flag. Every event's
+own data is in the file, so nothing is lost. What is missing is the
+difference between "you can leave" and "you can leave in an afternoon".
+
+---
+
+## USER-1 — Deleting a user does not handle their notes
+
+**Status:** Open. Found in session 86 phase 1 while reading `notes.author_id` for the backup work (v1.0.4m). Not fixed there.
+
+`api/users.py` deletes a user with a bare `db.delete(user)` and no sweep of
+anything they authored. `notes.author_id` is a foreign key to `users.id`
+declared with no `ondelete`, so the database default applies and deleting
+anyone who has ever written a note likely fails with an integrity error
+surfaced as a 500.
+
+Unverified: whether the deployed schema actually carries that constraint.
+The baseline migration builds the schema from the frozen v50b snapshot, and
+the model declares the foreign key, so the test database (built from
+`Base.metadata`) definitely has it. Confirming the deployed one needs a
+`\d notes` against a real database.
+
+Options, none picked: reassign a deleted user's notes to whoever deleted
+them; delete their unpublished notes and reassign the published ones; add
+`ondelete="SET NULL"` and make the column nullable, which is a migration
+and changes the visibility rule, since an unpublished note is visible only
+to its author.
+
+---
+
+## ARCH-1 — Group type and unit settings are copied by three separate paths
+
+**Status:** Open, after v1.0.5. Found in session 86 phase 1 while reading the backup path for BACKUP-1 (v1.0.4m).
+
+Three code paths copy allocation categories and units, each complete to a
+different degree, and the least complete one is the backup:
+
+- `backup_service.export_event_zip` / `confirm_restore`: drops `name_key`,
+  `item_label_key`, `exclusive_group_codes`, `mark_restriction` and
+  `is_kept`, and copies `settings` with stale mark ids inside it.
+- `event_service.duplicate_event_config`: introspects
+  `Model.__table__.columns` rather than using a hand list, rewires
+  `mark_restriction` through a `mark_id_map`, carries both name keys, and
+  forces `confirmed=False`.
+- `room_layout_io`: carries everything the other two do plus
+  `exclusive_group_codes` and `is_kept`, and rewrites both
+  `mark_restriction` and `settings.engine.mark_priorities` from ids to mark
+  NAMES so a layout is portable across instances.
+
+The same bug class has already been found and fixed once in one of them.
+`room_layout_io` carries the comment "v1.0.3 fix: this was omitted, so
+importing a layout silently reverted 'group codes claim units exclusively'
+to off" — the identical omission the backup still has.
+
+Converge the three on one serialiser. The v1.0.4n register and guard are
+the cheap version of this: they make an omission fail a test rather than
+ship. This entry is the real fix, and it is not urgent enough to hold
+v1.0.5.
