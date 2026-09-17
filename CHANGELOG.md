@@ -8,6 +8,44 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4m] — 2026-09-17
+Backups now carry exclusions.
+
+### Fixed
+
+- **An exclusion now survives a backup and restore.** Backing up an event
+  and restoring it used to lose every exclusion, without saying so. The
+  restored event came back with nobody excluded from anything, so work an
+  organiser had done by hand was gone. Exclusions are now written into the
+  backup file and put back when that file is restored.
+
+  An exclusion travels with its person. A row is written only when both the
+  participant and the group type are in that same backup. So a cancelled
+  participant's exclusion is carried, a removed participant's is not, and a
+  structure-only backup carries none, because it holds no participants at
+  all.
+
+### Changed
+
+- **Older backup files still restore.** A file made before this release has
+  no exclusions in it and restores as "nobody excluded". There is nothing
+  to convert and no file to re-make.
+
+- **Where a backup file disagrees with itself, the exclusion is kept and
+  the placement is dropped.** A backup file is a plain ZIP that can be
+  edited by hand, so it can end up saying that someone is both excluded
+  from a group type and placed in it. The rule that nobody is ever both
+  excluded from a group type and placed in it holds after a restore too.
+  The restore carries on and records what it dropped in the server log.
+
+### Notes
+
+- **Who made an exclusion is not part of a backup**, and neither is
+  allocation history in general. A restored event shows the exclusions and
+  the placements that are in force, with an empty history behind them. The
+  people who made those decisions have no account on the instance the file
+  is restored to, so there is nobody to name.
+
 ## [1.0.4l] — 2026-09-17
 A fix release for three defects found in v1.0.4k.
 

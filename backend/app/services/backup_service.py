@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import MoimioAppError
 from app.models.allocation import Allocation
 from app.models.allocation_category import AllocationCategory
+from app.models.allocation_category_exclusion import AllocationCategoryExclusion
 from app.models.allocation_unit import AllocationUnit
 from app.models.custom_field import CustomFieldDefinition, CustomFieldValue
 from app.models.event import Event
@@ -69,7 +70,8 @@ async def export_event_zip(
                participant PII, custom-field values, allocations, mark
                assignments, or preferences tied to a participant)
 
-    ZIP contents (always present — restore path expects them all):
+    ZIP contents (all written; only the eleven pre-v1.0.4m members are
+    required on read — see _parse_zip):
         manifest.json          — version, event_id, exported_at, row counts,
                                  backup_mode
         event.json             — event metadata + settings
@@ -78,6 +80,10 @@ async def export_event_zip(
         allocation_categories.json
         allocation_units.json
         allocations.json       — participant↔unit assignments ([] in structure mode)
+        allocation_exclusions.json
+                               — v1.0.4m: participant↔group-type exclusions
+                                 ([] in structure mode). Optional on read, so
+                                 pre-v1.0.4m files still restore.
         marks.json             — { definitions, assignments: [] in structure mode }
         preferences.json       — [] in structure mode
         notes.json             — event-level team notes (kept in both modes —
@@ -166,6 +172,28 @@ async def export_event_zip(
             select(Allocation).where(Allocation.unit_id.in_(unit_ids))
         )
         allocations = list(alloc_result.scalars().all())
+
+    # ── Load allocation category exclusions ──
+    # v1.0.4m: an exclusion keeps one participant out of one group type.
+    # It travels with its person: only rows whose participant AND whose
+    # group type are both in this export go in. The two lists above are
+    # the source of truth, so structure mode (participants emptied) and
+    # soft-deleted participants (already filtered out of `participants`)
+    # both fall out of the `participant_ids` test with no extra filter.
+    exclusions: list[AllocationCategoryExclusion] = []
+    if category_ids and participant_ids:
+        excl_result = await db.execute(
+            select(AllocationCategoryExclusion)
+            .where(
+                AllocationCategoryExclusion.allocation_category_id.in_(category_ids),
+                AllocationCategoryExclusion.participant_id.in_(participant_ids),
+            )
+            .order_by(
+                AllocationCategoryExclusion.created_at,
+                AllocationCategoryExclusion.id,
+            )
+        )
+        exclusions = list(excl_result.scalars().all())
 
     # ── Load marks ──
     mark_result = await db.execute(
@@ -260,6 +288,11 @@ async def export_event_zip(
         for a in allocations
     ]
 
+    exclusions_data = [
+        _row(x, "id", "allocation_category_id", "participant_id", "created_at")
+        for x in exclusions
+    ]
+
     marks_data = {
         "definitions": [
             _row(m, "id", "event_id", "name", "colour", "created_at")
@@ -309,6 +342,7 @@ async def export_event_zip(
             "allocation_categories": len(categories),
             "allocation_units": len(units),
             "allocations": len(allocations),
+            "allocation_exclusions": len(exclusions),
             "mark_definitions": len(mark_defs),
             "mark_assignments": len(mark_assignments),
             "preferences": len(preferences),
@@ -327,6 +361,7 @@ async def export_event_zip(
         zf.writestr("allocation_categories.json", json.dumps(categories_data, indent=2, ensure_ascii=False))
         zf.writestr("allocation_units.json", json.dumps(units_data, indent=2, ensure_ascii=False))
         zf.writestr("allocations.json", json.dumps(allocations_data, indent=2, ensure_ascii=False))
+        zf.writestr("allocation_exclusions.json", json.dumps(exclusions_data, indent=2, ensure_ascii=False))
         zf.writestr("marks.json", json.dumps(marks_data, indent=2, ensure_ascii=False))
         zf.writestr("field_configs.json", json.dumps(field_configs_data, indent=2, ensure_ascii=False))
         zf.writestr("preferences.json", json.dumps(preferences_data, indent=2, ensure_ascii=False))
@@ -337,10 +372,17 @@ async def export_event_zip(
 
 # ── Restore ───────────────────────────────────────────────────────────────────
 
+# v1.0.4m: members that may be absent, with the value to use when they are.
+# An older file simply has no exclusions in it, which restores as "nobody
+# excluded"; see _parse_zip.
+_OPTIONAL_MEMBERS: dict[str, list] = {"allocation_exclusions.json": []}
+
+
 def _parse_zip(content: bytes) -> dict:
     """
     Parse a backup ZIP and return a dict of all file contents.
     Raises ValueError if the ZIP is invalid or missing required files.
+    Optional members (_OPTIONAL_MEMBERS) are defaulted when absent.
     """
     required = {"manifest.json", "event.json", "participants.csv",
                 "custom_fields.json", "field_configs.json",
@@ -367,6 +409,19 @@ def _parse_zip(content: bytes) -> dict:
         else:
             # CSV — decode stripping BOM
             data[name] = raw.decode("utf-8-sig")
+
+    # v1.0.4m: optional members, read when present and defaulted when not.
+    # Deliberately NOT in `required`: a member added there would reject
+    # every backup file made before that member existed. A present member
+    # that will not parse raises exactly as a required one does — nothing
+    # here catches json.loads, so the caller turns it into the same error.
+    for name, default in _OPTIONAL_MEMBERS.items():
+        if name in names:
+            data[name] = json.loads(zf.read(name).decode("utf-8"))
+        else:
+            # Copy: the default lives on a module constant.
+            data[name] = list(default)
+
     zf.close()
     return data
 
@@ -424,9 +479,13 @@ async def confirm_restore(content: bytes, db: AsyncSession) -> dict:
     unit_map: dict[str, uuid.UUID] = {}
     mark_map: dict[str, uuid.UUID] = {}
     cf_map: dict[str, uuid.UUID] = {}           # custom field definition old → new
+    # v1.0.4m: new unit id → new group type id. An allocation names a unit,
+    # an exclusion names a group type, so deciding whether a placement is
+    # excluded needs the step between them.
+    unit_category_map: dict[uuid.UUID, uuid.UUID] = {}
 
     counts = {"participants": 0, "allocations": 0, "marks_assigned": 0,
-              "categories": 0, "units": 0}
+              "categories": 0, "units": 0, "allocation_exclusions": 0}
 
     # ── Create event ──
     new_event_id = uuid.uuid4()
@@ -551,6 +610,7 @@ async def confirm_restore(content: bytes, db: AsyncSession) -> dict:
         new_cat_id = category_map.get(unit_src["category_id"])
         if not new_cat_id:
             continue
+        unit_category_map[new_unit_id] = new_cat_id
         unit = AllocationUnit(
             id=new_unit_id,
             category_id=new_cat_id,
@@ -565,11 +625,38 @@ async def confirm_restore(content: bytes, db: AsyncSession) -> dict:
 
     await db.flush()
 
+    # ── Allocation category exclusions (v1.0.4m) ──
+    # Resolved BEFORE the allocations loop, because an exclusion outranks a
+    # placement: when a file says someone is both excluded from a group type
+    # and placed in it, the exclusion is restored and the placement is not.
+    # The rows themselves are written after the allocations block.
+    exclusion_rows: list[tuple[uuid.UUID, uuid.UUID]] = []
+    excluded_pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
+    for excl_src in data["allocation_exclusions.json"]:
+        new_p_id = participant_map.get(excl_src.get("participant_id", ""))
+        new_cat_id = category_map.get(excl_src.get("allocation_category_id", ""))
+        if not new_p_id or not new_cat_id:
+            continue
+        pair = (new_p_id, new_cat_id)
+        # The table is UNIQUE on (group type, participant). A duplicate in a
+        # hand-edited file is dropped here: letting one reach the constraint
+        # would roll the whole restore back over a single bad line.
+        if pair in excluded_pairs:
+            continue
+        excluded_pairs.add(pair)
+        exclusion_rows.append(pair)
+
+    dropped_placements = 0
+
     # ── Allocations ──
     for alloc_src in data["allocations.json"]:
         new_p_id = participant_map.get(alloc_src["participant_id"])
         new_unit_id = unit_map.get(alloc_src["unit_id"])
         if not new_p_id or not new_unit_id:
+            continue
+        # v1.0.4m: the exclusion wins, so drop the placement.
+        if (new_p_id, unit_category_map.get(new_unit_id)) in excluded_pairs:
+            dropped_placements += 1
             continue
         alloc = Allocation(
             event_id=new_event_id,
@@ -580,6 +667,32 @@ async def confirm_restore(content: bytes, db: AsyncSession) -> dict:
         counts["allocations"] += 1
 
     await db.flush()
+
+    # Written directly, never through add_exclusion: that writes history
+    # rows, vacates units and re-opens a confirmed group type. created_at
+    # is left to the column's server default, as the participant block
+    # leaves it; created_by is NULL because nobody on this instance made
+    # the decision, and restore carries attribution for nothing else.
+    for new_p_id, new_cat_id in exclusion_rows:
+        db.add(AllocationCategoryExclusion(
+            allocation_category_id=new_cat_id,
+            participant_id=new_p_id,
+            created_by=None,
+        ))
+        counts["allocation_exclusions"] += 1
+
+    await db.flush()
+
+    # One line per restore, only when a placement was actually dropped. No
+    # names, emails or participant ids: it exists to explain the count, and
+    # the board already shows who is excluded.
+    if dropped_placements:
+        print(
+            f"[RESTORE WARNING] event {new_event_id}: {dropped_placements} "
+            f"placement(s) not restored because the participant is excluded "
+            f"from that group type",
+            flush=True,
+        )
 
     # ── Marks ──
     marks_src = data["marks.json"]

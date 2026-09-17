@@ -623,7 +623,11 @@ up should still weigh Option B on its merits.
 
 ## BACKUP-1 — Backup and restore do not know exclusions exist
 
-**Status:** Open. Found in session 85 phase 1 while tracing every write path to `Allocation` for the exclusion work (v1.0.4j). Deliberately not fixed there. Gates v1.0.5.
+**Status:** ✅ CLOSED in v1.0.4m (2026-09-17). Export writes
+`allocation_exclusions.json`, restore puts the rows back, and a file that
+breaks the invariant loses the placement rather than the exclusion. Found in
+session 85 phase 1 while tracing every write path to `Allocation` for the
+exclusion work (v1.0.4j).
 
 The word "exclusion" does not appear in `backup_service.py`.
 `export_event_zip` writes no `allocation_category_exclusions.json`, and
@@ -636,10 +640,48 @@ violate, which is why j needs no change to `backup_service.py`. But this
 is silent data loss against the stated data-portability promise, and it
 must be closed before the feature ships publicly as v1.0.5.
 
-Its own small release after v1.0.4k, once the export format change can
-be assessed properly. Note for that release: `preview_restore` surfaces
-per-table counts and may carry user-facing strings. That was queued for
-checking when the phase 1 session dropped and is unverified.
+### Resolution
+
+Shipped as v1.0.4m. The member is `allocation_exclusions.json`, written in
+both backup modes and always present in a new file, holding `id`,
+`allocation_category_id`, `participant_id` and `created_at` per row.
+
+Five decisions settled the shape:
+
+- **An exclusion travels with its person.** Export writes a row only when
+  both its participant and its group type are in that export, so a
+  cancelled participant's row goes in, a soft-deleted participant's does
+  not, and structure mode carries none.
+- **The exclusion wins on restore.** A file that says someone is both
+  excluded from a group type and placed in it restores the exclusion and
+  drops the placement, logs one line naming the new event id and the
+  count, and carries on. That keeps the v1.0.4j invariant true through a
+  restore, including a restore from a hand-edited file.
+- **Optional on read.** `BACKUP_VERSION` stays `"1"` and the member never
+  joins `_parse_zip`'s required set. Adding it there would reject every
+  backup file made before it existed. An old file restores as "nobody
+  excluded"; an older Moimio given a v1.0.4m file ignores the member it
+  does not know.
+- **No attribution.** Restored rows get `created_by=None`. The user who
+  made the decision has no account on the receiving instance, and restore
+  carries attribution for nothing else either.
+- **Rows are written directly**, never through `add_exclusion`, which also
+  writes history rows, vacates units and can re-open a confirmed group
+  type. A duplicate pair is dropped before it can reach the UNIQUE
+  constraint, so one bad line cannot roll a whole restore back.
+
+The phase 1 note about `preview_restore` carrying user-facing strings is
+answered: `RestoreModal.jsx` reads two named counts from the manifest
+(`portability.participants_found`, `portability.allocations_found`) and
+ignores the rest, so adding a count to the manifest and to the restore
+return value needed no new strings and no frontend change.
+
+Five tests in `backend/tests/test_v1_0_4m_backup_exclusions.py` cover the
+round trip, an old file, a broken file, a duplicate row and structure
+mode. They are the first tests anywhere to export and then restore: before
+v1.0.4m, `confirm_restore` and `preview_restore` had no coverage at all.
+Everything else that read revealed is filed as BACKUP-2 to BACKUP-6 and
+VERSION-1.
 
 ---
 
