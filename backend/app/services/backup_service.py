@@ -13,6 +13,7 @@ import json
 import uuid
 import zipfile
 from datetime import datetime, date
+from typing import NamedTuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +32,323 @@ from app.models.participant import Participant
 from app.models.preference_request import ParticipantPreferenceRequest
 
 BACKUP_VERSION = "1"
+
+
+# ── The backup register ───────────────────────────────────────────────────────
+
+BACKUP_REGISTER_DOC = """What a backup carries, declared rather than implied.
+
+Every gap the v1.0.4m and backup-completeness investigations found had one
+root cause: what a backup contains was decided by hand-written field lists
+inside export_event_zip, and nothing checked them. A column added to a model
+years later was simply absent from a list nobody re-read, and the loss was
+silent in both directions.
+
+So the lists live here instead, as a register. For every event-scoped table,
+and for every column of every table the backup carries, the register records
+three facts: whether export writes the column, what restore does with it, and
+why, whenever the answer is not "carried faithfully".
+
+`export_event_zip` takes its column lists FROM this register, so the register
+cannot drift from the export. `tests/test_v1_0_4n_backup_guard.py` fails when
+the register disagrees with the schema, or with what the export writes. Adding
+a column to a backed-up model, or adding an event-scoped table, therefore
+fails a test until somebody records a decision about backups.
+
+RESTORE VERBS — what confirm_restore does with the column:
+
+  copied       the file's value is restored
+  remapped     an id, translated through one of the restore's id maps
+  parent       set to the restored event
+  defaulted    not restored, so the model default applies
+  placeholder  restore writes a stand-in value
+  ignored      exported, but restore does not use the file's value
+
+  `copied` and `remapped` require the column to be exported.
+
+REASON TAGS — why a column is not carried faithfully:
+
+  secret                    never leaves the instance
+  derived                   recoverable from something else the backup holds
+  new_id                    restore mints a fresh id, and nothing refers to
+                            the old one
+  reset_on_restore          a restored event is deliberately a fresh draft
+  not_meaningful_elsewhere  the value names something that does not exist on
+                            the receiving instance
+  instance_state            true of the sending instance, not of the event
+  known_gap:BACKUP-n        a real gap, filed under that backlog id
+
+  A reason is required unless the column is exported and `copied` or
+  `remapped`, or is `parent`. A `known_gap` tag is allowed on any entry,
+  because a copied column can still be wrong: JSON holding stale ids is
+  copied faithfully and still restores a rule that no longer works.
+
+**v1.0.5 ships only when no `known_gap` remains.** Each release between now
+and then removes its own tags; the register shrinking to zero is the
+definition of done, not a judgement call.
+"""
+
+RESTORE_VERBS = frozenset({
+    "copied", "remapped", "parent", "defaulted", "placeholder", "ignored",
+})
+
+REASON_TAGS = frozenset({
+    "secret", "derived", "new_id", "reset_on_restore",
+    "not_meaningful_elsewhere", "instance_state",
+})
+
+KNOWN_GAP_PREFIX = "known_gap:"
+
+
+class Col(NamedTuple):
+    """One column's three facts, plus how export writes it.
+
+    `raw` marks a column export writes by hand rather than through `_row`:
+    the JSON columns appended after the `_row` dict, and the custom field
+    values, which are keyed by participant instead of listed as rows. They
+    are declared so the guard can see them; how they are written is
+    unchanged.
+    """
+    exported: bool
+    restore: str
+    reason: str | None = None
+    raw: bool = False
+
+
+class Table(NamedTuple):
+    """One carried table: its ZIP member, and its key inside that member
+    when one member holds two tables (marks.json, custom_fields.json)."""
+    member: str
+    key: str | None
+    columns: dict[str, Col]
+
+
+# Column order matters: export derives its field lists from this register, so
+# the exported columns of each table are declared in exactly the order they
+# are written today, `raw` ones last. Columns export does not write follow.
+
+BACKUP_REGISTER: dict[str, Table] = {
+    "events": Table("event.json", None, {
+        # Exported, in export order.
+        "id": Col(True, "ignored", "new_id"),
+        # Restore appends " (Restored)", as the restore screen promises; the
+        # file's value is still what the new name is built from.
+        "name": Col(True, "copied"),
+        "description": Col(True, "copied"),
+        "location": Col(True, "copied"),
+        "start_date": Col(True, "copied"),
+        "end_date": Col(True, "copied"),
+        "status": Col(True, "ignored", "reset_on_restore"),
+        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "updated_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "settings": Col(True, "copied", raw=True),
+        # Not exported.
+        "timezone": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        "details_confirmed": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        "registration_confirmed": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        "is_archived": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        "over_cap_signalled": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        "created_by": Col(False, "placeholder", "known_gap:BACKUP-2"),
+    }),
+    "participants": Table("participants.csv", None, {
+        "id": Col(True, "remapped"),
+        "first_name": Col(True, "copied"),
+        "last_name": Col(True, "copied"),
+        "email": Col(True, "copied"),
+        "gender": Col(True, "copied"),
+        "date_of_birth": Col(True, "copied"),
+        "phone": Col(True, "copied"),
+        "address": Col(True, "copied"),
+        "country": Col(True, "copied"),
+        "church_organisation": Col(True, "copied"),
+        "message": Col(True, "copied"),
+        "group_code": Col(True, "copied"),
+        # Copied verbatim, so the list still names pre-restore group types.
+        "group_code_categories": Col(True, "copied", "known_gap:BACKUP-3"),
+        "participant_number": Col(True, "copied"),
+        "registration_status": Col(True, "copied"),
+        "gdpr_consent": Col(True, "copied"),
+        "checked_in": Col(True, "copied"),
+        "preferred_language": Col(True, "copied"),
+        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "event_id": Col(False, "parent"),
+        "override_group_room": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        "confirmation_token": Col(False, "defaulted", "secret"),
+        "checked_in_at": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        "deleted_at": Col(False, "defaulted", "derived"),
+        "updated_at": Col(False, "defaulted", "known_gap:BACKUP-8"),
+    }),
+    "custom_field_definitions": Table("custom_fields.json", "definitions", {
+        "id": Col(True, "remapped"),
+        "event_id": Col(True, "parent"),
+        "label": Col(True, "copied"),
+        "field_type": Col(True, "copied"),
+        "is_required": Col(True, "copied"),
+        "sort_order": Col(True, "copied"),
+        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "options": Col(True, "copied", raw=True),
+        "show_in_form": Col(False, "defaulted", "known_gap:BACKUP-2"),
+    }),
+    "custom_field_values": Table("custom_fields.json", "values", {
+        # Written as {old participant id: [{field_id, value}]}, so the
+        # participant id is the map key rather than a column in a row.
+        "participant_id": Col(True, "remapped", raw=True),
+        "field_id": Col(True, "remapped", raw=True),
+        "value": Col(True, "copied", raw=True),
+        "id": Col(False, "defaulted", "new_id"),
+    }),
+    "event_field_configs": Table("field_configs.json", None, {
+        "id": Col(True, "ignored", "new_id"),
+        "event_id": Col(True, "parent"),
+        "field_name": Col(True, "copied"),
+        "is_enabled": Col(True, "copied"),
+        "is_required": Col(True, "copied"),
+        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "updated_at": Col(False, "defaulted", "known_gap:BACKUP-8"),
+    }),
+    "allocation_categories": Table("allocation_categories.json", None, {
+        "id": Col(True, "remapped"),
+        "event_id": Col(True, "parent"),
+        "name": Col(True, "copied"),
+        "item_label": Col(True, "copied"),
+        "description": Col(True, "copied"),
+        "rule_type": Col(True, "copied"),
+        # Exported, then forced True on restore. Deprecated since v1.0.3 in
+        # the sense that the engine no longer reads them, but the API still
+        # accepts and stores False (api/allocations.py CategoryUpdate ->
+        # update_category), and the stated reason for keeping the columns is
+        # that rolling a workspace back to 1.0.2c must not hide the fields.
+        # So a restore can lose a False an older version would read.
+        "has_capacity": Col(True, "ignored", "known_gap:BACKUP-2"),
+        "has_gender_restriction": Col(True, "ignored", "known_gap:BACKUP-2"),
+        "sort_order": Col(True, "copied"),
+        "is_default": Col(True, "copied"),
+        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        # engine.mark_priorities entries key on a bare mark id.
+        "settings": Col(True, "copied", "known_gap:BACKUP-3", raw=True),
+        "name_key": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        "item_label_key": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        "exclusive_group_codes": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        "confirmed": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        "updated_at": Col(False, "defaulted", "known_gap:BACKUP-8"),
+    }),
+    "allocation_units": Table("allocation_units.json", None, {
+        "id": Col(True, "remapped"),
+        "category_id": Col(True, "remapped"),
+        "name": Col(True, "copied"),
+        "description": Col(True, "copied"),
+        "capacity": Col(True, "copied"),
+        "gender_restriction": Col(True, "copied"),
+        "sort_order": Col(True, "copied"),
+        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "mark_restriction": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        "is_kept": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        "updated_at": Col(False, "defaulted", "known_gap:BACKUP-8"),
+    }),
+    "allocations": Table("allocations.json", None, {
+        "id": Col(True, "ignored", "new_id"),
+        "event_id": Col(True, "parent"),
+        "participant_id": Col(True, "remapped"),
+        "unit_id": Col(True, "remapped"),
+        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "updated_at": Col(False, "defaulted", "known_gap:BACKUP-8"),
+    }),
+    "allocation_category_exclusions": Table("allocation_exclusions.json", None, {
+        "id": Col(True, "ignored", "new_id"),
+        "allocation_category_id": Col(True, "remapped"),
+        "participant_id": Col(True, "remapped"),
+        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        # v1.0.4m: NULL on purpose. Nobody on the receiving instance made
+        # this decision, and allocation_events is the audit surface anyway.
+        "created_by": Col(False, "defaulted", "not_meaningful_elsewhere"),
+    }),
+    "mark_definitions": Table("marks.json", "definitions", {
+        "id": Col(True, "remapped"),
+        "event_id": Col(True, "parent"),
+        "name": Col(True, "copied"),
+        "colour": Col(True, "copied"),
+        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "visible_in": Col(True, "copied", raw=True),
+        "cluster_behaviour": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        "created_by_user_id": Col(False, "defaulted", "known_gap:BACKUP-2"),
+    }),
+    "mark_assignments": Table("marks.json", "assignments", {
+        "id": Col(True, "ignored", "new_id"),
+        "mark_id": Col(True, "remapped"),
+        "participant_id": Col(True, "remapped"),
+        "event_id": Col(True, "parent"),
+        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "assigned_by_user_id": Col(False, "defaulted", "known_gap:BACKUP-2"),
+    }),
+    "participant_preference_requests": Table("preferences.json", None, {
+        "id": Col(True, "ignored", "new_id"),
+        "event_id": Col(True, "parent"),
+        "participant_id": Col(True, "remapped"),
+        # Points at a participant by participant_number, not by id, and that
+        # column is both exported and restored, so the target survives.
+        "preferred_participant_number": Col(True, "copied"),
+        "preferred_name": Col(True, "copied"),
+        "preferred_details": Col(True, "copied"),
+        "resolved": Col(True, "copied"),
+        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        # "all", or a list of pre-restore group type ids.
+        "category_scope": Col(True, "copied", "known_gap:BACKUP-3", raw=True),
+        "resolved_note": Col(False, "defaulted", "known_gap:BACKUP-2"),
+    }),
+    "notes": Table("notes.json", None, {
+        "id": Col(True, "ignored", "new_id"),
+        "notable_type": Col(True, "copied"),
+        # Overwritten with the restored event id instead of being remapped
+        # through the participant, category and unit maps.
+        "notable_id": Col(True, "parent", "known_gap:BACKUP-4"),
+        "content": Col(True, "copied"),
+        # Forced True on restore, so an unpublished note would come back
+        # published. Unreachable today: no screen writes an event-level note,
+        # so the export filter (notable_id == event_id AND is_published)
+        # never matches and this member is always empty.
+        "is_published": Col(True, "ignored", "known_gap:BACKUP-4"),
+        "author_id": Col(True, "placeholder", "known_gap:BACKUP-2"),
+        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "updated_at": Col(False, "defaulted", "known_gap:BACKUP-8"),
+    }),
+}
+
+# Event-scoped tables the backup does not carry at all.
+NOT_CARRIED: dict[str, str] = {
+    "checkin_fields": "known_gap:BACKUP-4",
+    "checkin_values": "known_gap:BACKUP-4",
+    "event_user_assignments": "known_gap:BACKUP-4",
+    "allocation_events": "known_gap:BACKUP-5",
+}
+
+# Which tables belong to an event is computed by walking the foreign keys to
+# `events` (see the guard). These are the references that have no foreign key
+# for the walk to follow, so each one is declared here with its reason.
+EVENT_SCOPE_OVERRIDES: dict[str, str] = {
+    # notes.notable_id is a plain UUID typed by notes.notable_type, pointing
+    # at a participant, a group type or a unit. The only foreign key on the
+    # table is author_id -> users, so the walk would call notes
+    # instance-scoped.
+    "notes": "notable_id is a polymorphic UUID with no foreign key",
+}
+
+
+def exported_columns(table: str) -> tuple[str, ...]:
+    """Every column export writes for this table, in export order."""
+    return tuple(
+        name for name, col in BACKUP_REGISTER[table].columns.items()
+        if col.exported
+    )
+
+
+def _row_fields(table: str) -> tuple[str, ...]:
+    """The columns export passes to `_row`: the exported ones it does not
+    write by hand. Same order as `exported_columns`, `raw` ones removed."""
+    return tuple(
+        name for name, col in BACKUP_REGISTER[table].columns.items()
+        if col.exported and not col.raw
+    )
+
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -236,13 +554,7 @@ async def export_event_zip(
 
     # ── Build participants CSV ──
     csv_buf = io.StringIO()
-    csv_cols = [
-        "id", "first_name", "last_name", "email", "gender", "date_of_birth",
-        "phone", "address", "country", "church_organisation", "message",
-        "group_code", "group_code_categories", "participant_number",
-        "registration_status", "gdpr_consent", "checked_in", "preferred_language",
-        "created_at",
-    ]
+    csv_cols = list(_row_fields("participants"))
     writer = csv.DictWriter(csv_buf, fieldnames=csv_cols, lineterminator="\r\n")
     writer.writeheader()
     for p in participants:
@@ -253,16 +565,13 @@ async def export_event_zip(
         writer.writerow(row)
 
     # ── Assemble JSON payloads ──
-    event_data = _row(
-        event, "id", "name", "description", "location",
-        "start_date", "end_date", "status", "created_at", "updated_at",
-    )
+    event_data = _row(event, *_row_fields("events"))
     event_data["settings"] = event.settings or {}
     event_data["status"] = event.status.value if hasattr(event.status, "value") else str(event.status)
 
     custom_fields_data = {
         "definitions": [
-            _row(cf, "id", "event_id", "label", "field_type", "is_required", "sort_order", "created_at")
+            _row(cf, *_row_fields("custom_field_definitions"))
             | {"options": cf.options}
             for cf in cf_defs
         ],
@@ -270,57 +579,51 @@ async def export_event_zip(
     }
 
     categories_data = [
-        _row(cat, "id", "event_id", "name", "item_label", "description",
-             "rule_type", "has_capacity", "has_gender_restriction",
-             "sort_order", "is_default", "created_at")
+        _row(cat, *_row_fields("allocation_categories"))
         | {"settings": cat.settings or {}}
         for cat in categories
     ]
 
     units_data = [
-        _row(u, "id", "category_id", "name", "description",
-             "capacity", "gender_restriction", "sort_order", "created_at")
+        _row(u, *_row_fields("allocation_units"))
         for u in units
     ]
 
     allocations_data = [
-        _row(a, "id", "event_id", "participant_id", "unit_id", "created_at")
+        _row(a, *_row_fields("allocations"))
         for a in allocations
     ]
 
     exclusions_data = [
-        _row(x, "id", "allocation_category_id", "participant_id", "created_at")
+        _row(x, *_row_fields("allocation_category_exclusions"))
         for x in exclusions
     ]
 
     marks_data = {
         "definitions": [
-            _row(m, "id", "event_id", "name", "colour", "created_at")
+            _row(m, *_row_fields("mark_definitions"))
             | {"visible_in": m.visible_in}
             for m in mark_defs
         ],
         "assignments": [
-            _row(ma, "id", "mark_id", "participant_id", "event_id", "created_at")
+            _row(ma, *_row_fields("mark_assignments"))
             for ma in mark_assignments
         ],
     }
 
     field_configs_data = [
-        _row(fc, "id", "event_id", "field_name", "is_enabled", "is_required", "created_at")
+        _row(fc, *_row_fields("event_field_configs"))
         for fc in field_configs
     ]
 
     preferences_data = [
-        _row(pr, "id", "event_id", "participant_id",
-             "preferred_participant_number", "preferred_name",
-             "preferred_details", "resolved", "created_at")
+        _row(pr, *_row_fields("participant_preference_requests"))
         | {"category_scope": pr.category_scope}
         for pr in preferences
     ]
 
     notes_data = [
-        _row(n, "id", "notable_type", "notable_id",
-             "content", "is_published", "author_id", "created_at")
+        _row(n, *_row_fields("notes"))
         for n in notes
     ]
 

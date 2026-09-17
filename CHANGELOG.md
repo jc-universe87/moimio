@@ -8,6 +8,34 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4n] — 2026-09-17
+Groundwork. Nothing you see or get in a backup changes.
+
+### Changed
+
+- **The backup now says, in one place, what it carries and what it does
+  not.** Nothing about a backup file changes in this release: export the
+  same event before and after and you get the same bytes. What changes is
+  that the list of what goes into a backup is no longer scattered through
+  the code where nobody could check it. It is written down once, column by
+  column, with a note against anything that is left out and why.
+
+  A check runs with the tests and fails if the two ever drift apart. Adding
+  a new field to Moimio now fails that check until somebody decides whether
+  a backup should carry it. The whole reason earlier fields went missing
+  from backups was that nobody was asked.
+
+### Notes
+
+- **The record starts by listing what is still missing.** Reading the
+  backup end to end turned up more than the exclusions fixed in v1.0.4m:
+  group settings an organiser had chosen, check-in columns and their ticks,
+  notes, the record of who changed what, and the original dates. Each one
+  is now written down as a known gap with its own entry.
+
+- **Every one of those gaps is being closed before the next public
+  release.** They are listed so they can be ticked off, not filed away.
+
 ## [1.0.4m] — 2026-09-17
 Backups now carry exclusions.
 
