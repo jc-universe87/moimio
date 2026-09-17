@@ -20,6 +20,7 @@ change here.
 An entry tagged `known_gap` is skipped: it is a filed gap, not a regression.
 """
 
+import copy
 import uuid
 from datetime import date
 
@@ -48,6 +49,11 @@ from app.services.backup_service import (
 )
 
 pytestmark = pytest.mark.asyncio
+
+# v1.0.4p: an id no map will ever know. Live data can hold one of these —
+# deleting a group type leaves its id behind in group_code_categories — so
+# the net carries one and checks it comes back untouched rather than dropped.
+DEAD_ID = "00000000-0000-4000-8000-0000000dead0"
 
 
 # ─── The natural key each table is matched by ─────────────────────────
@@ -256,15 +262,59 @@ async def _build(db) -> dict:
                                 is_enabled=True, is_required=True))
 
     # ── Preferences ──
-    for email, pref_number, pref_name, details in (
-        ("anna@test.local", 102, "Bruno Beta", "Same street, known each other for years"),
-        ("bruno@test.local", 101, "Anna Alpha", "Travelling together"),
+    for email, pref_number, pref_name, details, scope in (
+        ("anna@test.local", 102, "Bruno Beta",
+         "Same street, known each other for years",
+         # Two different known targets, so a wrong mapping cannot pass.
+         [str(cats["Bedrooms"].id), str(cats["Workshops"].id)]),
+        ("bruno@test.local", 101, "Anna Alpha", "Travelling together", "all"),
     ):
         db.add(ParticipantPreferenceRequest(
             event_id=ev.id, participant_id=people[email].id,
             preferred_participant_number=pref_number, preferred_name=pref_name,
-            preferred_details=details, resolved=True,
+            preferred_details=details, category_scope=scope, resolved=True,
         ))
+
+    # ── Ids inside JSON (v1.0.4p) ──
+    # Set here rather than at construction, because these columns hold ids of
+    # rows the fixture creates after the row that carries them.
+    #
+    # Carla's group code is limited to two group types AND carries one id no
+    # map can know, which is what live data looks like after a group type has
+    # been deleted. Anna and Bruno keep null, meaning every group type.
+    #
+    # It goes on Carla, the LAST participant by number, on purpose: serialised
+    # into participants.csv this value contains commas, so it is quoted, and
+    # test_v1_0_4o_damaged_files.py edits the FIRST data row with a plain
+    # split on ",". Keeping row one free of quoted commas leaves that file
+    # untouched, which it has to be.
+    people["carla@test.local"].group_code_categories = [
+        str(cats["Bedrooms"].id), str(cats["Workshops"].id), DEAD_ID,
+    ]
+
+    # Two entries naming two different marks, plus values that must survive
+    # untouched: `behaviour` inside each entry, and the keys beside them.
+    cats["Bedrooms"].settings = {
+        "engine": {
+            "use_group_codes": True,
+            "group_remaining_by_gender": False,
+            "split_oversized_groups": False,
+            "mark_priorities": [
+                {"id": str(marks["Team leader"].id), "behaviour": "together"},
+                {"id": str(marks["First aider"].id), "behaviour": "split"},
+            ],
+        },
+        "title": "Bedroom rules",
+    }
+    cats["Workshops"].settings = {
+        "engine": {
+            "use_group_codes": False,
+            "mark_priorities": [
+                {"id": str(marks["First aider"].id), "behaviour": "together"},
+            ],
+        },
+    }
+    await db.flush()
 
     # ── Notes: event-level and published, the only kind export carries ──
     for content in ("Minibus leaves at nine.", "Kitchen code is on the door."):
@@ -398,6 +448,51 @@ async def test_1_the_fixture_is_not_lazy(db):
                         f"check would pass for the wrong reason."
                     )
 
+    # v1.0.4p: the three columns that hold ids inside JSON. A list of ids
+    # that resolve to nothing proves nothing about remapping, so check the
+    # fixture really carries ids the maps will know — two different ones in
+    # each, so a wrong mapping cannot pass — plus, for
+    # group_code_categories, one that no map can know.
+    live_cats = {str(c.id) for c in snap["allocation_categories"].values()}
+    live_marks = {str(m.id) for m in snap["mark_definitions"].values()}
+
+    scoped = snap["participants"]["carla@test.local"].group_code_categories or []
+    known = [i for i in scoped if i in live_cats]
+    if len(set(known)) < 2:
+        problems.append(
+            f"participants.group_code_categories holds {len(set(known))} id(s) "
+            f"the maps will know, out of {scoped!r}. Two different ones are "
+            f"needed, or a wrong mapping passes."
+        )
+    if not [i for i in scoped if i not in live_cats]:
+        problems.append(
+            "participants.group_code_categories holds no unresolvable id. "
+            "Live data can carry one after a group type is deleted, and the "
+            "net has to prove it comes back untouched rather than dropped."
+        )
+
+    scope = snap["participant_preference_requests"]["anna@test.local"].category_scope
+    in_scope = [i for i in (scope or []) if i in live_cats]
+    if len(set(in_scope)) < 2:
+        problems.append(
+            f"participant_preference_requests.category_scope holds "
+            f"{len(set(in_scope))} id(s) the maps will know, out of {scope!r}. "
+            f"Two different ones are needed."
+        )
+
+    prioritised = set()
+    for cat in snap["allocation_categories"].values():
+        engine = (cat.settings or {}).get("engine") or {}
+        for entry in engine.get("mark_priorities") or []:
+            mid = entry.get("id") if isinstance(entry, dict) else entry
+            if isinstance(mid, str) and mid in live_marks:
+                prioritised.add(mid)
+    if len(prioritised) < 2:
+        problems.append(
+            f"allocation_categories.settings prioritises {len(prioritised)} "
+            f"mark(s) the maps will know. Two different ones are needed."
+        )
+
     assert not problems, "\n".join(problems)
 
 
@@ -429,7 +524,61 @@ async def test_2_round_trip_is_faithful(db):
     def before_cf(fid):
         return {c.id: c.label for c in before["custom_field_definitions"].values()}[fid]
 
+    # v1.0.4p: the three columns that hold ids inside JSON. The expected
+    # value is built through the source-to-restored correspondence by NAME,
+    # never through the ids under test, and an id neither side knows is
+    # expected back exactly as it was.
+    def cat_name_by_src_id() -> dict[str, str]:
+        return {str(c.id): c.name for c in before["allocation_categories"].values()}
+
+    def mark_name_by_src_id() -> dict[str, str]:
+        return {str(m.id): m.name for m in before["mark_definitions"].values()}
+
+    def expect_cat_ids(value):
+        if not isinstance(value, list):
+            return value            # null, or "all"
+        names = cat_name_by_src_id()
+        out = []
+        for element in value:
+            name = names.get(element) if isinstance(element, str) else None
+            out.append(
+                str(after["allocation_categories"][name].id) if name else element
+            )
+        return out
+
+    def expect_settings(value):
+        if not isinstance(value, dict):
+            return value
+        engine = value.get("engine")
+        if not isinstance(engine, dict):
+            return value
+        entries = engine.get("mark_priorities")
+        if not isinstance(entries, list):
+            return value
+        names = mark_name_by_src_id()
+
+        def one(entry):
+            if isinstance(entry, str):
+                name = names.get(entry)
+                return str(after["mark_definitions"][name].id) if name else entry
+            if isinstance(entry, dict) and isinstance(entry.get("id"), str):
+                name = names.get(entry["id"])
+                if not name:
+                    return entry
+                return {**entry, "id": str(after["mark_definitions"][name].id)}
+            return entry
+
+        out = copy.deepcopy(value)
+        out["engine"]["mark_priorities"] = [one(e) for e in entries]
+        return out
+
     RESOLVE = {
+        ("participants", "group_code_categories"):
+            lambda r: expect_cat_ids(r.group_code_categories),
+        ("participant_preference_requests", "category_scope"):
+            lambda r: expect_cat_ids(r.category_scope),
+        ("allocation_categories", "settings"):
+            lambda r: expect_settings(r.settings),
         ("allocation_units", "category_id"):
             lambda r: after["allocation_categories"][before_cat(r.category_id)].id,
         ("allocations", "participant_id"):

@@ -8,6 +8,41 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4p] — 2026-09-17
+Three settings that pointed at nothing after a restore now point at the right
+things.
+
+### Fixed
+
+- **A group code limited to certain group types keeps that limit after a
+  restore.** Where a participant's group code was set to apply only to, say,
+  Bedrooms and Workshops, the restored event used to hold the old event's
+  group type references, which matched nothing, so the group code quietly
+  applied nowhere at all. It now names the restored group types, in the same
+  order, and works as it did.
+
+- **A grouping request keeps the group types it was limited to.** Same
+  problem, same fix. Note that Moimio does not yet act on that limit by
+  itself: the request is there for the organising team to read, which has not
+  changed.
+
+- **Per-group-type mark priorities survive a restore.** Where the same mark
+  is set to keep people together in one group type and spread them evenly in
+  another, those settings referred to the old event's marks and had stopped
+  taking effect. They now refer to the restored marks, and everything else
+  in a group type's settings is carried through untouched.
+
+### Notes
+
+- **The backup file itself has not changed, and older files still restore.**
+  A backup made by any earlier version restores exactly as it did before,
+  and a backup made now can still be read by an older Moimio.
+
+- **A reference that was already broken stays as it is.** If a group type was
+  deleted before the backup was taken, its reference was already pointing at
+  nothing, and a restore leaves it exactly as it found it rather than
+  quietly changing what the setting means.
+
 ## [1.0.4o] — 2026-09-17
 A damaged backup file no longer costs you the whole restore.
 

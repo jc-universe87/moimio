@@ -932,7 +932,10 @@ column is fixed.
 
 ## BACKUP-3 — Ids inside JSON fields are not renumbered on restore
 
-**Status:** Open. Found in session 86 phase 1 while reading the backup path for BACKUP-1 (v1.0.4m). Not fixed there.
+**Status:** ✅ CLOSED in v1.0.4p (2026-09-17). All three columns are now
+`remapped`: every id the restore's maps know is translated in place, and
+everything else is left exactly as the file has it. Found in session 86 phase 1
+while reading the backup path for BACKUP-1 (v1.0.4m).
 
 Restore renumbers every id that lives in its own column, through the five
 maps in `confirm_restore`. Ids that live inside a JSON field are copied
@@ -950,6 +953,57 @@ working, with nothing on screen to say so:
 
 An exclusion is not affected: it stores both of its ids as real columns,
 which is why v1.0.4m could map them cleanly.
+
+### Resolution
+
+Shipped as v1.0.4p, in two parts.
+
+**The write order moved** so that every map exists before anything needs it:
+event, marks, custom field definitions, field configs, group types, units,
+participants, exclusions resolved, allocations, exclusion rows, mark
+assignments, preferences, notes. Marks moved from tenth to second and
+participants from fourth to seventh. Nothing inside any block changed beyond
+what the move required. This also clears the way for v1.0.4q to carry
+`mark_restriction`, which needs `mark_map` before units are written.
+
+**One rule for all three columns:** translate every id the maps know, and
+leave every other value exactly as the file has it, in place. Order and
+length never change, and nothing is added or dropped. "Every other value"
+covers `null`, `"all"`, ids the maps do not know, and elements of an
+unexpected type. In `mark_priorities`, only an entry's `id` is ever
+translated: every other key in the entry survives, both on-disk entry
+shapes are handled, and the bare id is never given a `mark:` prefix.
+
+**Why nothing is dropped**, which is the decision this release turned on.
+The investigation first proposed dropping ids that do not resolve. That is
+wrong, and the reason is in `engine_service`:
+
+```
+scope = p.group_code_categories
+if scope and cat_id_str not in [str(s) for s in scope]:
+    continue
+```
+
+It is a falsy check, and its own comment reads "default = all categories".
+So an EMPTY list means "applies to every group type", while a list of ids
+that resolve to nothing means "applies nowhere". Dropping the last
+untranslatable id would therefore have inverted the rule rather than losing
+it, and could have put people together in group types the organiser had
+deliberately taken their group code out of. Leaving the untranslatable in
+place keeps every reader's behaviour identical to what it was before the
+backup, whatever the list holds.
+
+In a file the app produced every id resolves, because export carries every
+group type and every mark. An id that does not resolve was already dead
+before the backup was taken, which is ARCH-3, not a backup gap.
+
+Covered by `test_v1_0_4p_write_order.py`, twelve cases, each checked through
+the column's real reader where one enforces it: the engine's PASS 1
+clustering for `group_code_categories` and `_mark_behaviour_for` for
+`mark_priorities`. `category_scope` is checked as a stored value only,
+because nothing enforces it: that is ARCH-4. The round-trip net now covers
+all three columns, and carries one unresolvable id to prove it comes back
+untouched.
 
 ---
 
@@ -1289,6 +1343,13 @@ explicit null in a NOT NULL column that HAS a default still reached the
 insert as None, because `.get(key, literal)` returns the literal only when
 the key is absent. Those reads now go through the same helper.
 
+v1.0.4p added the one de-duplication v1.0.4o left conditional. Custom field
+values have no unique constraint on (participant, field), so the question
+was whether the app can legitimately write two. It cannot: registration
+iterates a dict keyed by field id, and the update path builds
+`existing_by_field_id` and upserts. So a repeated line is damage, and the
+first one now wins, counted like every other skip.
+
 The whole of it is covered by `test_v1_0_4o_damaged_files.py`, and
 `test_v1_0_4o_round_trip.py` proves that a file Moimio produced restores
 exactly as it did before.
@@ -1317,10 +1378,34 @@ difference between "you can leave" and "you can leave in an afternoon".
 
 ### Decided (session 86)
 
-**Pending.** The shape of a whole-workspace restore is still with Johannes:
-whether it is a command, an endpoint or a screen, and what it does about
-events that already exist. Scheduled as v1.0.4t, to be briefed once that is
-settled.
+**A server command** restores every event in a whole-workspace export,
+archived ones included, through the same checked per-event restore. So every
+v1.0.4o rule about damaged lines applies unchanged.
+
+- **A trial run** shows what would be restored without writing anything.
+- **Damaged events.** If one event cannot be read, the rest still restore,
+  and the command lists what did not. The same rule one level up: one bad
+  event costs that event, not the archive.
+- **Names.** On an empty server, events keep their real names. If the server
+  already has events, the command stops unless it is told explicitly to add
+  to them, and in that case names get "(Restored)".
+- **Every event comes back as a draft**, attributed to the admin named in
+  the command.
+- **Two reference lists join the whole-workspace export.** Restore never
+  applies either of them, and both files are always present, empty or not.
+  - **The team:** names, emails, system roles and per-event roles. No
+    passwords and no tokens.
+  - **Webhooks:** customer-made endpoints only, never the hosting service's
+    own. Names, addresses and event types; no secrets. For hosted customers
+    this list is always empty, because the Webhooks page is not visible to
+    them.
+- **Not in per-event backups.** Both lists appear only in the
+  whole-workspace export.
+- **The leaving screen** says what the export contains (STRINGS-1).
+
+Follow-ups outside this code: a self-hosting documentation page, and the
+hosted leaving email should explain how to use the file, which is a wording
+change in `moimio-saas`.
 
 ---
 difference between "you can leave" and "you can leave in an afternoon".
@@ -1509,3 +1594,62 @@ participant's GDPR export as their data.
 Options, none picked: wire it up, if the rule was intended; drop the column
 in a migration, if it was not; or leave it and document it as reserved.
 Whichever it is, the answer should be written down rather than rediscovered.
+
+---
+
+## ARCH-3 — Deleting a group type leaves its id behind in two JSON columns
+
+**Status:** Open. Found in session 86 while settling the v1.0.4p rule for ids inside JSON. Belongs to the non-backup survey before v1.0.5.
+
+`delete_category` deletes the row and flushes, and nothing else. It does not
+touch either column that holds group type ids inside JSON:
+
+- `participants.group_code_categories`
+- `participant_preference_requests.category_scope`
+
+So a deleted group type's id stays in live data indefinitely. The
+consequences, in order of how much they matter:
+
+- **If every group type a group code was limited to is deleted, the code
+  silently applies nowhere.** The engine's PASS 1 reads the scope with
+  `if scope and cat_id_str not in [...]`, so a list of dead ids matches no
+  category and the participant is never clustered. Nothing on screen says
+  why the group code stopped working.
+- **Recreating the group type does not bring the limit back.** The new row
+  has a new id, so the stale one still matches nothing.
+- **What the screens show for such a person is unknown** and worth checking
+  while fixing this.
+
+**Warning for whoever picks this up: never fix it by emptying the list.** An
+empty list means "every group type" to the engine, so emptying a stale
+scope would widen a group code from "nowhere" to "everywhere". That is the
+trap v1.0.4p found and deliberately avoided; see BACKUP-3's Resolution.
+
+The safe shapes are to remove only the deleted id and leave any others, or
+to clear the group code alongside the scope when the scope would be left
+with nothing live in it. Either needs a decision about what the organiser
+should see.
+
+---
+
+## ARCH-4 — Grouping-request scopes are stored and exported but do nothing
+
+**Status:** Open. Found in session 86 while settling the v1.0.4p rule for ids inside JSON. Belongs to the non-backup survey before v1.0.5.
+
+`participant_preference_requests.category_scope` holds `"all"` or a list of
+group type ids, is written at registration, is carried in a backup, and
+appears in the per-person GDPR export. **Nothing enforces it.** The string
+`category_scope` appears nowhere in `engine_service.py` or
+`allocation_service.py`, so a request scoped to one group type is honoured
+exactly as widely as one scoped to all of them: the organiser reads the
+request and acts by hand.
+
+There is a second, smaller problem beside it. `PreferencesPanel.jsx` renders
+the scope as `req.category_scope.join(', ')`, which puts **raw UUIDs** on
+screen when the scope is a list rather than `"all"`. Nothing resolves them
+to group type names.
+
+So either the column should drive something, or the UI should stop offering
+a choice that has no effect, and in the meantime it should at least show
+names rather than ids. v1.0.4p carries the ids correctly through a restore,
+which is all that release could sensibly do about it.

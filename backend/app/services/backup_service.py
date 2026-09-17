@@ -165,8 +165,8 @@ BACKUP_REGISTER: dict[str, Table] = {
         "church_organisation": Col(True, "copied"),
         "message": Col(True, "copied"),
         "group_code": Col(True, "copied"),
-        # Copied verbatim, so the list still names pre-restore group types.
-        "group_code_categories": Col(True, "copied", "known_gap:BACKUP-3"),
+        # v1.0.4p: the group type ids inside are translated in place.
+        "group_code_categories": Col(True, "remapped"),
         "participant_number": Col(True, "copied"),
         "registration_status": Col(True, "copied"),
         "gdpr_consent": Col(True, "copied"),
@@ -226,8 +226,9 @@ BACKUP_REGISTER: dict[str, Table] = {
         "sort_order": Col(True, "copied"),
         "is_default": Col(True, "copied"),
         "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
-        # engine.mark_priorities entries key on a bare mark id.
-        "settings": Col(True, "copied", "known_gap:BACKUP-3", raw=True),
+        # v1.0.4p: engine.mark_priorities entries key on a bare mark id, and
+        # those ids are translated in place; every other key passes through.
+        "settings": Col(True, "remapped", raw=True),
         "name_key": Col(False, "defaulted", "known_gap:BACKUP-2"),
         "item_label_key": Col(False, "defaulted", "known_gap:BACKUP-2"),
         "exclusive_group_codes": Col(False, "defaulted", "known_gap:BACKUP-2"),
@@ -293,8 +294,9 @@ BACKUP_REGISTER: dict[str, Table] = {
         "preferred_details": Col(True, "copied"),
         "resolved": Col(True, "copied"),
         "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
-        # "all", or a list of pre-restore group type ids.
-        "category_scope": Col(True, "copied", "known_gap:BACKUP-3", raw=True),
+        # v1.0.4p: "all" passes through; a list of group type ids is
+        # translated in place.
+        "category_scope": Col(True, "remapped", raw=True),
         "resolved_note": Col(False, "defaulted", "known_gap:BACKUP-2"),
     }),
     "notes": Table("notes.json", None, {
@@ -432,6 +434,92 @@ def _old_id(src, key: str) -> str | None:
         return None
     raw = str(raw).strip()
     return raw or None
+
+
+# ── Ids that live inside a JSON column (v1.0.4p) ─────────────────────────────
+#
+# Three columns hold ids inside JSON rather than in a column of their own, so
+# restore's id maps cannot reach them by the ordinary route:
+#
+#   participants.group_code_categories              group type ids, or null
+#   participant_preference_requests.category_scope  group type ids, or "all"
+#   allocation_categories.settings                  mark ids, under
+#                                                   engine.mark_priorities
+#
+# THE RULE: translate every id the maps know. Leave every other value exactly
+# as the file has it, in place. Order and length never change, and nothing is
+# added or dropped.
+#
+# "Every other value" means null, "all", ids the maps do not know, and
+# elements of an unexpected type.
+#
+# Why not drop what cannot be translated: to the engine a list of ids that
+# resolve to nothing means "applies nowhere", while an EMPTY list means
+# "applies everywhere" — `if scope and cat_id_str not in ...` in
+# engine_service is a falsy check, and its own comment reads "default = all
+# categories". Emptying such a list would therefore invert the rule instead
+# of losing it. Leaving the untranslatable in place keeps every reader's
+# behaviour identical to what it was before the backup, whatever the list
+# holds.
+#
+# In a file the app produced every id resolves, because export carries every
+# group type and every mark. An id that does not resolve was already dead
+# before the backup was taken, which is a live-data question and not a
+# backup gap.
+
+
+def _translate_id(value, id_map: dict[str, uuid.UUID]):
+    """One id string, translated if the map knows it, otherwise untouched."""
+    if not isinstance(value, str):
+        return value
+    new = id_map.get(value.strip())
+    return str(new) if new is not None else value
+
+
+def _translate_id_list(value, id_map: dict[str, uuid.UUID]):
+    """A JSON column holding a list of ids. Anything that is not a list —
+    null, "all" — comes back exactly as it went in."""
+    if not isinstance(value, list):
+        return value
+    return [_translate_id(v, id_map) for v in value]
+
+
+def _translate_mark_priorities(settings, mark_map: dict[str, uuid.UUID]):
+    """The mark ids inside a group type's `settings.engine.mark_priorities`.
+
+    Only an entry's id is ever translated. Every other key in an entry,
+    every entry whose mark the map does not know, and every other settings
+    key are left exactly as they are.
+
+    Both on-disk entry shapes the engine accepts are handled: a bare id
+    string (legacy) and `{"id": ..., "behaviour": ...}`. The shape is
+    preserved either way.
+
+    Ids here are bare. The `mark:` prefix belongs to history `meta` and is
+    never added or stripped.
+    """
+    if not isinstance(settings, dict):
+        return settings
+    engine = settings.get("engine")
+    if not isinstance(engine, dict):
+        return settings
+    entries = engine.get("mark_priorities")
+    if not isinstance(entries, list):
+        return settings
+
+    translated = []
+    for entry in entries:
+        if isinstance(entry, str):
+            translated.append(_translate_id(entry, mark_map))
+        elif isinstance(entry, dict) and isinstance(entry.get("id"), str):
+            # Keeps every other key, and `id` in its original position.
+            translated.append({**entry, "id": _translate_id(entry["id"], mark_map)})
+        else:
+            translated.append(entry)
+
+    out = copy.deepcopy(settings)
+    out["engine"]["mark_priorities"] = translated
+    return out
 
 
 # ── Export ────────────────────────────────────────────────────────────────────
@@ -986,6 +1074,43 @@ async def confirm_restore(
     db.add(event)
     await db.flush()
 
+    # ── Marks ──
+    # v1.0.4p: written before group types and units, so `mark_map` exists
+    # by the time anything needs to translate a mark id: the priorities
+    # inside a group type's settings now, and a unit's mark_restriction
+    # from v1.0.4q.
+    marks_src = data["marks.json"]
+    seen_mark_ids: set[str] = set()
+    for mark_src in marks_src.get("definitions", []):
+        if not isinstance(mark_src, dict):
+            skip("marks.json")
+            continue
+        old_id = _old_id(mark_src, "id")
+        if old_id is not None and old_id in seen_mark_ids:
+            skip("marks.json")  # duplicate old id
+            continue
+        name = _field(mark_src, "name", "mark_definitions", "name")
+        if name is _SKIP:
+            skip("marks.json")
+            continue
+        new_mark_id = uuid.uuid4()
+        if old_id is not None:
+            mark_map[old_id] = new_mark_id
+            seen_mark_ids.add(old_id)
+        mark = MarkDefinition(
+            id=new_mark_id,
+            event_id=new_event_id,
+            name=fit(name, "mark_definitions", "name"),
+            colour=fit(
+                _field(mark_src, "colour", "mark_definitions", "colour"),
+                "mark_definitions", "colour",
+            ),
+            visible_in=mark_src.get("visible_in") or [],
+        )
+        db.add(mark)
+
+    await db.flush()
+
     # ── Custom field definitions ──
     cf_data = data["custom_fields.json"]
     seen_cf_ids: set[str] = set()
@@ -1036,10 +1161,103 @@ async def confirm_restore(
         db.add(fc)
     await db.flush()
 
+    # ── Allocation categories + units ──
+    seen_cat_ids: set[str] = set()
+    for cat_src in data["allocation_categories.json"]:
+        if not isinstance(cat_src, dict):
+            skip("allocation_categories.json")
+            continue
+        old_id = _old_id(cat_src, "id")
+        if old_id is not None and old_id in seen_cat_ids:
+            skip("allocation_categories.json")  # duplicate old id
+            continue
+        name = _field(cat_src, "name", "allocation_categories", "name")
+        if name is _SKIP:
+            skip("allocation_categories.json")
+            continue
+        new_cat_id = uuid.uuid4()
+        if old_id is not None:
+            category_map[old_id] = new_cat_id
+            seen_cat_ids.add(old_id)
+        cat = AllocationCategory(
+            id=new_cat_id,
+            event_id=new_event_id,
+            name=fit(name, "allocation_categories", "name"),
+            item_label=fit(cat_src.get("item_label"), "allocation_categories", "item_label"),
+            description=fit(cat_src.get("description"), "allocation_categories", "description"),
+            # v1.0.4o: the column's own default, "exclusive". The "none"
+            # this line used to fall back to is not a value the model
+            # defines, and nothing reads it as one.
+            rule_type=fit(
+                _field(cat_src, "rule_type", "allocation_categories", "rule_type"),
+                "allocation_categories", "rule_type",
+            ),
+            name_key=cat_src.get("name_key"),            # v1.0.4
+            item_label_key=cat_src.get("item_label_key"),  # v1.0.4
+            has_capacity=True,  # v1.0.3: ignored; always on
+            has_gender_restriction=True,  # v1.0.3: ignored; always on
+            sort_order=_field(cat_src, "sort_order", "allocation_categories", "sort_order"),
+            is_default=_field(cat_src, "is_default", "allocation_categories", "is_default"),
+            # v1.0.4p: the mark ids inside engine.mark_priorities are
+            # translated; every other settings key passes through.
+            settings=_translate_mark_priorities(
+                cat_src.get("settings"), mark_map,
+            ) or {},
+        )
+        db.add(cat)
+        counts["categories"] += 1
+
+    await db.flush()
+
+    seen_unit_ids: set[str] = set()
+    for unit_src in data["allocation_units.json"]:
+        if not isinstance(unit_src, dict):
+            skip("allocation_units.json")
+            continue
+        old_id = _old_id(unit_src, "id")
+        if old_id is not None and old_id in seen_unit_ids:
+            skip("allocation_units.json")  # duplicate old id
+            continue
+        new_cat_id = category_map.get(_old_id(unit_src, "category_id"))
+        name = _field(unit_src, "name", "allocation_units", "name")
+        capacity = _field(unit_src, "capacity", "allocation_units", "capacity")
+        if not new_cat_id or name is _SKIP or capacity is _SKIP:
+            skip("allocation_units.json")
+            continue
+        # v1.0.4o (BACKUP-7): the map entry is written only once the row is
+        # certain to be created. Written above this guard, a unit whose
+        # group type was missing still landed in unit_map although no row
+        # existed, and an allocation naming it then failed the foreign key
+        # and rolled the whole restore back.
+        new_unit_id = uuid.uuid4()
+        if old_id is not None:
+            unit_map[old_id] = new_unit_id
+            seen_unit_ids.add(old_id)
+        unit_category_map[new_unit_id] = new_cat_id
+        unit = AllocationUnit(
+            id=new_unit_id,
+            category_id=new_cat_id,
+            name=fit(name, "allocation_units", "name"),
+            description=fit(unit_src.get("description"), "allocation_units", "description"),
+            capacity=capacity,
+            gender_restriction=fit(
+                unit_src.get("gender_restriction"),
+                "allocation_units", "gender_restriction",
+            ),
+            sort_order=_field(unit_src, "sort_order", "allocation_units", "sort_order"),
+        )
+        db.add(unit)
+        counts["units"] += 1
+
+    await db.flush()
+
     # ── Participants ──
+    # v1.0.4p: written after group types, so `category_map` exists by the
+    # time the ids inside group_code_categories need translating.
     cf_values_src = cf_data.get("values", {})  # old_participant_id → [{field_id, value}]
     reader = csv.DictReader(io.StringIO(data["participants.csv"]))
     seen_p_ids: set[str] = set()
+    seen_cfv_pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
     for row in reader:
         old_id = _old_id(row, "id")
         if old_id is not None and old_id in seen_p_ids:
@@ -1086,7 +1304,10 @@ async def confirm_restore(
             ),
             message=row.get("message") or None,
             group_code=fit(row.get("group_code") or None, "participants", "group_code"),
-            group_code_categories=_parse_json_field(row.get("group_code_categories")),
+            # v1.0.4p: group type ids, translated in place.
+            group_code_categories=_translate_id_list(
+                _parse_json_field(row.get("group_code_categories")), category_map,
+            ),
             participant_number=_parse_int(row.get("participant_number")),
             registration_status=reg_status,
             gdpr_consent=(row.get("gdpr_consent") or "").lower() in ("true", "1"),
@@ -1110,97 +1331,19 @@ async def confirm_restore(
             if not new_field_id:
                 skip("custom_fields.json:values")
                 continue
+            # v1.0.4p: no unique constraint on (participant, field), but
+            # neither writer in the app can produce two rows for one pair:
+            # registration iterates a dict keyed by field id, and the update
+            # path upserts. So a repeated line is damage. The first wins.
+            if (new_p_id, new_field_id) in seen_cfv_pairs:
+                skip("custom_fields.json:values")
+                continue
+            seen_cfv_pairs.add((new_p_id, new_field_id))
             db.add(CustomFieldValue(
                 participant_id=new_p_id,
                 field_id=new_field_id,
                 value=cfv_src.get("value"),
             ))
-
-    await db.flush()
-
-    # ── Allocation categories + units ──
-    seen_cat_ids: set[str] = set()
-    for cat_src in data["allocation_categories.json"]:
-        if not isinstance(cat_src, dict):
-            skip("allocation_categories.json")
-            continue
-        old_id = _old_id(cat_src, "id")
-        if old_id is not None and old_id in seen_cat_ids:
-            skip("allocation_categories.json")  # duplicate old id
-            continue
-        name = _field(cat_src, "name", "allocation_categories", "name")
-        if name is _SKIP:
-            skip("allocation_categories.json")
-            continue
-        new_cat_id = uuid.uuid4()
-        if old_id is not None:
-            category_map[old_id] = new_cat_id
-            seen_cat_ids.add(old_id)
-        cat = AllocationCategory(
-            id=new_cat_id,
-            event_id=new_event_id,
-            name=fit(name, "allocation_categories", "name"),
-            item_label=fit(cat_src.get("item_label"), "allocation_categories", "item_label"),
-            description=fit(cat_src.get("description"), "allocation_categories", "description"),
-            # v1.0.4o: the column's own default, "exclusive". The "none"
-            # this line used to fall back to is not a value the model
-            # defines, and nothing reads it as one.
-            rule_type=fit(
-                _field(cat_src, "rule_type", "allocation_categories", "rule_type"),
-                "allocation_categories", "rule_type",
-            ),
-            name_key=cat_src.get("name_key"),            # v1.0.4
-            item_label_key=cat_src.get("item_label_key"),  # v1.0.4
-            has_capacity=True,  # v1.0.3: ignored; always on
-            has_gender_restriction=True,  # v1.0.3: ignored; always on
-            sort_order=_field(cat_src, "sort_order", "allocation_categories", "sort_order"),
-            is_default=_field(cat_src, "is_default", "allocation_categories", "is_default"),
-            settings=cat_src.get("settings") or {},
-        )
-        db.add(cat)
-        counts["categories"] += 1
-
-    await db.flush()
-
-    seen_unit_ids: set[str] = set()
-    for unit_src in data["allocation_units.json"]:
-        if not isinstance(unit_src, dict):
-            skip("allocation_units.json")
-            continue
-        old_id = _old_id(unit_src, "id")
-        if old_id is not None and old_id in seen_unit_ids:
-            skip("allocation_units.json")  # duplicate old id
-            continue
-        new_cat_id = category_map.get(_old_id(unit_src, "category_id"))
-        name = _field(unit_src, "name", "allocation_units", "name")
-        capacity = _field(unit_src, "capacity", "allocation_units", "capacity")
-        if not new_cat_id or name is _SKIP or capacity is _SKIP:
-            skip("allocation_units.json")
-            continue
-        # v1.0.4o (BACKUP-7): the map entry is written only once the row is
-        # certain to be created. Written above this guard, a unit whose
-        # group type was missing still landed in unit_map although no row
-        # existed, and an allocation naming it then failed the foreign key
-        # and rolled the whole restore back.
-        new_unit_id = uuid.uuid4()
-        if old_id is not None:
-            unit_map[old_id] = new_unit_id
-            seen_unit_ids.add(old_id)
-        unit_category_map[new_unit_id] = new_cat_id
-        unit = AllocationUnit(
-            id=new_unit_id,
-            category_id=new_cat_id,
-            name=fit(name, "allocation_units", "name"),
-            description=fit(unit_src.get("description"), "allocation_units", "description"),
-            capacity=capacity,
-            gender_restriction=fit(
-                unit_src.get("gender_restriction"),
-                "allocation_units", "gender_restriction",
-            ),
-            sort_order=_field(unit_src, "sort_order", "allocation_units", "sort_order"),
-        )
-        db.add(unit)
-        counts["units"] += 1
 
     await db.flush()
 
@@ -1289,39 +1432,7 @@ async def confirm_restore(
             flush=True,
         )
 
-    # ── Marks ──
-    marks_src = data["marks.json"]
-    seen_mark_ids: set[str] = set()
-    for mark_src in marks_src.get("definitions", []):
-        if not isinstance(mark_src, dict):
-            skip("marks.json")
-            continue
-        old_id = _old_id(mark_src, "id")
-        if old_id is not None and old_id in seen_mark_ids:
-            skip("marks.json")  # duplicate old id
-            continue
-        name = _field(mark_src, "name", "mark_definitions", "name")
-        if name is _SKIP:
-            skip("marks.json")
-            continue
-        new_mark_id = uuid.uuid4()
-        if old_id is not None:
-            mark_map[old_id] = new_mark_id
-            seen_mark_ids.add(old_id)
-        mark = MarkDefinition(
-            id=new_mark_id,
-            event_id=new_event_id,
-            name=fit(name, "mark_definitions", "name"),
-            colour=fit(
-                _field(mark_src, "colour", "mark_definitions", "colour"),
-                "mark_definitions", "colour",
-            ),
-            visible_in=mark_src.get("visible_in") or [],
-        )
-        db.add(mark)
-
-    await db.flush()
-
+    # ── Mark assignments ──
     seen_ma_pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
     for ma_src in marks_src.get("assignments", []):
         if not isinstance(ma_src, dict):
@@ -1367,7 +1478,11 @@ async def confirm_restore(
                 "participant_preference_requests", "preferred_name",
             ),
             preferred_details=pref_src.get("preferred_details"),
-            category_scope=pref_src.get("category_scope"),
+            # v1.0.4p: group type ids, translated in place. "all" and null
+            # pass through untouched.
+            category_scope=_translate_id_list(
+                pref_src.get("category_scope"), category_map,
+            ),
             resolved=_field(pref_src, "resolved", "participant_preference_requests", "resolved"),
         )
         db.add(pref)
