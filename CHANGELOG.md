@@ -8,6 +8,53 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4q] — 2026-09-17
+A restored event now comes back as it was, down to the dates.
+
+### Fixed
+
+- **The settings and rules an organiser had chosen now survive a restore.**
+  Several were quietly reset to their defaults before: which group a room was
+  reserved for, whether a room was locked as it stood, the group type names
+  Moimio shows in your own language, whether a group code takes a whole group
+  to itself, and whether a mark keeps people together or spreads them out. A
+  restored event ran by different rules from the one that was backed up, with
+  nothing to say so.
+
+- **Check-in times, admin-only form fields and the notes on settled requests
+  come back too.** The tick that somebody had arrived survived, but the time
+  did not. A custom field marked for the team only came back visible on the
+  public registration form. A grouping request marked as settled came back
+  with no record of how it was settled.
+
+- **The original dates are kept.** Everything in a restored event used to be
+  dated the day of the restore, so everybody appeared to have registered in
+  the same second, "Registered at" was meaningless, and the registration
+  graph collapsed to a single spike. A full backup now brings back every
+  date as it was.
+
+### Changed
+
+- **Restored events sit in the events list where the originals sat.** They
+  keep their own dates, so they no longer jump to the top. Until the restore
+  screen is updated, the quickest way to the restored event is to look for
+  its name with "(Restored)" after it.
+
+- **The restored event and its notes are recorded as created by whoever
+  restored them.** That is the truthful answer: the people who made them have
+  no account on the Moimio the file was restored into.
+
+- **A template is dated the day it is restored.** A structure-only backup is
+  a starting point rather than a copy, so its dates are the new event's own.
+
+### Notes
+
+- **Older backups do not carry the admin-only marker on custom fields.**
+  Restoring one puts those fields back on the public registration form. After
+  restoring an older backup, check the registration form before opening
+  registration. A restored event is a draft and reopening registration means
+  confirming that card again anyway, so there is a natural moment to look.
+
 ## [1.0.4p] — 2026-09-17
 Three settings that pointed at nothing after a restore now point at the right
 things.

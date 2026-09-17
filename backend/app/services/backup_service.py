@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import Base
+from app.core.default_type_names import ITEM_LABEL_KEYS, NAME_KEYS
 from app.core.exceptions import MoimioAppError
 from app.models.allocation import Allocation
 from app.models.allocation_category import AllocationCategory
@@ -141,16 +142,25 @@ BACKUP_REGISTER: dict[str, Table] = {
         "start_date": Col(True, "copied"),
         "end_date": Col(True, "copied"),
         "status": Col(True, "ignored", "reset_on_restore"),
-        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
-        "updated_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "created_at": Col(True, "copied"),
+        "updated_at": Col(True, "copied"),
+        # v1.0.4q: new exported columns sit after the existing non-raw ones
+        # and before the raw ones, because a raw column is appended to the
+        # dict by hand after `_row` has run. That keeps every existing key
+        # where it was and keeps the guard's export check true.
+        "timezone": Col(True, "copied"),
+        "is_archived": Col(True, "copied"),
         "settings": Col(True, "copied", raw=True),
         # Not exported.
-        "timezone": Col(False, "defaulted", "known_gap:BACKUP-2"),
-        "details_confirmed": Col(False, "defaulted", "known_gap:BACKUP-2"),
-        "registration_confirmed": Col(False, "defaulted", "known_gap:BACKUP-2"),
-        "is_archived": Col(False, "defaulted", "known_gap:BACKUP-2"),
-        "over_cap_signalled": Col(False, "defaulted", "known_gap:BACKUP-2"),
-        "created_by": Col(False, "placeholder", "known_gap:BACKUP-2"),
+        # The organiser re-ticks both Setup cards before reopening
+        # registration, and every ordinary edit already clears them.
+        "details_confirmed": Col(False, "defaulted", "reset_on_restore"),
+        "registration_confirmed": Col(False, "defaulted", "reset_on_restore"),
+        # The sending instance's plan-enforcement state, not the event's.
+        "over_cap_signalled": Col(False, "defaulted", "instance_state"),
+        # v1.0.4q: the restoring user when there is one. The original user
+        # has no account here, so their id would name nobody.
+        "created_by": Col(False, "placeholder", "not_meaningful_elsewhere"),
     }),
     "participants": Table("participants.csv", None, {
         "id": Col(True, "remapped"),
@@ -172,13 +182,17 @@ BACKUP_REGISTER: dict[str, Table] = {
         "gdpr_consent": Col(True, "copied"),
         "checked_in": Col(True, "copied"),
         "preferred_language": Col(True, "copied"),
-        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "created_at": Col(True, "copied"),
+        # v1.0.4q. These three are the last columns of participants.csv, so
+        # no existing cell moves. None of them can contain a comma, which
+        # matters: test_v1_0_4o_damaged_files.py edits the first data row
+        # with a plain split on ",".
+        "override_group_room": Col(True, "copied"),
+        "checked_in_at": Col(True, "copied"),
+        "updated_at": Col(True, "copied"),
         "event_id": Col(False, "parent"),
-        "override_group_room": Col(False, "defaulted", "known_gap:BACKUP-2"),
         "confirmation_token": Col(False, "defaulted", "secret"),
-        "checked_in_at": Col(False, "defaulted", "known_gap:BACKUP-2"),
         "deleted_at": Col(False, "defaulted", "derived"),
-        "updated_at": Col(False, "defaulted", "known_gap:BACKUP-8"),
     }),
     "custom_field_definitions": Table("custom_fields.json", "definitions", {
         "id": Col(True, "remapped"),
@@ -187,9 +201,11 @@ BACKUP_REGISTER: dict[str, Table] = {
         "field_type": Col(True, "copied"),
         "is_required": Col(True, "copied"),
         "sort_order": Col(True, "copied"),
-        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "created_at": Col(True, "copied"),
+        # v1.0.4q: False marks a field admin-only, so losing it put
+        # CSV-import fields back on the public registration form.
+        "show_in_form": Col(True, "copied"),
         "options": Col(True, "copied", raw=True),
-        "show_in_form": Col(False, "defaulted", "known_gap:BACKUP-2"),
     }),
     "custom_field_values": Table("custom_fields.json", "values", {
         # Written as {old participant id: [{field_id, value}]}, so the
@@ -205,8 +221,8 @@ BACKUP_REGISTER: dict[str, Table] = {
         "field_name": Col(True, "copied"),
         "is_enabled": Col(True, "copied"),
         "is_required": Col(True, "copied"),
-        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
-        "updated_at": Col(False, "defaulted", "known_gap:BACKUP-8"),
+        "created_at": Col(True, "copied"),
+        "updated_at": Col(True, "copied"),
     }),
     "allocation_categories": Table("allocation_categories.json", None, {
         "id": Col(True, "remapped"),
@@ -220,20 +236,26 @@ BACKUP_REGISTER: dict[str, Table] = {
         # accepts and stores False (api/allocations.py CategoryUpdate ->
         # update_category), and the stated reason for keeping the columns is
         # that rolling a workspace back to 1.0.2c must not hide the fields.
-        # So a restore can lose a False an older version would read.
-        "has_capacity": Col(True, "ignored", "known_gap:BACKUP-2"),
-        "has_gender_restriction": Col(True, "ignored", "known_gap:BACKUP-2"),
+        # So a restore could lose a False an older version would read. The
+        # code keeps these retired flags true for rollback safety, so restore
+        # goes on forcing True rather than fighting it.
+        "has_capacity": Col(True, "ignored", "reset_on_restore"),
+        "has_gender_restriction": Col(True, "ignored", "reset_on_restore"),
         "sort_order": Col(True, "copied"),
         "is_default": Col(True, "copied"),
-        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "created_at": Col(True, "copied"),
+        # v1.0.4q. Only a key the app knows is restored; anything else
+        # becomes NULL, which is how the stored name shows through.
+        "name_key": Col(True, "copied"),
+        "item_label_key": Col(True, "copied"),
+        "exclusive_group_codes": Col(True, "copied"),
+        "updated_at": Col(True, "copied"),
         # v1.0.4p: engine.mark_priorities entries key on a bare mark id, and
         # those ids are translated in place; every other key passes through.
         "settings": Col(True, "remapped", raw=True),
-        "name_key": Col(False, "defaulted", "known_gap:BACKUP-2"),
-        "item_label_key": Col(False, "defaulted", "known_gap:BACKUP-2"),
-        "exclusive_group_codes": Col(False, "defaulted", "known_gap:BACKUP-2"),
-        "confirmed": Col(False, "defaulted", "known_gap:BACKUP-2"),
-        "updated_at": Col(False, "defaulted", "known_gap:BACKUP-8"),
+        # A restored event is a fresh draft, and every edit clears this
+        # anyway, so the organiser signs each group type off again.
+        "confirmed": Col(False, "defaulted", "reset_on_restore"),
     }),
     "allocation_units": Table("allocation_units.json", None, {
         "id": Col(True, "remapped"),
@@ -243,24 +265,27 @@ BACKUP_REGISTER: dict[str, Table] = {
         "capacity": Col(True, "copied"),
         "gender_restriction": Col(True, "copied"),
         "sort_order": Col(True, "copied"),
-        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
-        "mark_restriction": Col(False, "defaulted", "known_gap:BACKUP-2"),
-        "is_kept": Col(False, "defaulted", "known_gap:BACKUP-2"),
-        "updated_at": Col(False, "defaulted", "known_gap:BACKUP-8"),
+        "created_at": Col(True, "copied"),
+        # v1.0.4q: a real foreign key to mark_definitions, so a dead id
+        # cannot be written. v1.0.4p put marks before units, which is what
+        # makes `mark_map` available here.
+        "mark_restriction": Col(True, "remapped"),
+        "is_kept": Col(True, "copied"),
+        "updated_at": Col(True, "copied"),
     }),
     "allocations": Table("allocations.json", None, {
         "id": Col(True, "ignored", "new_id"),
         "event_id": Col(True, "parent"),
         "participant_id": Col(True, "remapped"),
         "unit_id": Col(True, "remapped"),
-        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
-        "updated_at": Col(False, "defaulted", "known_gap:BACKUP-8"),
+        "created_at": Col(True, "copied"),
+        "updated_at": Col(True, "copied"),
     }),
     "allocation_category_exclusions": Table("allocation_exclusions.json", None, {
         "id": Col(True, "ignored", "new_id"),
         "allocation_category_id": Col(True, "remapped"),
         "participant_id": Col(True, "remapped"),
-        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "created_at": Col(True, "copied"),
         # v1.0.4m: NULL on purpose. Nobody on the receiving instance made
         # this decision, and allocation_events is the audit surface anyway.
         "created_by": Col(False, "defaulted", "not_meaningful_elsewhere"),
@@ -270,18 +295,21 @@ BACKUP_REGISTER: dict[str, Table] = {
         "event_id": Col(True, "parent"),
         "name": Col(True, "copied"),
         "colour": Col(True, "copied"),
-        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "created_at": Col(True, "copied"),
+        # v1.0.4q: only one of the app's own three values is restored.
+        "cluster_behaviour": Col(True, "copied"),
         "visible_in": Col(True, "copied", raw=True),
-        "cluster_behaviour": Col(False, "defaulted", "known_gap:BACKUP-2"),
-        "created_by_user_id": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        # NULL is already the modelled "system mark", and the screen renders
+        # it. The original user has no account on this instance.
+        "created_by_user_id": Col(False, "defaulted", "not_meaningful_elsewhere"),
     }),
     "mark_assignments": Table("marks.json", "assignments", {
         "id": Col(True, "ignored", "new_id"),
         "mark_id": Col(True, "remapped"),
         "participant_id": Col(True, "remapped"),
         "event_id": Col(True, "parent"),
-        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
-        "assigned_by_user_id": Col(False, "defaulted", "known_gap:BACKUP-2"),
+        "created_at": Col(True, "copied"),
+        "assigned_by_user_id": Col(False, "defaulted", "not_meaningful_elsewhere"),
     }),
     "participant_preference_requests": Table("preferences.json", None, {
         "id": Col(True, "ignored", "new_id"),
@@ -293,11 +321,13 @@ BACKUP_REGISTER: dict[str, Table] = {
         "preferred_name": Col(True, "copied"),
         "preferred_details": Col(True, "copied"),
         "resolved": Col(True, "copied"),
-        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
+        "created_at": Col(True, "copied"),
+        # v1.0.4q: `resolved` without its note said a request was settled
+        # and gave no reason.
+        "resolved_note": Col(True, "copied"),
         # v1.0.4p: "all" passes through; a list of group type ids is
         # translated in place.
         "category_scope": Col(True, "remapped", raw=True),
-        "resolved_note": Col(False, "defaulted", "known_gap:BACKUP-2"),
     }),
     "notes": Table("notes.json", None, {
         "id": Col(True, "ignored", "new_id"),
@@ -311,9 +341,11 @@ BACKUP_REGISTER: dict[str, Table] = {
         # so the export filter (notable_id == event_id AND is_published)
         # never matches and this member is always empty.
         "is_published": Col(True, "ignored", "known_gap:BACKUP-4"),
-        "author_id": Col(True, "placeholder", "known_gap:BACKUP-2"),
-        "created_at": Col(True, "ignored", "known_gap:BACKUP-8"),
-        "updated_at": Col(False, "defaulted", "known_gap:BACKUP-8"),
+        # v1.0.4o: the restoring user. The original author has no account
+        # on this instance, and the column is a real foreign key.
+        "author_id": Col(True, "placeholder", "not_meaningful_elsewhere"),
+        "created_at": Col(True, "copied"),
+        "updated_at": Col(True, "copied"),
     }),
 }
 
@@ -424,6 +456,48 @@ def _field(src, key: str, table: str, column: str, *, blank_is_null: bool = Fals
             return default
         return None if _column(table, column).nullable else _SKIP
     return raw
+
+
+# v1.0.4q: the values the app itself accepts for two restored columns.
+#
+# `cluster_behaviour` is declared as "'together' | 'split' | 'none' (default)"
+# at the write schema (api/marks.py) and enforced verbatim for the identical
+# value in the per-group-type override path (engine_service, where anything
+# else "is silently skipped"). The mark write path does NOT enforce it, so
+# restore is very slightly stricter than the API here; an out-of-set value is
+# inert either way, because the engine dispatches on equality.
+CLUSTER_BEHAVIOURS: frozenset[str] = frozenset({"together", "split", "none"})
+
+# `name_key` and `item_label_key` take only the app's own keys, and the two
+# fields have separate sets on purpose: "a default typed into one must never
+# attach the other's key" (core/default_type_names.py).
+ACCEPTED_KEYS: dict[str, frozenset[str]] = {
+    "name_key": frozenset(NAME_KEYS),
+    "item_label_key": frozenset(ITEM_LABEL_KEYS),
+}
+
+
+def _parse_datetime(value):
+    """A timestamp out of a backup file, or None when it cannot be used.
+
+    v1.0.4q. Separate from `_parse_date`, which serves the date columns and
+    deliberately truncates to ten characters.
+
+    Only a timezone-aware value is accepted. Every timestamp column in the
+    schema is `DateTime(timezone=True)`, and export writes `isoformat()`, so
+    an app-made file always carries the offset. A naive value would be
+    written as though it were UTC, which is a guess, so it counts as damage
+    and the model default applies instead.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip())
+    except (ValueError, TypeError):
+        return None
+    if parsed.tzinfo is None or parsed.tzinfo.utcoffset(parsed) is None:
+        return None
+    return parsed
 
 
 def _old_id(src, key: str) -> str | None:
@@ -1036,9 +1110,78 @@ async def confirm_restore(
     # damage was, never by participant.
     skipped: dict[str, int] = {}
     shortened: dict[str, int] = {}
+    # v1.0.4q: a value the file carried but restore could not use, so the
+    # column's own model default applies. Keyed by table.column, like
+    # `shortened`, because that is what a reader needs to know.
+    defaulted: dict[str, int] = {}
+
+    # v1.0.4q: only a structure backup is a template. A missing or unknown
+    # mode means a full backup, because files older than the distinction
+    # carry no mode at all.
+    manifest = data["manifest.json"]
+    backup_mode = manifest.get("backup_mode", "full") if isinstance(manifest, dict) else "full"
+    restore_timestamps = backup_mode != "structure"
 
     def skip(member: str) -> None:
         skipped[member] = skipped.get(member, 0) + 1
+
+    def fell_back(table: str, column: str) -> None:
+        label = f"{table}.{column}"
+        defaulted[label] = defaulted.get(label, 0) + 1
+
+    def ts(src, key: str, table: str, column: str) -> dict:
+        """A timestamp kwarg, or nothing at all so the model default applies.
+
+        Full backups keep every original timestamp. A structure backup is a
+        new event built from somebody's setup, so its rows are dated when
+        they are restored. A value the file does not have is not damage; a
+        value it has and restore cannot parse is.
+        """
+        if not restore_timestamps:
+            return {}
+        raw = src.get(key) if isinstance(src, dict) else None
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            return {}
+        parsed = _parse_datetime(raw)
+        if parsed is None:
+            fell_back(table, column)
+            return {}
+        return {column: parsed}
+
+    def server_side(src, key: str, table: str, column: str) -> dict:
+        """A kwarg for a NOT NULL column whose only default is the database's.
+
+        `_field` cannot serve these: it knows Python-side defaults, and where
+        there is none it reports the line unwritable, which is wrong for a
+        column the database will fill itself. `events.timezone`,
+        `events.is_archived` and `allocation_units.is_kept` are the three.
+        An absent or wrong-typed value means omit the column.
+        """
+        raw = src.get(key) if isinstance(src, dict) else None
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            return {}
+        if not isinstance(raw, _column(table, column).type.python_type):
+            fell_back(table, column)
+            return {}
+        return {column: fit(raw, table, column)}
+
+    def accepted(src, key: str, table: str, column: str):
+        """A value the app itself would accept, or the model default.
+
+        Used for the columns whose values the app looks up or validates
+        (see ACCEPTED_KEYS and CLUSTER_BEHAVIOURS).
+        """
+        value = _field(src, key, table, column)
+        if value is _SKIP or value is None:
+            return value
+        allowed = ACCEPTED_KEYS.get(column) or (
+            CLUSTER_BEHAVIOURS if column == "cluster_behaviour" else None
+        )
+        if allowed is not None and value not in allowed:
+            fell_back(table, column)
+            _, default = _column_default(table, column)
+            return default
+        return value
 
     def fit(value, table: str, column: str):
         """Shorten over-long text to the column's declared length, counted
@@ -1069,7 +1212,17 @@ async def confirm_restore(
         end_date=_parse_date(event_src.get("end_date")),
         status=EventStatus.DRAFT,
         settings=event_src.get("settings") or {},
-        created_by=new_event_id,  # placeholder — no original user in new install
+        # v1.0.4q: the restoring user, who genuinely created this row. With
+        # no actor the pre-v1.0.4q stand-in stays: the column is NOT NULL
+        # with no foreign key, so there is no blank to leave.
+        created_by=actor_user_id or new_event_id,
+        # The app neither validates nor resolves a timezone anywhere: there
+        # is no VALID_TIMEZONES beside VALID_DATE_FORMATS, and nothing
+        # imports zoneinfo. So it is carried as it is.
+        **server_side(event_src, "timezone", "events", "timezone"),
+        **server_side(event_src, "is_archived", "events", "is_archived"),
+        **ts(event_src, "created_at", "events", "created_at"),
+        **ts(event_src, "updated_at", "events", "updated_at"),
     )
     db.add(event)
     await db.flush()
@@ -1106,6 +1259,11 @@ async def confirm_restore(
                 "mark_definitions", "colour",
             ),
             visible_in=mark_src.get("visible_in") or [],
+            # v1.0.4q: one of the app's own three values, or the default.
+            cluster_behaviour=accepted(
+                mark_src, "cluster_behaviour",
+                "mark_definitions", "cluster_behaviour"),
+            **ts(mark_src, "created_at", "mark_definitions", "created_at"),
         )
         db.add(mark)
 
@@ -1139,6 +1297,10 @@ async def confirm_restore(
             options=cf_src.get("options"),
             is_required=_field(cf_src, "is_required", "custom_field_definitions", "is_required"),
             sort_order=_field(cf_src, "sort_order", "custom_field_definitions", "sort_order"),
+            # v1.0.4q: False means admin-only. Absent, as in a pre-v1.0.4q
+            # file, means the model default, which is visible.
+            show_in_form=_field(cf_src, "show_in_form", "custom_field_definitions", "show_in_form"),
+            **ts(cf_src, "created_at", "custom_field_definitions", "created_at"),
         )
         db.add(cf)
     await db.flush()
@@ -1157,6 +1319,8 @@ async def confirm_restore(
             field_name=fit(field_name, "event_field_configs", "field_name"),
             is_enabled=_field(fc_src, "is_enabled", "event_field_configs", "is_enabled"),
             is_required=_field(fc_src, "is_required", "event_field_configs", "is_required"),
+            **ts(fc_src, "created_at", "event_field_configs", "created_at"),
+            **ts(fc_src, "updated_at", "event_field_configs", "updated_at"),
         )
         db.add(fc)
     await db.flush()
@@ -1192,8 +1356,14 @@ async def confirm_restore(
                 _field(cat_src, "rule_type", "allocation_categories", "rule_type"),
                 "allocation_categories", "rule_type",
             ),
-            name_key=cat_src.get("name_key"),            # v1.0.4
-            item_label_key=cat_src.get("item_label_key"),  # v1.0.4
+            # v1.0.4q: only a key the app knows. Anything else becomes
+            # NULL, which is exactly how the stored name shows through.
+            name_key=accepted(cat_src, "name_key", "allocation_categories", "name_key"),
+            item_label_key=accepted(
+                cat_src, "item_label_key", "allocation_categories", "item_label_key"),
+            exclusive_group_codes=_field(
+                cat_src, "exclusive_group_codes",
+                "allocation_categories", "exclusive_group_codes"),
             has_capacity=True,  # v1.0.3: ignored; always on
             has_gender_restriction=True,  # v1.0.3: ignored; always on
             sort_order=_field(cat_src, "sort_order", "allocation_categories", "sort_order"),
@@ -1203,6 +1373,8 @@ async def confirm_restore(
             settings=_translate_mark_priorities(
                 cat_src.get("settings"), mark_map,
             ) or {},
+            **ts(cat_src, "created_at", "allocation_categories", "created_at"),
+            **ts(cat_src, "updated_at", "allocation_categories", "updated_at"),
         )
         db.add(cat)
         counts["categories"] += 1
@@ -1234,6 +1406,15 @@ async def confirm_restore(
             unit_map[old_id] = new_unit_id
             seen_unit_ids.add(old_id)
         unit_category_map[new_unit_id] = new_cat_id
+        # v1.0.4q: mark_restriction is a real foreign key, so a dead id
+        # cannot be written. An id `mark_map` does not know becomes NULL —
+        # the model default, and what the database itself does when the
+        # mark is deleted. v1.0.4p put marks before units so this map
+        # exists here at all.
+        old_mark_id = _old_id(unit_src, "mark_restriction")
+        new_mark_restriction = mark_map.get(old_mark_id) if old_mark_id else None
+        if old_mark_id and not new_mark_restriction:
+            fell_back("allocation_units", "mark_restriction")
         unit = AllocationUnit(
             id=new_unit_id,
             category_id=new_cat_id,
@@ -1245,6 +1426,10 @@ async def confirm_restore(
                 "allocation_units", "gender_restriction",
             ),
             sort_order=_field(unit_src, "sort_order", "allocation_units", "sort_order"),
+            mark_restriction=new_mark_restriction,
+            **server_side(unit_src, "is_kept", "allocation_units", "is_kept"),
+            **ts(unit_src, "created_at", "allocation_units", "created_at"),
+            **ts(unit_src, "updated_at", "allocation_units", "updated_at"),
         )
         db.add(unit)
         counts["units"] += 1
@@ -1312,11 +1497,19 @@ async def confirm_restore(
             registration_status=reg_status,
             gdpr_consent=(row.get("gdpr_consent") or "").lower() in ("true", "1"),
             checked_in=(row.get("checked_in") or "").lower() in ("true", "1"),
+            # v1.0.4q. A CSV cell is text, so the booleans are read the way
+            # the two above are; absent reads as False, the model default.
+            override_group_room=(
+                row.get("override_group_room") or ""
+            ).lower() in ("true", "1"),
             preferred_language=fit(
                 _field(row, "preferred_language", "participants",
                        "preferred_language", blank_is_null=True),
                 "participants", "preferred_language",
             ),
+            **ts(row, "checked_in_at", "participants", "checked_in_at"),
+            **ts(row, "created_at", "participants", "created_at"),
+            **ts(row, "updated_at", "participants", "updated_at"),
         )
         db.add(p)
         counts["participants"] += 1
@@ -1352,7 +1545,9 @@ async def confirm_restore(
     # placement: when a file says someone is both excluded from a group type
     # and placed in it, the exclusion is restored and the placement is not.
     # The rows themselves are written after the allocations block.
-    exclusion_rows: list[tuple[uuid.UUID, uuid.UUID]] = []
+    # v1.0.4q: the third element carries the row's own created_at kwargs,
+    # because the resolve pass runs before the rows are written.
+    exclusion_rows: list[tuple[uuid.UUID, uuid.UUID, dict]] = []
     excluded_pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
     for excl_src in data["allocation_exclusions.json"]:
         if not isinstance(excl_src, dict):
@@ -1371,7 +1566,11 @@ async def confirm_restore(
             skip("allocation_exclusions.json")
             continue
         excluded_pairs.add(pair)
-        exclusion_rows.append(pair)
+        exclusion_rows.append((
+            new_p_id, new_cat_id,
+            ts(excl_src, "created_at",
+               "allocation_category_exclusions", "created_at"),
+        ))
 
     dropped_placements = 0
 
@@ -1400,6 +1599,8 @@ async def confirm_restore(
             event_id=new_event_id,
             participant_id=new_p_id,
             unit_id=new_unit_id,
+            **ts(alloc_src, "created_at", "allocations", "created_at"),
+            **ts(alloc_src, "updated_at", "allocations", "updated_at"),
         )
         db.add(alloc)
         counts["allocations"] += 1
@@ -1411,11 +1612,12 @@ async def confirm_restore(
     # is left to the column's server default, as the participant block
     # leaves it; created_by is NULL because nobody on this instance made
     # the decision, and restore carries attribution for nothing else.
-    for new_p_id, new_cat_id in exclusion_rows:
+    for new_p_id, new_cat_id, created in exclusion_rows:
         db.add(AllocationCategoryExclusion(
             allocation_category_id=new_cat_id,
             participant_id=new_p_id,
             created_by=None,
+            **created,
         ))
         counts["allocation_exclusions"] += 1
 
@@ -1453,6 +1655,7 @@ async def confirm_restore(
             mark_id=new_mark_id,
             participant_id=new_p_id,
             event_id=new_event_id,
+            **ts(ma_src, "created_at", "mark_assignments", "created_at"),
         )
         db.add(ma)
         counts["marks_assigned"] += 1
@@ -1484,6 +1687,13 @@ async def confirm_restore(
                 pref_src.get("category_scope"), category_map,
             ),
             resolved=_field(pref_src, "resolved", "participant_preference_requests", "resolved"),
+            # v1.0.4q: `resolved` without its note said a request was
+            # settled and gave no reason.
+            resolved_note=_field(
+                pref_src, "resolved_note",
+                "participant_preference_requests", "resolved_note"),
+            **ts(pref_src, "created_at",
+                 "participant_preference_requests", "created_at"),
         )
         db.add(pref)
 
@@ -1511,6 +1721,8 @@ async def confirm_restore(
             content=content,
             is_published=True,
             author_id=actor_user_id,
+            **ts(note_src, "created_at", "notes", "created_at"),
+            **ts(note_src, "updated_at", "notes", "updated_at"),
         )
         db.add(note)
 
@@ -1521,12 +1733,13 @@ async def confirm_restore(
     # be told where the damage was; no names, emails or participant ids.
     # Separate from the v1.0.4m placement warning, which reports a
     # different thing and stays exactly as it was.
-    if skipped or shortened:
+    if skipped or shortened or defaulted:
         print(
             f"[RESTORE WARNING] event {new_event_id}: damaged or unreadable "
-            f"lines were skipped or shortened. "
+            f"lines were skipped, shortened or defaulted. "
             f"skipped={dict(sorted(skipped.items()))} "
-            f"shortened={dict(sorted(shortened.items()))}",
+            f"shortened={dict(sorted(shortened.items()))} "
+            f"defaulted={dict(sorted(defaulted.items()))}",
             flush=True,
         )
 
@@ -1536,6 +1749,7 @@ async def confirm_restore(
         "counts": counts,
         "skipped": dict(sorted(skipped.items())),
         "shortened": dict(sorted(shortened.items())),
+        "defaulted": dict(sorted(defaulted.items())),
     }
 
 

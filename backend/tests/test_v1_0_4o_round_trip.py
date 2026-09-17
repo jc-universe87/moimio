@@ -22,7 +22,7 @@ An entry tagged `known_gap` is skipped: it is a filed gap, not a regression.
 
 import copy
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
@@ -54,6 +54,24 @@ pytestmark = pytest.mark.asyncio
 # deleting a group type leaves its id behind in group_code_categories — so
 # the net carries one and checks it comes back untouched rather than dropped.
 DEAD_ID = "00000000-0000-4000-8000-0000000dead0"
+
+# v1.0.4q: fixed timestamps, clearly in the past and distinct from each
+# other, so a restored value cannot be mistaken for one the restore minted
+# and the ordering of the three participants is checkable. Every timestamp
+# column in the schema is timezone-aware, and only an aware value is
+# accepted on restore.
+TZ = timezone(timedelta(hours=1))
+T_EVENT = datetime(2026, 1, 5, 8, 30, tzinfo=TZ)
+T_MARK = datetime(2026, 1, 6, 9, 0, tzinfo=TZ)
+T_CAT = datetime(2026, 1, 7, 10, 0, tzinfo=TZ)
+T_UNIT = datetime(2026, 1, 8, 11, 0, tzinfo=TZ)
+T_PEOPLE = {
+    "anna@test.local": datetime(2026, 2, 1, 12, 0, tzinfo=TZ),
+    "bruno@test.local": datetime(2026, 2, 2, 13, 0, tzinfo=TZ),
+    "carla@test.local": datetime(2026, 2, 3, 14, 0, tzinfo=TZ),
+}
+T_CHECKIN = datetime(2026, 6, 1, 16, 45, tzinfo=TZ)
+T_ROW = datetime(2026, 3, 3, 15, 0, tzinfo=TZ)
 
 
 # ─── The natural key each table is matched by ─────────────────────────
@@ -113,8 +131,25 @@ def _model_default(table: str, column: str):
                 return True, arg()
         return True, arg
     if col.server_default is not None:
-        arg = col.server_default.arg
-        return True, getattr(arg, "text", arg)
+        raw = str(getattr(col.server_default.arg, "text", col.server_default.arg)).strip()
+        # v1.0.4q: interpret a SIMPLE literal, so the comparison is a real
+        # one. Before this, a column whose only default is the database's
+        # was compared against the SQL text — `False == "false"` is never
+        # true, so the self-check waved through a fixture sitting on its own
+        # default. v1.0.4q is the first release to carry three such columns
+        # (is_kept, is_archived, timezone).
+        #
+        # A function default like now() or clock_timestamp() is deliberately
+        # left as its text: no timestamp can equal it, which is the right
+        # answer, because a timestamp is never "at its default".
+        lowered = raw.lower()
+        if lowered in ("true", "false"):
+            return True, lowered == "true"
+        if len(raw) >= 2 and raw[0] == raw[-1] == "'":
+            return True, raw[1:-1]
+        if "(" not in raw:
+            return True, raw
+        return True, raw
     return False, None
 
 
@@ -145,8 +180,33 @@ async def _build(db) -> dict:
         # Every key differs from the model's default settings dict.
         settings={"require_email_confirmation": True, "default_language": "de"},
         created_by=user.id,
+        # v1.0.4q. "UTC" is the server default and false is is_archived's,
+        # so both of these differ from what restore would produce by
+        # ignoring the file.
+        timezone="Europe/London",
+        is_archived=True,
+        created_at=T_EVENT,
+        updated_at=T_EVENT,
     )
     db.add(ev)
+    await db.flush()
+
+    # ── Marks ──
+    # v1.0.4q: ahead of the units, because a unit's mark_restriction names a
+    # mark and has to be set at construction. Setting it afterwards would be
+    # an UPDATE, and `onupdate=func.now()` would then overwrite the unit's
+    # restored updated_at — the trap this release had to avoid.
+    marks = {}
+    for name, colour, visible, behaviour in (
+        ("Team leader", "#AA3311", ["allocation", "people"], "together"),
+        ("First aider", "#22AA55", ["people", "checkin"], "split"),
+    ):
+        m = MarkDefinition(
+            event_id=ev.id, name=name, colour=colour, visible_in=visible,
+            cluster_behaviour=behaviour, created_at=T_MARK,
+        )
+        db.add(m)
+        marks[name] = m
     await db.flush()
 
     # ── Participants: three, so a wrong link cannot pass by accident ──
@@ -172,6 +232,12 @@ async def _build(db) -> dict:
             group_code=code, participant_number=number,
             registration_status=status, gdpr_consent=True, checked_in=True,
             preferred_language=lang,
+            # v1.0.4q. override_group_room defaults False, and the three
+            # created_at values are distinct so their order is checkable.
+            override_group_room=True,
+            checked_in_at=T_CHECKIN,
+            created_at=T_PEOPLE[email],
+            updated_at=T_PEOPLE[email],
         )
         db.add(p)
         people[email] = p
@@ -179,28 +245,43 @@ async def _build(db) -> dict:
 
     # ── Group types and units ──
     cats = {}
-    for name, item_label, desc, rule, order in (
-        ("Bedrooms", "Room", "Sleeping arrangements", "overlapping", 5),
-        ("Workshops", "Session", "Optional afternoon tracks", "overlapping", 6),
+    for name, item_label, desc, rule, order, name_key, label_key in (
+        ("Bedrooms", "Room", "Sleeping arrangements", "overlapping", 5,
+         "rooms", "room"),
+        ("Workshops", "Session", "Optional afternoon tracks", "overlapping", 6,
+         "small_groups", "group"),
     ):
         c = AllocationCategory(
             event_id=ev.id, name=name, item_label=item_label,
             description=desc, rule_type=rule, sort_order=order,
             is_default=True,
+            # v1.0.4q. Both keys are ones the app knows (NAME_KEYS and
+            # ITEM_LABEL_KEYS), and each field takes only its own set.
+            name_key=name_key, item_label_key=label_key,
+            exclusive_group_codes=True,
+            created_at=T_CAT, updated_at=T_CAT,
         )
         db.add(c)
         cats[name] = c
     await db.flush()
 
     units = {}
-    for name, cat, desc, cap, gender, order in (
-        ("Lakeside", "Bedrooms", "Two bunks, view of the water", 7, "female", 2),
-        ("Hillside", "Bedrooms", "Quiet end of the corridor", 13, "male", 3),
-        ("Pottery", "Workshops", "In the old barn", 9, "female", 4),
+    for name, cat, desc, cap, gender, order, mark in (
+        ("Lakeside", "Bedrooms", "Two bunks, view of the water", 7, "female", 2,
+         "Team leader"),
+        ("Hillside", "Bedrooms", "Quiet end of the corridor", 13, "male", 3,
+         "First aider"),
+        ("Pottery", "Workshops", "In the old barn", 9, "female", 4,
+         "Team leader"),
     ):
         u = AllocationUnit(
             category_id=cats[cat].id, name=name, description=desc,
             capacity=cap, gender_restriction=gender, sort_order=order,
+            # v1.0.4q. mark_restriction is the one newly carried column that
+            # is remapped rather than copied; is_kept defaults false.
+            mark_restriction=marks[mark].id,
+            is_kept=True,
+            created_at=T_UNIT, updated_at=T_UNIT,
         )
         db.add(u)
         units[name] = u
@@ -208,10 +289,12 @@ async def _build(db) -> dict:
 
     db.add(Allocation(event_id=ev.id,
                       participant_id=people["anna@test.local"].id,
-                      unit_id=units["Lakeside"].id))
+                      unit_id=units["Lakeside"].id,
+                      created_at=T_ROW, updated_at=T_ROW))
     db.add(Allocation(event_id=ev.id,
                       participant_id=people["bruno@test.local"].id,
-                      unit_id=units["Hillside"].id))
+                      unit_id=units["Hillside"].id,
+                      created_at=T_ROW, updated_at=T_ROW))
     await db.flush()
 
     # Exclusions through the real write path. Neither participant holds a
@@ -220,22 +303,20 @@ async def _build(db) -> dict:
     await add_exclusion(db, cats["Workshops"].id, people["anna@test.local"].id)
     await add_exclusion(db, cats["Workshops"].id, people["bruno@test.local"].id)
 
-    # ── Marks ──
-    marks = {}
-    for name, colour, visible in (
-        ("Team leader", "#AA3311", ["allocation", "people"]),
-        ("First aider", "#22AA55", ["people", "checkin"]),
-    ):
-        m = MarkDefinition(event_id=ev.id, name=name, colour=colour,
-                           visible_in=visible)
-        db.add(m)
-        marks[name] = m
+    # v1.0.4q: add_exclusion takes no timestamp, so these are set after the
+    # fact. Safe here and nowhere else: allocation_category_exclusions has no
+    # updated_at, so the UPDATE cannot trip an `onupdate`.
+    for row in (await db.execute(select(AllocationCategoryExclusion))).scalars().all():
+        row.created_at = T_ROW
     await db.flush()
 
+    # ── Mark assignments ──
     db.add(MarkAssignment(event_id=ev.id, mark_id=marks["Team leader"].id,
-                          participant_id=people["anna@test.local"].id))
+                          participant_id=people["anna@test.local"].id,
+                          created_at=T_ROW))
     db.add(MarkAssignment(event_id=ev.id, mark_id=marks["First aider"].id,
-                          participant_id=people["bruno@test.local"].id))
+                          participant_id=people["bruno@test.local"].id,
+                          created_at=T_ROW))
 
     # ── Custom fields ──
     cfs = {}
@@ -246,6 +327,10 @@ async def _build(db) -> dict:
         cf = CustomFieldDefinition(
             event_id=ev.id, label=label, field_type=ftype, options=options,
             is_required=True, sort_order=order,
+            # v1.0.4q: False marks a field admin-only, and True is the
+            # default, so False is what proves it was carried.
+            show_in_form=False,
+            created_at=T_ROW,
         )
         db.add(cf)
         cfs[label] = cf
@@ -259,7 +344,8 @@ async def _build(db) -> dict:
     # ── Registration form toggles ──
     for field_name in ("phone", "address"):
         db.add(EventFieldConfig(event_id=ev.id, field_name=field_name,
-                                is_enabled=True, is_required=True))
+                                is_enabled=True, is_required=True,
+                                created_at=T_ROW, updated_at=T_ROW))
 
     # ── Preferences ──
     for email, pref_number, pref_name, details, scope in (
@@ -273,6 +359,9 @@ async def _build(db) -> dict:
             event_id=ev.id, participant_id=people[email].id,
             preferred_participant_number=pref_number, preferred_name=pref_name,
             preferred_details=details, category_scope=scope, resolved=True,
+            # v1.0.4q: `resolved` without its note gave no reason.
+            resolved_note="Seated together at the Friday meal.",
+            created_at=T_ROW,
         ))
 
     # ── Ids inside JSON (v1.0.4p) ──
@@ -319,7 +408,8 @@ async def _build(db) -> dict:
     # ── Notes: event-level and published, the only kind export carries ──
     for content in ("Minibus leaves at nine.", "Kitchen code is on the door."):
         db.add(Note(notable_type="event", notable_id=ev.id, content=content,
-                    is_published=True, author_id=author.id))
+                    is_published=True, author_id=author.id,
+                    created_at=T_ROW, updated_at=T_ROW))
 
     await db.flush()
 
@@ -572,7 +662,14 @@ async def test_2_round_trip_is_faithful(db):
         out["engine"]["mark_priorities"] = [one(e) for e in entries]
         return out
 
+    def before_mark_name(mid):
+        return {m.id: m.name for m in before["mark_definitions"].values()}[mid]
+
     RESOLVE = {
+        # v1.0.4q: a real foreign key to a mark, translated through the name
+        # correspondence, never through the id under test.
+        ("allocation_units", "mark_restriction"):
+            lambda r: after["mark_definitions"][before_mark_name(r.mark_restriction)].id,
         ("participants", "group_code_categories"):
             lambda r: expect_cat_ids(r.group_code_categories),
         ("participant_preference_requests", "category_scope"):

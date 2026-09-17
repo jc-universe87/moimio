@@ -824,7 +824,10 @@ block is open.
 
 ## BACKUP-2 — The backup drops columns, and restore reads two it never gets
 
-**Status:** Open. Found in session 86 phase 1 while reading the backup path for BACKUP-1 (v1.0.4m). Not fixed there.
+**Status:** ✅ CLOSED in v1.0.4q (2026-09-17). Every column is now carried,
+reset on purpose, or left out for a stated reason, and the register holds no
+`known_gap:BACKUP-2`. Found in session 86 phase 1 while reading the backup path
+for BACKUP-1 (v1.0.4m).
 
 `export_event_zip` writes a literal field list per model, passed to the
 `_row` helper. Nothing is picked up automatically, so a column added to a
@@ -884,6 +887,49 @@ harmless, but it is not a real value.
 
 v1.0.4m adds the first round-trip test over this code. Extend it as each
 column is fixed.
+
+### Resolution
+
+Shipped as v1.0.4q, applying the decisions below column by column.
+
+**Carried**, and each one proved on a restored event through its real reader
+where it has one: `timezone`, `is_archived`, `override_group_room`,
+`checked_in_at`, `show_in_form`, `name_key`, `item_label_key`,
+`exclusive_group_codes`, `is_kept`, `cluster_behaviour`, `resolved_note`, and
+`mark_restriction`, which is `remapped` through `mark_map` rather than copied
+because it is a real foreign key. v1.0.4p's write order is what made that
+possible: marks are now written before units.
+
+**Left out, each with its reason in the register** rather than as a gap:
+`over_cap_signalled` is `instance_state`; `details_confirmed`,
+`registration_confirmed`, `confirmed`, `has_capacity` and
+`has_gender_restriction` are `reset_on_restore`; `created_by_user_id` and
+`assigned_by_user_id` are `not_meaningful_elsewhere`.
+
+**Attribution.** `events.created_by` and `notes.author_id` are the restoring
+user, declared `placeholder` with `not_meaningful_elsewhere`. With no actor
+the pre-existing stand-in stays, because both columns are NOT NULL and there
+is no blank to leave.
+
+**Three columns whose values the app looks up or validates** get the model
+default when the file's value is not one the app would accept, and the fall
+back is counted: `name_key` and `item_label_key` against the app's own
+`NAME_KEYS` and `ITEM_LABEL_KEYS`, and `cluster_behaviour` against
+`("together", "split", "none")`. **`timezone` is the exception**: the app has
+no notion of a valid zone anywhere, so it is carried as it is. There is no
+`VALID_TIMEZONES` beside `VALID_DATE_FORMATS` and `VALID_LANGUAGES` in
+`api/user_preferences.py`, nothing checks the zone on the event or preference
+write paths, and nothing in the backend imports `zoneinfo` or `pytz`: the
+value is written at creation and read once, into the per-person GDPR export.
+Validating it on restore would have made a restore stricter than
+registration, which is a product decision and not this release's to take.
+
+**The `name_key` asymmetry that started this entry is gone.** Restore read
+`name_key` and `item_label_key` for a field export never wrote; now export
+writes both and the round-trip net checks them.
+
+Covered by `test_v1_0_4q_columns_and_dates.py`, and the net's fixture now
+holds a non-default value for every newly carried column.
 
 ### Decided (session 86)
 
@@ -1221,7 +1267,9 @@ file can refer to it.
 
 ## BACKUP-8 — Restore re-dates every row
 
-**Status:** Open. Found in session 86 phase 1 while reading the restore path for BACKUP-1 (v1.0.4m). Not fixed there.
+**Status:** ✅ CLOSED in v1.0.4q (2026-09-17). A full backup keeps every
+original timestamp; a structure backup is dated when it is restored. Found in
+session 86 phase 1 while reading the restore path for BACKUP-1 (v1.0.4m).
 
 Every restore block omits the timestamp columns from its insert, so the
 server default supplies the value and every row is dated to the moment of
@@ -1256,6 +1304,40 @@ required and not merely preferable.
 
 `_parse_date` truncates to ten characters and returns a `date`, so it needs
 a datetime sibling before this can be done.
+
+### Resolution
+
+Shipped as v1.0.4q.
+
+**Export** gained `updated_at` on the six members that lacked it, appended
+after each member's existing columns so no existing position moved.
+
+**Restore** writes every exported `created_at`, `updated_at` and
+`checked_in_at` as the file has them, through a new `_parse_datetime` beside
+`_parse_date`, which is left alone because it serves the date columns and
+deliberately truncates. Only a timezone-aware value is accepted: every
+timestamp column is `DateTime(timezone=True)` and export writes
+`isoformat()`, so an app-made file always carries the offset, and a naive
+value would be a guess about which zone it meant.
+
+**A structure backup restores no timestamps.** It is a new event built from
+someone's setup, so the model defaults apply. The mode is read once from
+`manifest.json`, and only the exact value `"structure"` counts: a missing or
+unknown mode means a full backup, because files older than the distinction
+carry no mode at all.
+
+**A value the file lacks is not damage**, and the model default applies. A
+value it has that will not parse is damage, and is counted in a new
+`defaulted` ledger reported beside v1.0.4o's `skipped` and `shortened`.
+
+**Nothing overwrites a restored `updated_at`.** `onupdate=func.now()` fires
+on UPDATE only, and `confirm_restore` issues nothing but INSERTs: it holds no
+`db.refresh`, no `db.execute`, no `db.merge` and not one assignment to an ORM
+attribute after construction. There are no ORM event listeners and no
+`@validates` anywhere in `backend/app`, and no database triggers. The one
+place the trap could have been sprung was the round-trip net's own fixture,
+which used to set a unit's mark after the unit was flushed; the marks block
+moved ahead of the units so every value is set at construction.
 
 ### Decided (session 86)
 
@@ -1515,6 +1597,21 @@ once, in one release, before v1.0.5.
 - **The leaving (Danger Zone) screen says what the leaving export
   contains**, so a customer knows before they click what they will get back
   and what they will have to set up again.
+
+### Added by v1.0.4q
+
+- **The restore success button should open the restored event.** It reads
+  `portability.go_to_events` ("Go to events") today, and that stopped being
+  the helpful destination in v1.0.4q: restored events keep their original
+  dates, so they sit in the list where the originals sat instead of at the
+  top, and an organiser restoring a two-year-old event has to hunt for it.
+  The restore result already returns `new_event_id`, so the button can go
+  straight there.
+
+  **No existing key fits.** The nearest is `events.menu.open_label`
+  ("Actions"), which is the accessibility label on a row's overflow menu, not
+  an action. So this needs one new key and a frontend change to navigate by
+  id, not a wording change alone.
 
 ### Decided (session 86)
 
