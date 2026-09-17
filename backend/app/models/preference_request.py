@@ -32,7 +32,16 @@ class ParticipantPreferenceRequest(Base):
         Text, nullable=True  # DOB, hometown, church — for manual organiser matching
     )
 
-    # Scope: "all" or JSON array of category UUIDs
+    # RETIRED in v1.0.4r, and unread from that release on.
+    #
+    # "all", or a JSON array of group type ids. Nothing ever enforced it: it
+    # appeared nowhere in the engine or the allocation service, the
+    # registration page never rendered a selector for it, and the one screen
+    # that displayed a list value showed raw ids. Every row takes the default
+    # from here on.
+    #
+    # The column stays for one release for rollback safety and is dropped
+    # after v1.0.5 (see BACKLOG ARCH-5).
     category_scope: Mapped[dict | list | None] = mapped_column(
         JSONB, nullable=True, default=lambda: "all"
     )

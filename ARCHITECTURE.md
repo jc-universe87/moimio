@@ -157,7 +157,9 @@ A `group_code` is a string assigned at registration time (e.g. `SMITH-742`). Par
 
 If a registrant doesn't enter one, Moimio auto-generates `STEM-NNN` (a stem derived from the surname plus a unique three-digit suffix, scoped to the event), and includes it in the confirmation email so the registrant can share it.
 
-Group codes optionally scope to specific allocation categories — a family wants to share a room but not necessarily the same workshop. The `group_code_categories` JSONB field captures this.
+A group code applies in every group type where the engine setting "keep group codes together" (`use_group_codes`) is on, which is a per-group-type switch on the allocation board. So an organiser who wants codes ignored for workshops turns that switch off for workshops.
+
+There was once a per-person alternative: a `group_code_categories` field limiting one person's code to particular group types. It was enforced by the engine and by nothing else, no screen could ever see or set it, and it was retired in v1.0.4r. Its column is unread from that release and is dropped after v1.0.5.
 
 The engine treats group-code clusters in pass 1, before any mark logic. This means group codes effectively override mark behaviours — if a married couple are both leaders and the leader mark is `split_evenly`, the engine will still keep them in the same room.
 

@@ -26,7 +26,7 @@ function RegisterForm() {
     first_name: '', last_name: '', email: '',
     gender: '', date_of_birth: '', phone: '',
     address: '', country: '', church_organisation: '',
-    message: '', group_code: '', group_code_categories: null, gdpr_consent: false,
+    message: '', group_code: '', gdpr_consent: false,
   });
   const [customValues, setCustomValues] = useState({});
   const [error, setError] = useState(null);
@@ -37,7 +37,7 @@ function RegisterForm() {
   const [prefEnabled, setPrefEnabled] = useState(false);
   const [categories, setCategories] = useState([]);
   const [preferences, setPreferences] = useState([
-    { preferred_participant_number: '', preferred_name: '', preferred_details: '', category_scope: 'all' }
+    { preferred_participant_number: '', preferred_name: '', preferred_details: '' }
   ]);
   // Grouping mode: 'none' (default) | 'code' (have a group code) | 'request' (have name only)
   const [groupingMode, setGroupingMode] = useState('none');
@@ -125,7 +125,7 @@ function RegisterForm() {
   const updatePref = (idx, field, value) => {
     setPreferences(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
   };
-  const addPref = () => setPreferences(prev => [...prev, { preferred_participant_number: '', preferred_name: '', preferred_details: '', category_scope: 'all' }]);
+  const addPref = () => setPreferences(prev => [...prev, { preferred_participant_number: '', preferred_name: '', preferred_details: '' }]);
   const removePref = (idx) => setPreferences(prev => prev.filter((_, i) => i !== idx));
 
   const isFieldEnabled = (name) => fields.find(f => f.field_name === name)?.is_enabled || false;
@@ -223,7 +223,6 @@ function RegisterForm() {
       // and 'request' send no group_code here.
       if (groupingMode === 'join' && formData.group_code.trim()) {
         submission.group_code = formData.group_code.trim();
-        if (formData.group_code_categories) submission.group_code_categories = formData.group_code_categories;
       } else if (groupingMode === 'start' && showCustomName && startCustomName.trim()) {
         // Normalise to the stem so the custom field ALWAYS starts a fresh
         // group with an auto-suffix (typing a full code shape like
@@ -241,7 +240,6 @@ function RegisterForm() {
             preferred_participant_number: p.preferred_participant_number ? parseInt(p.preferred_participant_number) : null,
             preferred_name: p.preferred_name.trim() || null,
             preferred_details: p.preferred_details.trim() || null,
-            category_scope: p.category_scope,
           }));
         }
       }
@@ -255,7 +253,6 @@ function RegisterForm() {
       // inherited value is taken as-is — same cluster guaranteed.
       const primaryResp = await participants.register(eventId, submission);
       const inheritedGroupCode = primaryResp?.group_code || null;
-      const inheritedGroupCodeCategories = primaryResp?.group_code_categories || null;
 
       // All extras pre-validated above — just submit, no skip-on-empty.
       for (const ep of extraPersons) {
@@ -301,9 +298,6 @@ function RegisterForm() {
           epSubmission.group_code = ep.group_code.trim();
         } else if (ep.groupCodeMode === 'same' && inheritedGroupCode) {
           epSubmission.group_code = inheritedGroupCode;
-          if (inheritedGroupCodeCategories) {
-            epSubmission.group_code_categories = inheritedGroupCodeCategories;
-          }
         }
         // 'none' falls through: no group_code attached.
         // v1.0.0k #5: per-person custom field values. Mirrors the
@@ -632,10 +626,10 @@ function RegisterForm() {
                         placeholder={t('grouping.request_details')}
                         rows={2}
                         className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-steel-blue resize-none" />
-                      {/* Scoping selector ("Apply to: All / Specific group types")
-                          intentionally not rendered. The category_scope field is
-                          always sent as 'all' (its initial value); the backend
-                          does not enforce per-category scoping in v1.0. */}
+                      {/* There is no scoping selector. A grouping request once
+                          carried a hidden limit to particular group types; it
+                          was never rendered and nothing ever acted on it, and
+                          it was retired in v1.0.4r. */}
                     </div>
                   ))}
                   <button type="button" onClick={addPref}

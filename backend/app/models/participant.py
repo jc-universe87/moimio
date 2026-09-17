@@ -50,8 +50,21 @@ class Participant(Base):
     group_code: Mapped[str | None] = mapped_column(
         String(50), nullable=True, index=True
     )
+    # RETIRED in v1.0.4r, and unread from that release on.
+    #
+    # It once limited a group code to particular group types, enforced by the
+    # engine's PASS 1 and nowhere else. No screen in any of the six languages
+    # could see or set it, no CSV column carried it, and no release ever
+    # announced it; the only way in was a hand-made API call. A group code now
+    # applies in every group type where `use_group_codes` is on.
+    #
+    # The column stays for one release so a rollback still finds what it
+    # expects, and is dropped after v1.0.5 (see BACKLOG ARCH-5). Backups and
+    # the per-person GDPR export go on carrying it until then, so the file,
+    # the export and the database agree on what is stored. Note the stored
+    # value is the JSON `null` literal, not SQL NULL.
     group_code_categories: Mapped[list | None] = mapped_column(
-        JSONB, nullable=True  # NULL = all categories; [uuid_str, ...] = specific
+        JSONB, nullable=True
     )
     override_group_room: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False

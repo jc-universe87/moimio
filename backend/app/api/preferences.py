@@ -25,7 +25,6 @@ def _fmt(pr: ParticipantPreferenceRequest, p: Participant) -> dict:
         "preferred_participant_number": pr.preferred_participant_number,
         "preferred_name": pr.preferred_name,
         "preferred_details": pr.preferred_details,
-        "category_scope": pr.category_scope,
         "resolved": pr.resolved,
         "resolved_note": pr.resolved_note,
         "created_at": pr.created_at.isoformat() if pr.created_at else None,

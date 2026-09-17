@@ -140,13 +140,6 @@ export default function PreferencesPanel({ eventId, isAdmin }) {
                         {req.preferred_details && (
                           <p className="text-muted italic">{req.preferred_details}</p>
                         )}
-                        {req.category_scope && req.category_scope !== 'all' && (
-                          <p className="text-subtle text-[10px] mt-1">
-                            {t('prefs.scope')}: {Array.isArray(req.category_scope)
-                              ? req.category_scope.join(', ')
-                              : req.category_scope}
-                          </p>
-                        )}
                       </div>
                     </div>
                     {isAdmin && (

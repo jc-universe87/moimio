@@ -159,7 +159,6 @@ async def register_participant(
         church_organisation=data.church_organisation,
         message=data.message,
         group_code=group_code,
-        group_code_categories=getattr(data, 'group_code_categories', None),
         participant_number=participant_number,
         gdpr_consent=data.gdpr_consent,
         registration_status=status,
@@ -194,7 +193,6 @@ async def register_participant(
             preferred_participant_number=pref.get('preferred_participant_number'),
             preferred_name=pref.get('preferred_name'),
             preferred_details=pref.get('preferred_details'),
-            category_scope=pref.get('category_scope', 'all'),
         )
         db.add(pr)
     if pref_requests:
@@ -380,10 +378,13 @@ async def update_participant(
 
 
 async def update_group_code(
-    db: AsyncSession, participant: Participant, new_code: str, categories: list | None = None
+    db: AsyncSession, participant: Participant, new_code: str
 ) -> Participant:
+    # v1.0.4r: the per-person group-type limit is retired, so this no longer
+    # touches it. That also closes the hazard it carried: the parameter
+    # defaulted to None, so any caller that changed a code without resending
+    # the limit silently wiped it.
     participant.group_code = new_code
-    participant.group_code_categories = categories
     db.add(participant)
     await db.flush()
     await db.refresh(participant)

@@ -42,7 +42,7 @@ Event
  │    └── AllocationUnit
  ├── Participant
  │    ├── group_code            (STEM-NNN, links related registrations)
- │    ├── group_code_categories (JSONB: null = all categories, [uuid,...] = scoped)
+ │    ├── group_code_categories (JSONB: retired v1.0.4r, unread)
  │    ├── registration_status   (pending/confirmed/cancelled)
  │    ├── participant_number    (sequential per event; shown in table + email)
  │    ├── override_group_room   (opt-out of group-aware allocation)
@@ -75,7 +75,7 @@ User
 | `allocation_categories` | Named kinds of allocation per event. `rule_type` = exclusive/overlapping. `settings` JSON holds engine config. |
 | `allocation_units` | Named slots within a category. Capacity + gender restriction optional. |
 | `allocations` | Participant↔Unit links. UNIQUE(participant_id, unit_id). |
-| `participant_preference_requests` | "I'd like to be with so-and-so" submissions from the registration form (off by default per event). |
+| `participant_preference_requests` | "I'd like to be with so-and-so" submissions from the registration form (off by default per event). The organising team reads these and acts by hand; nothing in the engine acts on them. Their `category_scope` column, a limit to particular group types, was never enforced and never had a screen: it was retired in v1.0.4r and is dropped after v1.0.5. |
 | `mark_definitions` | Colour-badge types per event ("Leader", "New to us", "Allergic to X"). |
 | `mark_assignments` | Badge↔participant links. |
 | `checkin_fields` | Custom tick columns for check-in mode ("Arrived", "Picked up pack", "Paid cash"). |
@@ -141,10 +141,16 @@ when the registrant doesn't supply one (`SURNAME-` plus a random
 three-digit suffix), and included in the registration confirmation
 email.
 
-`group_code_categories` (JSONB, nullable): exists in the schema as
-a future-facing field for limiting a group code's effect to specific
-categories. **Not currently enforced by the engine** — left as `NULL`
-in practice; group codes apply to all exclusive-rule categories.
+`group_code_categories` (JSONB, nullable): **RETIRED in v1.0.4r, and
+unread from that release on.** It limited one person's group code to
+particular group types, and until v1.0.4r the engine's PASS 1 did
+enforce it — this page previously said it did not, which was wrong from
+the first public commit. No screen in any of the six languages could
+see or set it, no CSV column carried it, and no release announced it;
+the only way in was a hand-made API call. A group code now applies in
+every group type where `use_group_codes` is on. The column stays for one
+release so a rollback still finds what it expects, and is dropped after
+v1.0.5. Note the stored value is the JSON `null` literal, not SQL NULL.
 
 `override_group_room` (bool): if true, the allocation engine
 ignores this participant's group code when placing them into

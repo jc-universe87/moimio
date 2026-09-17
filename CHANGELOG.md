@@ -8,6 +8,32 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4r] — 2026-09-17
+A hidden limit on group codes is retired.
+
+### Changed
+
+- **The per-person limit is gone.** A group code could carry a hidden limit to
+  certain group types. No screen could set that limit, and it no longer has any
+  effect. Group codes apply wherever "use group codes" is on for a group type,
+  which is how every event created through the app already behaves.
+
+- **Registration no longer accepts it.** The public registration no longer takes
+  this hidden setting.
+
+- **The same goes for grouping requests.** The hidden scope on grouping
+  requests, which nothing ever acted on, is retired too, and the panel no
+  longer shows it.
+
+- **The documentation is corrected.** It described the limit as a working
+  feature in one place and as unenforced in another. Neither was right.
+
+- **The stored values stay for one more release,** so a rollback stays safe, and
+  are then removed.
+
+- **For API users.** Anyone who set a limit through the API directly will see it
+  stop having an effect.
+
 ## [1.0.4q] — 2026-09-17
 A restored event now comes back as it was, down to the dates.
 

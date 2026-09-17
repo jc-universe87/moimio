@@ -20,7 +20,6 @@ class ParticipantRegister(BaseModel):
     church_organisation: str | None = None
     message: str | None = None
     group_code: str | None = None
-    group_code_categories: list[str] | None = None  # None = all categories
     gdpr_consent: bool
     preferred_language: str | None = 'en'
     custom_fields: dict[str, str] | None = None
@@ -40,7 +39,6 @@ class ParticipantUpdate(BaseModel):
     church_organisation: str | None = None
     message: str | None = None
     group_code: str | None = None
-    group_code_categories: list[str] | None = None
     override_group_room: bool | None = None
     registration_status: str | None = None
     # v0.85 #16: custom-field updates from the People table inline editor.
@@ -58,7 +56,6 @@ class ParticipantUpdate(BaseModel):
 class GroupCodeUpdate(BaseModel):
     """Reassign a participant's group code."""
     group_code: str
-    group_code_categories: list[str] | None = None
 
 
 class CheckInRequest(BaseModel):
@@ -79,7 +76,6 @@ class ParticipantResponse(BaseModel):
     church_organisation: str | None
     message: str | None
     group_code: str | None
-    group_code_categories: list | None
     participant_number: int | None
     override_group_room: bool = False
     registration_status: str

@@ -1613,6 +1613,14 @@ once, in one release, before v1.0.5.
   an action. So this needs one new key and a frontend change to navigate by
   id, not a wording change alone.
 
+### Removed by v1.0.4r
+
+- **`prefs.scope`** is now unused in all six locale files, and should be deleted
+  in the same batch. v1.0.4r removed the only thing that read it: the label
+  above the group-type scope in the grouping-requests panel, which showed raw
+  ids for a setting nothing ever acted on. The key sits at line 894 of each of
+  the six files. It is the only key this release left unused.
+
 ### Decided (session 86)
 
 Both lines above are now decided, and both are needed.
@@ -1696,7 +1704,23 @@ Whichever it is, the answer should be written down rather than rediscovered.
 
 ## ARCH-3 — Deleting a group type leaves its id behind in two JSON columns
 
-**Status:** Open. Found in session 86 while settling the v1.0.4p rule for ids inside JSON. Belongs to the non-backup survey before v1.0.5.
+**Status:** ✅ CLOSED in v1.0.4r (2026-09-17). Both columns are retired, so a
+leftover id is now unread and has no effect. Found in session 86 while settling
+the v1.0.4p rule for ids inside JSON.
+
+**Resolution.** Rather than teach `delete_category` to tidy these columns,
+v1.0.4r retired what they were for. The engine no longer reads
+`participants.group_code_categories`, and nothing ever read
+`participant_preference_requests.category_scope`, so a dead group type id in
+either one changes nothing: a group code now applies in every group type where
+`use_group_codes` is on. The stored values stay for one release for rollback
+safety, and step 2 (ARCH-5) drops both columns, which removes the stale data
+along with them.
+
+The warning below still holds for anyone working on the restore path before
+step 2, because restore keeps translating these lists until the columns go.
+
+The original entry follows, as the record of what was found.
 
 `delete_category` deletes the row and flushes, and nothing else. It does not
 touch either column that holds group type ids inside JSON:
@@ -1731,7 +1755,17 @@ should see.
 
 ## ARCH-4 — Grouping-request scopes are stored and exported but do nothing
 
-**Status:** Open. Found in session 86 while settling the v1.0.4p rule for ids inside JSON. Belongs to the non-backup survey before v1.0.5.
+**Status:** ✅ CLOSED in v1.0.4r (2026-09-17). The scope is retired. Found in
+session 86 while settling the v1.0.4p rule for ids inside JSON.
+
+**Resolution.** The choice that had no effect is gone rather than made to work.
+Registration no longer reads `category_scope`, so every row takes the column's
+default from here on, and `PreferencesPanel.jsx` no longer renders it, which
+also ends the raw-UUID display described below. A backup and the GDPR export
+still carry the column until step 2 (ARCH-5) drops it, so that a backup, the
+export and the database agree on what is stored.
+
+The original entry follows, as the record of what was found.
 
 `participant_preference_requests.category_scope` holds `"all"` or a list of
 group type ids, is written at registration, is carried in a backup, and
@@ -1750,3 +1784,58 @@ So either the column should drive something, or the UI should stop offering
 a choice that has no effect, and in the meantime it should at least show
 names rather than ids. v1.0.4p carries the ids correctly through a restore,
 which is all that release could sensibly do about it.
+
+---
+
+## ARCH-5 — Step 2: drop the retired limit columns, once v1.0.5 has run safely
+
+**Status:** Open, and deliberately not before v1.0.5. Opened in session 86 as
+step 2 of v1.0.4r, which retired both limits (see ARCH-3 and ARCH-4).
+
+v1.0.4r stopped reading and writing two columns but left them in place, so that
+a rollback to v1.0.4q or earlier still finds the data it expects. Once v1.0.5
+has run safely in the field, they go.
+
+**The columns:**
+
+- `participants.group_code_categories`
+- `participant_preference_requests.category_scope`
+
+**What step 2 removes:**
+
+- **Both columns, by migration.** One Alembic revision, dropping both.
+- **Both model fields and their RETIRED comments**, in
+  `backend/app/models/participant.py` and
+  `backend/app/models/preference_request.py`.
+- **The backup register entries**, in `backend/app/services/backup_service.py`:
+  `"group_code_categories": Col(True, "remapped")` under `participants`, and
+  `"category_scope": Col(True, "remapped", raw=True)` under
+  `participant_preference_requests`. Note the declaration-order rule when
+  editing the register: non-raw exported columns come before `raw` ones.
+- **The export and restore handling for both**, in the same file: the
+  `json.dumps` of `group_code_categories` in the participants CSV writer, the
+  `| {"category_scope": pr.category_scope}` in the preference-requests writer,
+  and both `_translate_id_list(...)` calls in `confirm_restore`.
+- **`_translate_id_list` itself.** These two calls are its only callers, so it
+  is orphaned the moment they go. `mark_priorities` is translated by a
+  different path and is unaffected.
+- **The net fixture's parts and the p test cases for these columns:** the
+  fixture values, the net's own self-checks and the reference entries in
+  `backend/tests/test_v1_0_4o_round_trip.py`, the translation cases in
+  `backend/tests/test_v1_0_4p_write_order.py`, the register expectations in
+  `backend/tests/test_v1_0_4n_backup_guard.py`, and
+  `backend/tests/test_v1_0_4r_limits_retired.py`, whose whole subject is these
+  two columns.
+- **The GDPR export keys**, in `backend/app/services/data_export_service.py`:
+  `category_scope` (twice, in the two preference-request shapes) and
+  `group_code_categories` (once, in the participant shape).
+- **The `make_participant` keyword** `group_code_categories` in
+  `backend/tests/conftest.py`, if nothing still passes it.
+
+**One detail for any count or clean-up query written before the drop.**
+`participants.group_code_categories` is `JSONB` without `none_as_null=True`, so
+a row with no limit holds the **JSON `null` literal**, not SQL NULL.
+`WHERE group_code_categories IS NULL` therefore finds nothing.
+`WHERE group_code_categories = 'null'::jsonb` is the test that works. Python
+reads both back as `None`, which is why this is invisible from the application
+side.

@@ -18,8 +18,10 @@ untranslatable id would therefore invert the rule rather than lose it.
 Every case here is checked through the column's REAL reader wherever one
 enforces it:
 
-  - group_code_categories — the engine's PASS 1 clustering, by running the
-    engine on the restored event and reading the placement reason.
+  - group_code_categories — v1.0.4r retired the limit, so the engine no
+    longer reads it and there is no behaviour left to check here. This file
+    proves the translation only: the stored value. What an id inside such a
+    list now means is tested in test_v1_0_4r_limits_retired.py.
   - mark_priorities — `_mark_behaviour_for`, the per-group-type override
     lookup.
   - category_scope — nothing enforces it (it is stored, displayed and
@@ -44,7 +46,6 @@ from app.models.participant import Participant
 from app.models.preference_request import ParticipantPreferenceRequest
 from app.services.allocation_service import _mark_behaviour_for
 from app.services.backup_service import confirm_restore, export_event_zip
-from app.services.engine_service import run_engine
 
 from tests.conftest import (
     make_category,
@@ -157,25 +158,6 @@ async def _restored_person(db, event_id, email) -> Participant:
     )).scalar_one()
 
 
-# ─── The real reader for group_code_categories ────────────────────────
-
-async def _group_code_applies_in(db, event_id, category_id) -> bool:
-    """Does the group code cluster its members in this group type?
-
-    This is the engine's PASS 1, reached through `run_engine`, which is the
-    only thing that reads group_code_categories for behaviour. A clustered
-    member carries a placement reason of `group_code` (or
-    `group_code_split`); an unclustered one is placed by fill or round
-    robin.
-    """
-    proposal = await run_engine(db, event_id, category_id, mode="replace")
-    reasons = proposal.get("placement_reasons", {})
-    return any(
-        str(r.get("reason", "")).startswith("group_code")
-        for r in reasons.values()
-    )
-
-
 # ─── 1. group_code_categories ─────────────────────────────────────────
 
 async def test_1_1_two_known_ids_come_back_as_the_two_restored_ids(db):
@@ -194,21 +176,24 @@ async def test_1_1_two_known_ids_come_back_as_the_two_restored_ids(db):
         str(cats["Alpha"].id), str(cats["Beta"].id),
     ]
 
-    # And the rule works: the code applies to those two group types only.
-    assert await _group_code_applies_in(db, new_id, cats["Alpha"].id)
-    assert await _group_code_applies_in(db, new_id, cats["Beta"].id)
-    assert not await _group_code_applies_in(db, new_id, cats["Gamma"].id)
+    # v1.0.4r: the engine-behaviour check that stood here is gone. The
+    # per-person limit is retired and the engine no longer reads it, so
+    # what a restored list MEANS is now tested in
+    # test_v1_0_4r_limits_retired.py test 1. What this file still proves
+    # is the translation itself: the stored value above.
 
 
 async def test_1_2_null_stays_null_and_the_code_applies_everywhere(db):
     src = await _event_with_group_code(db, None)
     new_id = await _round_trip(db, src["event"].id)
-    cats = await _restored_cats(db, new_id)
     sara = await _restored_person(db, new_id, "sara@test.local")
 
     assert sara.group_code_categories is None
-    for name in ("Alpha", "Beta", "Gamma"):
-        assert await _group_code_applies_in(db, new_id, cats[name].id), name
+    # v1.0.4r: the engine-behaviour check that stood here is gone. The
+    # per-person limit is retired and the engine no longer reads it, so
+    # what a restored list MEANS is now tested in
+    # test_v1_0_4r_limits_retired.py test 1. What this file still proves
+    # is the translation itself: the stored value above.
 
 
 async def test_1_3_one_known_and_one_unknown_id(db):
@@ -226,22 +211,26 @@ async def test_1_3_one_known_and_one_unknown_id(db):
     assert sara.group_code_categories == [str(cats["Alpha"].id), DEAD_ID]
     assert len(sara.group_code_categories) == 2
 
-    assert await _group_code_applies_in(db, new_id, cats["Alpha"].id)
-    assert not await _group_code_applies_in(db, new_id, cats["Beta"].id)
-    assert not await _group_code_applies_in(db, new_id, cats["Gamma"].id)
+    # v1.0.4r: the engine-behaviour check that stood here is gone. The
+    # per-person limit is retired and the engine no longer reads it, so
+    # what a restored list MEANS is now tested in
+    # test_v1_0_4r_limits_retired.py test 1. What this file still proves
+    # is the translation itself: the stored value above.
 
 
 async def test_1_4_only_unknown_ids_still_apply_nowhere(db):
     src = await _event_with_group_code(db, [DEAD_ID])
     new_id = await _round_trip(db, src["event"].id)
-    cats = await _restored_cats(db, new_id)
     sara = await _restored_person(db, new_id, "sara@test.local")
 
     # Unchanged. Emptying it would mean "every group type", the opposite of
     # what it meant before the backup.
     assert sara.group_code_categories == [DEAD_ID]
-    for name in ("Alpha", "Beta", "Gamma"):
-        assert not await _group_code_applies_in(db, new_id, cats[name].id), name
+    # v1.0.4r: the engine-behaviour check that stood here is gone. The
+    # per-person limit is retired and the engine no longer reads it, so
+    # what a restored list MEANS is now tested in
+    # test_v1_0_4r_limits_retired.py test 1. What this file still proves
+    # is the translation itself: the stored value above.
 
 
 # ─── 2. category_scope ────────────────────────────────────────────────

@@ -358,7 +358,7 @@ async def reassign_group_code(
             detail={"key": "errors.participant.group_code_too_short"},
         )
 
-    participant = await update_group_code(db, participant, data.group_code, data.group_code_categories)
+    participant = await update_group_code(db, participant, data.group_code)
     logger.info(
         "group_code_reassigned",
         participant_id=str(participant_id),

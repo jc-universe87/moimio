@@ -176,6 +176,8 @@ BACKUP_REGISTER: dict[str, Table] = {
         "message": Col(True, "copied"),
         "group_code": Col(True, "copied"),
         # v1.0.4p: the group type ids inside are translated in place.
+        # Retired in v1.0.4r; carried until the column is dropped, so that a
+        # backup, the GDPR export and the database agree on what is stored.
         "group_code_categories": Col(True, "remapped"),
         "participant_number": Col(True, "copied"),
         "registration_status": Col(True, "copied"),
@@ -327,6 +329,8 @@ BACKUP_REGISTER: dict[str, Table] = {
         "resolved_note": Col(True, "copied"),
         # v1.0.4p: "all" passes through; a list of group type ids is
         # translated in place.
+        # Retired in v1.0.4r; carried until the column is dropped, so that a
+        # backup, the GDPR export and the database agree on what is stored.
         "category_scope": Col(True, "remapped", raw=True),
     }),
     "notes": Table("notes.json", None, {

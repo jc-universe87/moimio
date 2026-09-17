@@ -324,8 +324,6 @@ async def run_engine(
     if not participants:
         return _empty_return(units, mode, run_id, excluded_count)
 
-    cat_id_str = str(category_id)
-
     # Mark assignments — load only when there are mark_priorities to honour.
     # participant_marks: pid → set of mark_ids (only marks in priorities list)
     participant_marks: dict[str, set[str]] = defaultdict(set)
@@ -517,16 +515,18 @@ async def run_engine(
 
     if use_group_codes:
         # Build clusters: group_code → list of participants.
-        # Participants without group_code (or with group_code applied to
-        # other categories) are skipped here; they go to PASS 4.
+        # Participants without a group_code are skipped here; they go to
+        # PASS 4.
+        #
+        # v1.0.4r: the per-person limit on which group types a code applied
+        # in is retired. It was enforced here and nowhere else, and no screen
+        # in any of the six languages could see or set it. A group code now
+        # applies in every group type where `use_group_codes` is on, which is
+        # how every event created through the app already behaved.
         clusters: dict[str, list[Participant]] = defaultdict(list)
         for p in participants:
             gc = (p.group_code or "").strip()
             if not gc:
-                continue
-            # Honour group_code_categories scope if set; default = all categories
-            scope = p.group_code_categories
-            if scope and cat_id_str not in [str(s) for s in scope]:
                 continue
             clusters[gc].append(p)
 
