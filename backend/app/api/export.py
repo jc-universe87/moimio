@@ -405,7 +405,7 @@ async def restore_confirm(
         raise HTTPException(status_code=422, detail={"key": "errors.export.empty_file"})
 
     try:
-        result = await confirm_restore(content, db)
+        result = await confirm_restore(content, db, actor_user_id=current_user.id)
     except MoimioAppError:
         raise  # let the global handler convert to dict-detail
     except Exception as e:

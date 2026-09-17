@@ -1014,7 +1014,10 @@ is the stronger guard, but it only works if the first exists too.
 
 ## BACKUP-7 — The units loop records a unit before checking it
 
-**Status:** Open. Found in session 86 phase 1 while reading the restore path for BACKUP-1 (v1.0.4m). Not fixed there.
+**Status:** ✅ CLOSED in v1.0.4o (2026-09-17). The map entry is now written
+below the guard, so a unit whose group type is missing is skipped and never
+reaches `unit_map`. Found in session 86 phase 1 while reading the restore
+path for BACKUP-1 (v1.0.4m).
 
 In `confirm_restore`, the units loop fills `unit_map` before the guard that
 skips a unit whose group type is missing from the file:
@@ -1045,6 +1048,19 @@ Every other block was checked for the same pattern and is safe: the custom
 field, participant, category and mark loops all write their map entry with
 no guard following, and the v1.0.4m `unit_category_map` is deliberately
 written after the guard.
+
+### Resolution
+
+Shipped as v1.0.4o. The `unit_map` write moved below the guard, and the
+guard grew: a unit is skipped when its group type does not resolve, when it
+has no usable name, or when it has no capacity. The consequence is recorded
+as intended behaviour rather than left to be discovered: a file with a
+missing group type silently loses the placements in it, and the counts the
+restore returns say how many lines went.
+
+Every map-filling block now also declines to use an empty or missing old id
+as a key, so a row with no id of its own is still created but nothing in the
+file can refer to it.
 
 ---
 
@@ -1090,7 +1106,10 @@ a datetime sibling before this can be done.
 
 ## BACKUP-9 — A damaged or hand-edited file can still fail the whole restore
 
-**Status:** Open. Found in session 86 phase 1 while reading the restore path for BACKUP-1 (v1.0.4m). Not fixed there.
+**Status:** ✅ CLOSED in v1.0.4o (2026-09-17). Every line-level problem now
+costs its own line and whatever depended on it; a member that cannot be read
+refuses the file before anything is written. Found in session 86 phase 1
+while reading the restore path for BACKUP-1 (v1.0.4m).
 
 A backup is a plain unsigned ZIP, so a hand-edited file is expected input,
 and the rule is that what does not map is skipped and one bad line never
@@ -1126,6 +1145,41 @@ Two related defects belong here:
 
 `_parse_date`, `_parse_int` and `_parse_json_field` already degrade instead
 of raising, and are the pattern the rest of the restore should follow.
+
+### Resolution
+
+Shipped as v1.0.4o, on two rules.
+
+**A damaged line costs its own line.** Every one of the eighteen bracket
+reads became a forgiving read through one helper, which falls back to the
+column's OWN default, read from the model so it cannot drift, and skips the
+line when the column is NOT NULL with no default. Restore never invents a
+value the model does not define. Duplicates are dropped with the first
+winning, by old id in every block that fills a map and by pair for
+allocations, exclusions and mark assignments. Over-long text is shortened to
+the column's declared length. A line of the wrong type inside a well-shaped
+member is skipped.
+
+**A member that cannot be read refuses the file.** Invalid JSON, a member
+whose top-level shape is wrong, and a `participants.csv` with no `id`
+column are all refused in `_parse_zip`, before any row is written, at
+preview and at confirm alike. They surface as the existing 422 rather than
+as a 500; `errors.export.zip_missing_files` is the closest key and names the
+member, and STRINGS-1 carries the specific wording it deserves.
+
+Both related defects are fixed too. `_safe_enum` now falls back to the
+model's own `PENDING` rather than `CONFIRMED`, so a bad status no longer
+quietly promotes somebody into the active roster. `_OPTIONAL_MEMBERS`
+defaults are deep-copied and the annotation is widened.
+
+One case the entry did not list turned up while writing the tests: an
+explicit null in a NOT NULL column that HAS a default still reached the
+insert as None, because `.get(key, literal)` returns the literal only when
+the key is absent. Those reads now go through the same helper.
+
+The whole of it is covered by `test_v1_0_4o_damaged_files.py`, and
+`test_v1_0_4o_round_trip.py` proves that a file Moimio produced restores
+exactly as it did before.
 
 ---
 
@@ -1236,9 +1290,15 @@ once, in one release, before v1.0.5.
   are already there and invisible. One or two keys, in the shape of the
   existing `portability.participants_found`.
 - **A backup file that cannot be read needs its own message.** v1.0.4o
-  refuses an unreadable member with the closest existing key, which describes
-  a missing file rather than an unreadable one. A specific key would say
-  which member and why.
+  refuses an unreadable member with `errors.export.zip_missing_files`, "The
+  backup ZIP is missing files: {files}", passing the member name. It is the
+  closest existing key: it is about the backup rather than a generic
+  failure, it names the member, and it already surfaces as a 422 at both
+  preview and confirm. But it says "missing" where the truth is "present and
+  unreadable", so an organiser could go looking for a file that is there. A
+  new key should say that a part of the backup could not be read, and name
+  it. Cases to cover: invalid JSON, a section of the wrong shape, and a
+  participant list with no id column.
 
 ### Pending a decision
 

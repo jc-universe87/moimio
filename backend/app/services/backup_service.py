@@ -7,6 +7,7 @@ Restore: parses a ZIP, previews counts, then creates a new event with
          all entities re-keyed to fresh UUIDs.
 """
 
+import copy
 import csv
 import io
 import json
@@ -18,6 +19,7 @@ from typing import NamedTuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import Base
 from app.core.exceptions import MoimioAppError
 from app.models.allocation import Allocation
 from app.models.allocation_category import AllocationCategory
@@ -369,6 +371,69 @@ def _row(obj, *fields) -> dict:
     return {f: _str(getattr(obj, f, None)) for f in fields}
 
 
+# ── Reading a damaged line (v1.0.4o) ─────────────────────────────────────────
+#
+# A backup is a plain unsigned ZIP, so a hand-edited or truncated file is
+# expected input. One damaged line costs that line and whatever depends on
+# it, never the whole file.
+#
+# The rules, in one place:
+#
+#   - A missing key and an explicit null are the same thing. In the
+#     participants CSV a blank cell means the same again.
+#   - A damaged value falls back to the column's own default, read from the
+#     model so it cannot drift. Restore never invents a value the model does
+#     not define.
+#   - A NOT NULL column with no model default means the line is skipped.
+#   - Over-long text is shortened to the column's declared length.
+#   - An empty or missing old id is never a map key: the row is still
+#     created, but nothing can refer to it.
+
+_SKIP = object()
+
+
+def _column(table: str, name: str):
+    return Base.metadata.tables[table].columns[name]
+
+
+def _column_default(table: str, name: str):
+    """(has_default, value) for a column's own Python-side default."""
+    col = _column(table, name)
+    if col.default is None:
+        return False, None
+    arg = col.default.arg
+    if callable(arg):
+        try:
+            return True, arg(None)
+        except TypeError:
+            return True, arg()
+    return True, arg
+
+
+def _field(src, key: str, table: str, column: str, *, blank_is_null: bool = False):
+    """One field of one line. Returns the value to write, or `_SKIP` when
+    the line cannot be written at all. See the rules above."""
+    raw = src.get(key) if isinstance(src, dict) else None
+    if raw == "" and blank_is_null:
+        raw = None
+    if raw is None:
+        has_default, default = _column_default(table, column)
+        if has_default:
+            return default
+        return None if _column(table, column).nullable else _SKIP
+    return raw
+
+
+def _old_id(src, key: str) -> str | None:
+    """The old id a line carries, or None when it is missing or blank.
+    None is never used as a map key (rule 4 above)."""
+    raw = src.get(key) if isinstance(src, dict) else None
+    if raw is None:
+        return None
+    raw = str(raw).strip()
+    return raw or None
+
+
 # ── Export ────────────────────────────────────────────────────────────────────
 
 async def export_event_zip(
@@ -678,7 +743,66 @@ async def export_event_zip(
 # v1.0.4m: members that may be absent, with the value to use when they are.
 # An older file simply has no exclusions in it, which restores as "nobody
 # excluded"; see _parse_zip.
-_OPTIONAL_MEMBERS: dict[str, list] = {"allocation_exclusions.json": []}
+_OPTIONAL_MEMBERS: dict[str, object] = {"allocation_exclusions.json": []}
+
+# v1.0.4o: the top-level shape every member must have. A member that cannot
+# be read at all is refused before anything is written (there is no sensible
+# per-line recovery from "this member is not a list"), which is what
+# _require_shape below does. `object` means a JSON object, `array` a list.
+_MEMBER_SHAPES: dict[str, str] = {
+    "manifest.json": "object",
+    "event.json": "object",
+    "custom_fields.json": "object",
+    "field_configs.json": "array",
+    "allocation_categories.json": "array",
+    "allocation_units.json": "array",
+    "allocations.json": "array",
+    "allocation_exclusions.json": "array",
+    "marks.json": "object",
+    "preferences.json": "array",
+    "notes.json": "array",
+}
+
+# Members that hold two tables: the keys inside them, and their shapes.
+_MEMBER_INNER: dict[str, tuple[tuple[str, str], ...]] = {
+    "custom_fields.json": (("definitions", "array"), ("values", "object")),
+    "marks.json": (("definitions", "array"), ("assignments", "array")),
+}
+
+
+def _unreadable(*members: str):
+    """Refuse the file, naming the members at fault.
+
+    `zip_missing_files` is the closest existing key: it is about the backup
+    ZIP rather than a generic failure, it names the member through its
+    `files` parameter, and it already surfaces as a 422 at both preview and
+    confirm. It says "missing" where the truth is "present but unreadable",
+    which is why STRINGS-1 carries a specific message for this case.
+    """
+    return MoimioAppError(
+        "errors.export.zip_missing_files",
+        params={"files": ", ".join(sorted(members))},
+        status_code=422,
+    )
+
+
+def _require_shape(name: str, payload) -> None:
+    """Check one member's top-level shape, and its inner keys where it
+    holds two tables. Raises rather than repairing: a member of the wrong
+    shape is not a damaged line, it is a file that cannot be read."""
+    want = _MEMBER_SHAPES.get(name)
+    if want == "array" and not isinstance(payload, list):
+        raise _unreadable(name)
+    if want == "object" and not isinstance(payload, dict):
+        raise _unreadable(name)
+    for key, inner in _MEMBER_INNER.get(name, ()):
+        value = payload.get(key)
+        if value is None:
+            continue  # absent is fine; the readers default it
+        if inner == "array" and not isinstance(value, list):
+            raise _unreadable(f"{name}:{key}")
+        if inner == "object" and not isinstance(value, dict):
+            raise _unreadable(f"{name}:{key}")
 
 
 def _parse_zip(content: bytes) -> dict:
@@ -708,10 +832,20 @@ def _parse_zip(content: bytes) -> dict:
     for name in required:
         raw = zf.read(name)
         if name.endswith(".json"):
-            data[name] = json.loads(raw.decode("utf-8"))
+            # v1.0.4o: invalid JSON used to reach the caller as a 500. A
+            # member that will not parse is a file that cannot be read.
+            try:
+                payload = json.loads(raw.decode("utf-8"))
+            except (UnicodeDecodeError, ValueError):
+                raise _unreadable(name)
+            _require_shape(name, payload)
+            data[name] = payload
         else:
             # CSV — decode stripping BOM
-            data[name] = raw.decode("utf-8-sig")
+            try:
+                data[name] = raw.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                raise _unreadable(name)
 
     # v1.0.4m: optional members, read when present and defaulted when not.
     # Deliberately NOT in `required`: a member added there would reject
@@ -720,10 +854,23 @@ def _parse_zip(content: bytes) -> dict:
     # here catches json.loads, so the caller turns it into the same error.
     for name, default in _OPTIONAL_MEMBERS.items():
         if name in names:
-            data[name] = json.loads(zf.read(name).decode("utf-8"))
+            try:
+                payload = json.loads(zf.read(name).decode("utf-8"))
+            except (UnicodeDecodeError, ValueError):
+                raise _unreadable(name)
+            _require_shape(name, payload)
+            data[name] = payload
         else:
-            # Copy: the default lives on a module constant.
-            data[name] = list(default)
+            # v1.0.4o: deep copy, so a default that is a dict or holds one
+            # cannot be mutated on the module constant, and does not come
+            # back as a list of its own keys the way list() gave.
+            data[name] = copy.deepcopy(default)
+
+    # v1.0.4o: without an `id` column nothing in the file can refer to a
+    # participant, and every read of it would raise. Refuse the file.
+    header = (data["participants.csv"].splitlines() or [""])[0]
+    if "id" not in [c.strip() for c in header.split(",")]:
+        raise _unreadable("participants.csv:id")
 
     zf.close()
     return data
@@ -755,7 +902,11 @@ def preview_restore(content: bytes) -> dict:
     }
 
 
-async def confirm_restore(content: bytes, db: AsyncSession) -> dict:
+async def confirm_restore(
+    content: bytes,
+    db: AsyncSession,
+    actor_user_id: uuid.UUID | None = None,
+) -> dict:
     """
     Parse a backup ZIP and create a new event with fresh UUIDs.
 
@@ -790,16 +941,42 @@ async def confirm_restore(content: bytes, db: AsyncSession) -> dict:
     counts = {"participants": 0, "allocations": 0, "marks_assigned": 0,
               "categories": 0, "units": 0, "allocation_exclusions": 0}
 
+    # v1.0.4o: a damaged or hand-edited line costs that line and whatever
+    # depends on it, never the whole file. Every such loss is counted here,
+    # reported in the return value, and summarised in one log line at the
+    # end. Keyed by ZIP member so the organiser can be told where the
+    # damage was, never by participant.
+    skipped: dict[str, int] = {}
+    shortened: dict[str, int] = {}
+
+    def skip(member: str) -> None:
+        skipped[member] = skipped.get(member, 0) + 1
+
+    def fit(value, table: str, column: str):
+        """Shorten over-long text to the column's declared length, counted
+        by characters. The length is read from the model, so it cannot
+        drift from the schema."""
+        length = getattr(_column(table, column).type, "length", None)
+        if isinstance(value, str) and length and len(value) > length:
+            label = f"{table}.{column}"
+            shortened[label] = shortened.get(label, 0) + 1
+            return value[:length]
+        return value
+
+
     # ── Create event ──
     new_event_id = uuid.uuid4()
     # Append "(Restored)" to name to make it distinguishable
-    new_name = event_src.get("name", "Restored Event") + " (Restored)"
+    # The event is the one row that cannot be skipped, so it keeps its
+    # pre-existing fallback name. The suffix is added first and the result
+    # shortened, or a name already at the column limit would overflow it.
+    new_name = f"{event_src.get('name') or 'Restored Event'} (Restored)"
     # Restore as DRAFT regardless of original status
     event = Event(
         id=new_event_id,
-        name=new_name,
+        name=fit(new_name, "events", "name"),
         description=event_src.get("description"),
-        location=event_src.get("location"),
+        location=fit(event_src.get("location"), "events", "location"),
         start_date=_parse_date(event_src.get("start_date")),
         end_date=_parse_date(event_src.get("end_date")),
         status=EventStatus.DRAFT,
@@ -811,28 +988,50 @@ async def confirm_restore(content: bytes, db: AsyncSession) -> dict:
 
     # ── Custom field definitions ──
     cf_data = data["custom_fields.json"]
+    seen_cf_ids: set[str] = set()
     for cf_src in cf_data.get("definitions", []):
+        if not isinstance(cf_src, dict):
+            skip("custom_fields.json")
+            continue
+        old_id = _old_id(cf_src, "id")
+        if old_id is not None and old_id in seen_cf_ids:
+            skip("custom_fields.json")  # duplicate old id: the first wins
+            continue
+        label = _field(cf_src, "label", "custom_field_definitions", "label")
+        field_type = _field(cf_src, "field_type", "custom_field_definitions", "field_type")
+        if label is _SKIP or field_type is _SKIP:
+            skip("custom_fields.json")
+            continue
         new_cf_id = uuid.uuid4()
-        cf_map[cf_src["id"]] = new_cf_id
+        if old_id is not None:
+            cf_map[old_id] = new_cf_id
+            seen_cf_ids.add(old_id)
         cf = CustomFieldDefinition(
             id=new_cf_id,
             event_id=new_event_id,
-            label=cf_src["label"],
-            field_type=cf_src["field_type"],
+            label=fit(label, "custom_field_definitions", "label"),
+            field_type=fit(field_type, "custom_field_definitions", "field_type"),
             options=cf_src.get("options"),
-            is_required=cf_src.get("is_required", False),
-            sort_order=cf_src.get("sort_order", 0),
+            is_required=_field(cf_src, "is_required", "custom_field_definitions", "is_required"),
+            sort_order=_field(cf_src, "sort_order", "custom_field_definitions", "sort_order"),
         )
         db.add(cf)
     await db.flush()
 
     # ── Field configs (registration form settings) ──
     for fc_src in data["field_configs.json"]:
+        if not isinstance(fc_src, dict):
+            skip("field_configs.json")
+            continue
+        field_name = _field(fc_src, "field_name", "event_field_configs", "field_name")
+        if field_name is _SKIP:
+            skip("field_configs.json")
+            continue
         fc = EventFieldConfig(
             event_id=new_event_id,
-            field_name=fc_src["field_name"],
-            is_enabled=fc_src.get("is_enabled", False),
-            is_required=fc_src.get("is_required", False),
+            field_name=fit(field_name, "event_field_configs", "field_name"),
+            is_enabled=_field(fc_src, "is_enabled", "event_field_configs", "is_enabled"),
+            is_required=_field(fc_src, "is_required", "event_field_configs", "is_required"),
         )
         db.add(fc)
     await db.flush()
@@ -840,66 +1039,122 @@ async def confirm_restore(content: bytes, db: AsyncSession) -> dict:
     # ── Participants ──
     cf_values_src = cf_data.get("values", {})  # old_participant_id → [{field_id, value}]
     reader = csv.DictReader(io.StringIO(data["participants.csv"]))
+    seen_p_ids: set[str] = set()
     for row in reader:
-        new_p_id = uuid.uuid4()
-        participant_map[row["id"]] = new_p_id
+        old_id = _old_id(row, "id")
+        if old_id is not None and old_id in seen_p_ids:
+            skip("participants.csv")  # duplicate old id: the first wins
+            continue
+        # A person with no name and no email is not a person. These three
+        # are NOT NULL with no model default, so the line goes, and with it
+        # everything that referred to this participant.
+        first = _field(row, "first_name", "participants", "first_name", blank_is_null=True)
+        last = _field(row, "last_name", "participants", "last_name", blank_is_null=True)
+        email = _field(row, "email", "participants", "email", blank_is_null=True)
+        if first is _SKIP or last is _SKIP or email is _SKIP:
+            skip("participants.csv")
+            continue
 
-        reg_status = _safe_enum(RegistrationStatus, row.get("registration_status"), RegistrationStatus.CONFIRMED)
+        new_p_id = uuid.uuid4()
+        # A blank id cell is never a map key, but the row is still created:
+        # nothing in the file can refer to it.
+        if old_id is not None:
+            participant_map[old_id] = new_p_id
+            seen_p_ids.add(old_id)
+
+        # v1.0.4o: the model's own default, PENDING, not CONFIRMED. A bad
+        # value must not quietly promote someone into the active roster.
+        reg_status = _safe_enum(
+            RegistrationStatus,
+            row.get("registration_status"),
+            _column_default("participants", "registration_status")[1],
+        )
         p = Participant(
             id=new_p_id,
             event_id=new_event_id,
-            first_name=row.get("first_name") or "",
-            last_name=row.get("last_name") or "",
-            email=row.get("email") or "",
-            gender=row.get("gender") or None,
+            first_name=fit(first, "participants", "first_name"),
+            last_name=fit(last, "participants", "last_name"),
+            email=fit(email, "participants", "email"),
+            gender=fit(row.get("gender") or None, "participants", "gender"),
             date_of_birth=_parse_date(row.get("date_of_birth")),
-            phone=row.get("phone") or None,
+            phone=fit(row.get("phone") or None, "participants", "phone"),
             address=row.get("address") or None,
-            country=row.get("country") or None,
-            church_organisation=row.get("church_organisation") or None,
+            country=fit(row.get("country") or None, "participants", "country"),
+            church_organisation=fit(
+                row.get("church_organisation") or None,
+                "participants", "church_organisation",
+            ),
             message=row.get("message") or None,
-            group_code=row.get("group_code") or None,
+            group_code=fit(row.get("group_code") or None, "participants", "group_code"),
             group_code_categories=_parse_json_field(row.get("group_code_categories")),
             participant_number=_parse_int(row.get("participant_number")),
             registration_status=reg_status,
-            gdpr_consent=row.get("gdpr_consent", "").lower() in ("true", "1"),
-            checked_in=row.get("checked_in", "").lower() in ("true", "1"),
-            preferred_language=row.get("preferred_language") or "en",
+            gdpr_consent=(row.get("gdpr_consent") or "").lower() in ("true", "1"),
+            checked_in=(row.get("checked_in") or "").lower() in ("true", "1"),
+            preferred_language=fit(
+                _field(row, "preferred_language", "participants",
+                       "preferred_language", blank_is_null=True),
+                "participants", "preferred_language",
+            ),
         )
         db.add(p)
         counts["participants"] += 1
 
-        # Custom field values for this participant
-        for cfv_src in cf_values_src.get(row["id"], []):
-            old_field_id = cfv_src.get("field_id")
-            new_field_id = cf_map.get(old_field_id)
-            if new_field_id:
-                cfv = CustomFieldValue(
-                    participant_id=new_p_id,
-                    field_id=new_field_id,
-                    value=cfv_src.get("value"),
-                )
-                db.add(cfv)
+        # Custom field values for this participant. Keyed by the old
+        # participant id, so a line with no id has none to find.
+        for cfv_src in (cf_values_src.get(old_id) or [] if old_id else []):
+            if not isinstance(cfv_src, dict):
+                skip("custom_fields.json:values")
+                continue
+            new_field_id = cf_map.get(_old_id(cfv_src, "field_id"))
+            if not new_field_id:
+                skip("custom_fields.json:values")
+                continue
+            db.add(CustomFieldValue(
+                participant_id=new_p_id,
+                field_id=new_field_id,
+                value=cfv_src.get("value"),
+            ))
 
     await db.flush()
 
     # ── Allocation categories + units ──
+    seen_cat_ids: set[str] = set()
     for cat_src in data["allocation_categories.json"]:
+        if not isinstance(cat_src, dict):
+            skip("allocation_categories.json")
+            continue
+        old_id = _old_id(cat_src, "id")
+        if old_id is not None and old_id in seen_cat_ids:
+            skip("allocation_categories.json")  # duplicate old id
+            continue
+        name = _field(cat_src, "name", "allocation_categories", "name")
+        if name is _SKIP:
+            skip("allocation_categories.json")
+            continue
         new_cat_id = uuid.uuid4()
-        category_map[cat_src["id"]] = new_cat_id
+        if old_id is not None:
+            category_map[old_id] = new_cat_id
+            seen_cat_ids.add(old_id)
         cat = AllocationCategory(
             id=new_cat_id,
             event_id=new_event_id,
-            name=cat_src["name"],
-            item_label=cat_src.get("item_label"),
-            description=cat_src.get("description"),
-            rule_type=cat_src.get("rule_type", "none"),
+            name=fit(name, "allocation_categories", "name"),
+            item_label=fit(cat_src.get("item_label"), "allocation_categories", "item_label"),
+            description=fit(cat_src.get("description"), "allocation_categories", "description"),
+            # v1.0.4o: the column's own default, "exclusive". The "none"
+            # this line used to fall back to is not a value the model
+            # defines, and nothing reads it as one.
+            rule_type=fit(
+                _field(cat_src, "rule_type", "allocation_categories", "rule_type"),
+                "allocation_categories", "rule_type",
+            ),
             name_key=cat_src.get("name_key"),            # v1.0.4
             item_label_key=cat_src.get("item_label_key"),  # v1.0.4
             has_capacity=True,  # v1.0.3: ignored; always on
             has_gender_restriction=True,  # v1.0.3: ignored; always on
-            sort_order=cat_src.get("sort_order", 0),
-            is_default=cat_src.get("is_default", False),
+            sort_order=_field(cat_src, "sort_order", "allocation_categories", "sort_order"),
+            is_default=_field(cat_src, "is_default", "allocation_categories", "is_default"),
             settings=cat_src.get("settings") or {},
         )
         db.add(cat)
@@ -907,21 +1162,42 @@ async def confirm_restore(content: bytes, db: AsyncSession) -> dict:
 
     await db.flush()
 
+    seen_unit_ids: set[str] = set()
     for unit_src in data["allocation_units.json"]:
-        new_unit_id = uuid.uuid4()
-        unit_map[unit_src["id"]] = new_unit_id
-        new_cat_id = category_map.get(unit_src["category_id"])
-        if not new_cat_id:
+        if not isinstance(unit_src, dict):
+            skip("allocation_units.json")
             continue
+        old_id = _old_id(unit_src, "id")
+        if old_id is not None and old_id in seen_unit_ids:
+            skip("allocation_units.json")  # duplicate old id
+            continue
+        new_cat_id = category_map.get(_old_id(unit_src, "category_id"))
+        name = _field(unit_src, "name", "allocation_units", "name")
+        capacity = _field(unit_src, "capacity", "allocation_units", "capacity")
+        if not new_cat_id or name is _SKIP or capacity is _SKIP:
+            skip("allocation_units.json")
+            continue
+        # v1.0.4o (BACKUP-7): the map entry is written only once the row is
+        # certain to be created. Written above this guard, a unit whose
+        # group type was missing still landed in unit_map although no row
+        # existed, and an allocation naming it then failed the foreign key
+        # and rolled the whole restore back.
+        new_unit_id = uuid.uuid4()
+        if old_id is not None:
+            unit_map[old_id] = new_unit_id
+            seen_unit_ids.add(old_id)
         unit_category_map[new_unit_id] = new_cat_id
         unit = AllocationUnit(
             id=new_unit_id,
             category_id=new_cat_id,
-            name=unit_src["name"],
-            description=unit_src.get("description"),
-            capacity=unit_src.get("capacity"),
-            gender_restriction=unit_src.get("gender_restriction"),
-            sort_order=unit_src.get("sort_order", 0),
+            name=fit(name, "allocation_units", "name"),
+            description=fit(unit_src.get("description"), "allocation_units", "description"),
+            capacity=capacity,
+            gender_restriction=fit(
+                unit_src.get("gender_restriction"),
+                "allocation_units", "gender_restriction",
+            ),
+            sort_order=_field(unit_src, "sort_order", "allocation_units", "sort_order"),
         )
         db.add(unit)
         counts["units"] += 1
@@ -936,15 +1212,20 @@ async def confirm_restore(content: bytes, db: AsyncSession) -> dict:
     exclusion_rows: list[tuple[uuid.UUID, uuid.UUID]] = []
     excluded_pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
     for excl_src in data["allocation_exclusions.json"]:
-        new_p_id = participant_map.get(excl_src.get("participant_id", ""))
-        new_cat_id = category_map.get(excl_src.get("allocation_category_id", ""))
+        if not isinstance(excl_src, dict):
+            skip("allocation_exclusions.json")
+            continue
+        new_p_id = participant_map.get(_old_id(excl_src, "participant_id"))
+        new_cat_id = category_map.get(_old_id(excl_src, "allocation_category_id"))
         if not new_p_id or not new_cat_id:
+            skip("allocation_exclusions.json")
             continue
         pair = (new_p_id, new_cat_id)
         # The table is UNIQUE on (group type, participant). A duplicate in a
         # hand-edited file is dropped here: letting one reach the constraint
         # would roll the whole restore back over a single bad line.
         if pair in excluded_pairs:
+            skip("allocation_exclusions.json")
             continue
         excluded_pairs.add(pair)
         exclusion_rows.append(pair)
@@ -952,11 +1233,22 @@ async def confirm_restore(content: bytes, db: AsyncSession) -> dict:
     dropped_placements = 0
 
     # ── Allocations ──
+    seen_alloc_pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
     for alloc_src in data["allocations.json"]:
-        new_p_id = participant_map.get(alloc_src["participant_id"])
-        new_unit_id = unit_map.get(alloc_src["unit_id"])
-        if not new_p_id or not new_unit_id:
+        if not isinstance(alloc_src, dict):
+            skip("allocations.json")
             continue
+        new_p_id = participant_map.get(_old_id(alloc_src, "participant_id"))
+        new_unit_id = unit_map.get(_old_id(alloc_src, "unit_id"))
+        if not new_p_id or not new_unit_id:
+            skip("allocations.json")
+            continue
+        # UNIQUE (participant_id, unit_id): a repeated line would break the
+        # constraint and roll the whole restore back, so the first wins.
+        if (new_p_id, new_unit_id) in seen_alloc_pairs:
+            skip("allocations.json")
+            continue
+        seen_alloc_pairs.add((new_p_id, new_unit_id))
         # v1.0.4m: the exclusion wins, so drop the placement.
         if (new_p_id, unit_category_map.get(new_unit_id)) in excluded_pairs:
             dropped_placements += 1
@@ -999,25 +1291,53 @@ async def confirm_restore(content: bytes, db: AsyncSession) -> dict:
 
     # ── Marks ──
     marks_src = data["marks.json"]
+    seen_mark_ids: set[str] = set()
     for mark_src in marks_src.get("definitions", []):
+        if not isinstance(mark_src, dict):
+            skip("marks.json")
+            continue
+        old_id = _old_id(mark_src, "id")
+        if old_id is not None and old_id in seen_mark_ids:
+            skip("marks.json")  # duplicate old id
+            continue
+        name = _field(mark_src, "name", "mark_definitions", "name")
+        if name is _SKIP:
+            skip("marks.json")
+            continue
         new_mark_id = uuid.uuid4()
-        mark_map[mark_src["id"]] = new_mark_id
+        if old_id is not None:
+            mark_map[old_id] = new_mark_id
+            seen_mark_ids.add(old_id)
         mark = MarkDefinition(
             id=new_mark_id,
             event_id=new_event_id,
-            name=mark_src["name"],
-            colour=mark_src.get("colour", "#4682B4"),
+            name=fit(name, "mark_definitions", "name"),
+            colour=fit(
+                _field(mark_src, "colour", "mark_definitions", "colour"),
+                "mark_definitions", "colour",
+            ),
             visible_in=mark_src.get("visible_in") or [],
         )
         db.add(mark)
 
     await db.flush()
 
+    seen_ma_pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
     for ma_src in marks_src.get("assignments", []):
-        new_p_id = participant_map.get(ma_src["participant_id"])
-        new_mark_id = mark_map.get(ma_src["mark_id"])
-        if not new_p_id or not new_mark_id:
+        if not isinstance(ma_src, dict):
+            skip("marks.json:assignments")
             continue
+        new_p_id = participant_map.get(_old_id(ma_src, "participant_id"))
+        new_mark_id = mark_map.get(_old_id(ma_src, "mark_id"))
+        if not new_p_id or not new_mark_id:
+            skip("marks.json:assignments")
+            continue
+        # No unique constraint on this table, so a duplicate would insert
+        # silently and show the same mark twice. The first wins.
+        if (new_p_id, new_mark_id) in seen_ma_pairs:
+            skip("marks.json:assignments")
+            continue
+        seen_ma_pairs.add((new_p_id, new_mark_id))
         ma = MarkAssignment(
             mark_id=new_mark_id,
             participant_id=new_p_id,
@@ -1030,37 +1350,77 @@ async def confirm_restore(content: bytes, db: AsyncSession) -> dict:
 
     # ── Preferences ──
     for pref_src in data["preferences.json"]:
-        new_p_id = participant_map.get(pref_src.get("participant_id", ""))
+        if not isinstance(pref_src, dict):
+            skip("preferences.json")
+            continue
+        new_p_id = participant_map.get(_old_id(pref_src, "participant_id"))
         if not new_p_id:
+            skip("preferences.json")
             continue
         pref = ParticipantPreferenceRequest(
             event_id=new_event_id,
             participant_id=new_p_id,
-            preferred_participant_number=pref_src.get("preferred_participant_number"),
-            preferred_name=pref_src.get("preferred_name"),
+            preferred_participant_number=_parse_int(
+                pref_src.get("preferred_participant_number")),
+            preferred_name=fit(
+                pref_src.get("preferred_name"),
+                "participant_preference_requests", "preferred_name",
+            ),
             preferred_details=pref_src.get("preferred_details"),
             category_scope=pref_src.get("category_scope"),
-            resolved=pref_src.get("resolved", False),
+            resolved=_field(pref_src, "resolved", "participant_preference_requests", "resolved"),
         )
         db.add(pref)
 
     # ── Notes (published only, attached to new event id) ──
+    # v1.0.4o: author_id is a real foreign key to users, so the stand-in id
+    # written before this release made any note fail the whole restore. The
+    # author is now whoever is restoring: true on this instance, and the
+    # only non-null option, since the column is NOT NULL. With no actor
+    # there is no truthful value, so the line is skipped and counted.
     for note_src in data["notes.json"]:
+        if not isinstance(note_src, dict):
+            skip("notes.json")
+            continue
+        if actor_user_id is None:
+            skip("notes.json")
+            continue
+        notable_type = _field(note_src, "notable_type", "notes", "notable_type")
+        content = _field(note_src, "content", "notes", "content")
+        if notable_type is _SKIP or content is _SKIP:
+            skip("notes.json")
+            continue
         note = Note(
-            notable_type=note_src.get("notable_type", "event"),
+            notable_type=fit(notable_type, "notes", "notable_type"),
             notable_id=new_event_id,
-            content=note_src.get("content", ""),
+            content=content,
             is_published=True,
-            author_id=new_event_id,  # placeholder — original author not in new install
+            author_id=actor_user_id,
         )
         db.add(note)
 
     await db.commit()
 
+    # v1.0.4o: one line per restore, and only when something was lost or
+    # changed. Counts per member and the new event id, so an organiser can
+    # be told where the damage was; no names, emails or participant ids.
+    # Separate from the v1.0.4m placement warning, which reports a
+    # different thing and stays exactly as it was.
+    if skipped or shortened:
+        print(
+            f"[RESTORE WARNING] event {new_event_id}: damaged or unreadable "
+            f"lines were skipped or shortened. "
+            f"skipped={dict(sorted(skipped.items()))} "
+            f"shortened={dict(sorted(shortened.items()))}",
+            flush=True,
+        )
+
     return {
         "new_event_id": str(new_event_id),
         "new_event_name": new_name,
         "counts": counts,
+        "skipped": dict(sorted(skipped.items())),
+        "shortened": dict(sorted(shortened.items())),
     }
 
 

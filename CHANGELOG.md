@@ -8,6 +8,51 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4o] — 2026-09-17
+A damaged backup file no longer costs you the whole restore.
+
+### Fixed
+
+- **One bad line in a backup file no longer spoils everything else.** A
+  backup is an ordinary ZIP file, so it can be opened, edited by hand, or
+  cut short by a failed download. Until now a single damaged line could
+  stop the entire restore: nothing was written, and the message said only
+  that the restore had failed. Now the damaged line is the only thing lost,
+  along with anything that depended on it. A room whose group type is
+  missing is left out, and so is anyone who was placed in it; everybody
+  else, and everything else, comes back.
+
+- **A file that cannot be read at all is refused before anything is
+  written.** If a part of the backup is not readable, the restore stops at
+  once and says so, instead of failing halfway with an internal error. You
+  get the same answer whether you are previewing the file or restoring it,
+  so nothing half-finished is ever left behind.
+
+- **Repeated lines are dropped, and over-long text is shortened.** Where a
+  hand-edited file names the same placement or the same exclusion twice,
+  the first one is kept and the repeat is dropped, rather than the
+  duplicate stopping the restore. Text too long for its field is shortened
+  to fit rather than rejected.
+
+### Changed
+
+- **A restored note is recorded as written by whoever restored it.** That
+  is the truthful answer: the person who wrote it originally has no account
+  on the Moimio the file is being restored into. Before this release a note
+  in a backup file would have stopped the restore outright.
+
+- **A restore now reports what it could not use.** The count of skipped and
+  shortened lines comes back with the result, ready for the restore screen
+  to show. Anything skipped is also recorded once in the server log, with
+  counts only and no names or email addresses.
+
+### Notes
+
+- **For a normal backup, nothing changes.** A file Moimio produced restores
+  to exactly what it did before. There is now a test that backs up an event
+  in which every field holds a distinctive value, restores it, and checks
+  every one of them came back.
+
 ## [1.0.4n] — 2026-09-17
 Groundwork. Nothing you see or get in a backup changes.
 
