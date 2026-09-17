@@ -1203,3 +1203,80 @@ Converge the three on one serialiser. The v1.0.4n register and guard are
 the cheap version of this: they make an omission fail a test rather than
 ship. This entry is the real fix, and it is not urgent enough to hold
 v1.0.5.
+
+---
+
+## STRINGS-1 — Strings to deliver in one batch before v1.0.5
+
+**Status:** Open. New series, opened in session 86 during the backup work (v1.0.4o).
+
+Six locale files, and the i18n validator only checks one direction: it never
+checks that the other five match English. Johannes reviews DE and KO himself
+and his corrections are applied character for character. So a string change
+is not cheap, and dribbling one key per release through that review five or
+six times is the wrong shape.
+
+This entry collects every string the backup work needs, to be delivered
+once, in one release, before v1.0.5.
+
+### Wrong today
+
+- **`backup.mode.full.hint`** reads "Everything: participants, allocations,
+  responses, notes. For backup and restore." Both "everything" and "notes"
+  are untrue: the backup carries no notes an organiser can create, no
+  check-in answers and no history. Rewrite it once the backup releases have
+  landed and the sentence can be made true. This is the one string that is
+  a false product claim rather than a missing one.
+
+### Needed by work already done
+
+- **The restore success panel should say how many lines could not be
+  restored.** v1.0.4o returns per-member skipped and shortened counts in the
+  restore result, and the modal ignores keys it does not know, so the counts
+  are already there and invisible. One or two keys, in the shape of the
+  existing `portability.participants_found`.
+- **A backup file that cannot be read needs its own message.** v1.0.4o
+  refuses an unreadable member with the closest existing key, which describes
+  a missing file rather than an unreadable one. A specific key would say
+  which member and why.
+
+### Pending a decision
+
+- **The restore screen says that team members and their roles are not part
+  of a backup**, if `event_user_assignments` stays uncarried. A new key
+  beside `portability.restore_as_new_hint`.
+- **The leaving (Danger Zone) screen says what the leaving export
+  contains**, so a customer knows before they click what they will get back
+  and what they will have to set up again.
+
+---
+
+## BACKUP-11 — A structure-only backup still carries personal data
+
+**Status:** Open. Found in session 86 phase 1 while reading structure mode for the backup work (v1.0.4o). Not fixed there.
+
+Structure mode is offered as "Structure only (GDPR-safe)" with the hint
+"Event shape without any personal data. Share as a template between
+organisations.", and `export_event_zip`'s own docstring says it "deliberately
+contains NO personal data. Safe to share with another organisation as an
+event template, version-control, email between staff, etc."
+
+It keeps `event.json` whole, and two of its fields are personal data:
+
+- `events.settings.email_from_name` — a real person's name, used as the
+  sender name on registration email.
+- `events.settings.email_reply_to` — a real email address.
+
+Both are read at `api/events.py` when a registration email is composed. They
+are not incidental free text like the event's own name: they are contact
+details for a named individual, and they travel under a promise that the
+file contains none.
+
+The event's `name`, `description` and `location` are free organiser text and
+could in principle name someone too, but stripping them would make a
+template useless, so they are a different case and are left alone.
+
+**Decision pending:** leave both fields out of `event.json` in structure
+mode, keeping them in full mode. That is a two-line filter on one member and
+needs no schema change. The alternative, doing nothing, means the GDPR-safe
+claim is not quite true.
