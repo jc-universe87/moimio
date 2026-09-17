@@ -885,6 +885,49 @@ harmless, but it is not a real value.
 v1.0.4m adds the first round-trip test over this code. Extend it as each
 column is fixed.
 
+### Decided (session 86)
+
+Column by column, so v1.0.4q has nothing left to weigh up.
+
+**Carried.** `timezone`, `is_archived`, `name_key`, `item_label_key`,
+`exclusive_group_codes`, `mark_restriction`, `is_kept`, `cluster_behaviour`,
+`checked_in_at`, `show_in_form`, `resolved_note`, `override_group_room`. An
+archived event comes back archived: losing the flag would un-archive
+something the organiser deliberately put away, which is a silent change in
+the more permissive direction.
+
+**Not carried, with the reason each gets in the register.**
+
+- `over_cap_signalled` is `instance_state`. It is the sending instance's
+  plan-enforcement state, not the event's. Carried across it would either
+  suppress a signal a hosted tenant is entitled to, or re-fire one already
+  sent.
+- `mark_definitions.created_by_user_id` and
+  `mark_assignments.assigned_by_user_id` are `not_meaningful_elsewhere`.
+  NULL is already the modelled meaning of a "system mark", and the screen
+  renders it. Carrying the old id would show every mark as made by an
+  unknown user, or worse, match a real user on the receiving instance.
+- `details_confirmed`, `registration_confirmed` and
+  `allocation_categories.confirmed` are `reset_on_restore`. Every ordinary
+  edit already clears them, and a restore is the largest edit there is; the
+  organiser re-ticks them before opening registration.
+- `has_capacity` and `has_gender_restriction` stay forced to `True`, also
+  `reset_on_restore`. The code deliberately keeps these retired flags true
+  for rollback safety, so writing anything else back would fight it.
+
+**Attribution.** `events.created_by` and `notes.author_id` are the
+restoring user: the only truthful answer on the receiving instance, and the
+only non-null one, since both columns are NOT NULL. Notes have worked this
+way since v1.0.4o; `events.created_by` follows in v1.0.4q.
+
+Whether `override_group_room` should exist at all is a separate question,
+filed as ARCH-2. It is carried either way: dropping a column from a backup
+because it currently looks unused is how the next silent loss happens.
+
+---
+v1.0.4m adds the first round-trip test over this code. Extend it as each
+column is fixed.
+
 ---
 
 ## BACKUP-3 — Ids inside JSON fields are not renumbered on restore
@@ -947,6 +990,39 @@ Two consequences follow from that block never running:
   (`backup.mode.full.hint`). The notes part is untrue today, and so is
   "everything".
 
+### Decided (session 86)
+
+**Team roles are never carried.** A permission must never arrive from a
+file. Restore is Super Admin only, which limits who can trigger it but not
+who can craft the file, so carrying `event_user_assignments` would let a
+hand-edited ZIP grant a third party `event_admin` on the restored event.
+The restore screen tells the organiser to re-invite the team (STRINGS-1),
+which is also the right moment to review who still needs access.
+
+**Notes: every existing kind is carried**, in full backups only, and only
+for things that are themselves in the backup. So a note on a participant
+who is not in the export goes with them.
+
+- An event backup carries every **shared** note, plus only the
+  **downloading user's own** private notes. A private note is visible to
+  its author alone, and a backup must not become a way around that.
+- The **workspace export for a leaving customer** carries **everyone's**
+  notes. The customer is the controller and it is all their data; the
+  leaving screen says so (STRINGS-1).
+- A restored private note **stays private**, authored by the restoring
+  user.
+
+**Structure-only backups carry no notes at all.** The text is unvalidated
+and the file is offered for sharing between organisations.
+
+**Check-in follows the standing rules:** fields in both modes, because they
+are configuration and exactly what a template is for; ticks in full backups
+only, and only for people in the backup.
+
+---
+  (`backup.mode.full.hint`). The notes part is untrue today, and so is
+  "everything".
+
 ---
 
 ## BACKUP-5 — Allocation history is not in the backup
@@ -965,6 +1041,20 @@ Exporting it needs three decisions first, none of them obvious:
   that is not a user id
 - the `unit_name_snapshot` and `category_name_snapshot` columns, which are
   organiser text and may name a person
+- ids inside the `meta` JSONB, including the `mark:<uuid>` cluster ids the
+  engine writes (see BACKUP-3)
+
+### Decided (session 86)
+
+**History is carried.** The names of people who are not in the backup are
+removed from the placement details inside it, so some lines will name fewer
+people than they did: a line that read "placed with Anna, Bruno and Carla"
+may come back naming only two of them. That is a real loss of fidelity and
+it is the right trade, because the alternative is either carrying the names
+of people the backup is not allowed to mention, or dropping the reasoning
+line for everyone.
+
+---
 - ids inside the `meta` JSONB, including the `mark:<uuid>` cluster ids the
   engine writes (see BACKUP-3)
 
@@ -989,6 +1079,17 @@ custom fields, marks, preferences, allocations, allocation history, notes
 and check-in values, resolving every foreign key to a readable name, and an
 exclusion is the one recorded decision about that individual that is
 missing. An `exclusions` key of `[{category_name, created_at}, ...]` would
+match how `allocations` becomes `{unit_name, category_name, created_at}`.
+
+### Decided (session 86)
+
+Both go ahead. `participants.csv` gains an **"Excluded From"** column,
+holding group type names as stored, comma separated, in the shape the
+existing `Marks` column already uses. The header is a literal English list,
+so it needs no new string. The per-person GDPR export gains its
+`exclusions` key too.
+
+---
 match how `allocations` becomes `{unit_name, category_name, created_at}`.
 
 ---
@@ -1102,6 +1203,17 @@ required and not merely preferable.
 `_parse_date` truncates to ten characters and returns a `date`, so it needs
 a datetime sibling before this can be done.
 
+### Decided (session 86)
+
+**The original dates are kept.** A backup that says an event was created on
+the day it was restored is not a faithful copy, and these columns are read
+on screen: "Registered at", the sort order, the recent sign-ups list and the
+registration sparkline all come from `participants.created_at`.
+
+---
+`_parse_date` truncates to ten characters and returns a `date`, so it needs
+a datetime sibling before this can be done.
+
 ---
 
 ## BACKUP-9 — A damaged or hand-edited file can still fail the whole restore
@@ -1201,6 +1313,16 @@ happen to click.
 The workspace shape lives only in the outer manifest, which nothing reads:
 which events existed, their order, and their archived flag. Every event's
 own data is in the file, so nothing is lost. What is missing is the
+difference between "you can leave" and "you can leave in an afternoon".
+
+### Decided (session 86)
+
+**Pending.** The shape of a whole-workspace restore is still with Johannes:
+whether it is a command, an endpoint or a screen, and what it does about
+events that already exist. Scheduled as v1.0.4t, to be briefed once that is
+settled.
+
+---
 difference between "you can leave" and "you can leave in an afternoon".
 
 ---
@@ -1309,6 +1431,22 @@ once, in one release, before v1.0.5.
   contains**, so a customer knows before they click what they will get back
   and what they will have to set up again.
 
+### Decided (session 86)
+
+Both lines above are now decided, and both are needed.
+
+- The restore screen **does** say that team members and their roles are not
+  part of a backup, because BACKUP-4 settles that they are never carried.
+- The leaving screen **does** say what the export contains, and it must
+  also say that the export carries **everyone's notes**, including private
+  ones, since BACKUP-4 settles that too. A customer should know that before
+  they click, not after.
+
+---
+- **The leaving (Danger Zone) screen says what the leaving export
+  contains**, so a customer knows before they click what they will get back
+  and what they will have to set up again.
+
 ---
 
 ## BACKUP-11 — A structure-only backup still carries personal data
@@ -1340,3 +1478,34 @@ template useless, so they are a different case and are left alone.
 mode, keeping them in full mode. That is a two-line filter on one member and
 needs no schema change. The alternative, doing nothing, means the GDPR-safe
 claim is not quite true.
+
+### Decided (session 86)
+
+**Structure-only backups leave out `email_from_name` and `email_reply_to`.**
+Both stay in a full backup. They are contact details for a named individual
+and the file travels under a promise that it holds none.
+
+---
+
+## ARCH-2 — `participants.override_group_room` is a column nothing reads
+
+**Status:** Open. Found in session 86 phase 1 while listing the columns the backup drops (BACKUP-2). Not a defect.
+
+`override_group_room` is Boolean, NOT NULL, default false. Searching the
+whole backend and frontend finds it in four places and no more: the model,
+two schema fields, and `data_export_service`, which puts it in a
+participant's own GDPR export. **Nothing reads it for behaviour** — not the
+engine, not `allocation_service`, not any screen.
+
+The name suggests "let this person override their group's room", which
+would be a real allocation rule, so either the feature was never finished
+or it was removed and the column outlived it.
+
+It is carried in a backup from v1.0.4q onward, decided under BACKUP-2: a
+column that currently looks unused is exactly the kind of thing that gets
+dropped and then turns out to matter, and it already appears in a
+participant's GDPR export as their data.
+
+Options, none picked: wire it up, if the rule was intended; drop the column
+in a migration, if it was not; or leave it and document it as reserved.
+Whichever it is, the answer should be written down rather than rediscovered.
