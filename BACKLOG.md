@@ -777,3 +777,147 @@ even though every chip has it.
 Options, none picked: shorten the label, use an icon with the existing
 title text, put the control on a second line, or widen the panel while the
 block is open.
+
+---
+
+## BACKUP-2 — The backup drops columns, and restore reads two it never gets
+
+**Status:** Open. Found in session 86 phase 1 while reading the backup path for BACKUP-1 (v1.0.4m). Not fixed there.
+
+`export_event_zip` writes a literal field list per model, passed to the
+`_row` helper. Nothing is picked up automatically, so a column added to a
+model after its list was written is silently dropped from every backup.
+Dropped today:
+
+- Event: `timezone`, `details_confirmed`, `registration_confirmed`,
+  `is_archived`, `over_cap_signalled`
+- AllocationCategory: `name_key`, `item_label_key`,
+  `exclusive_group_codes`, `confirmed`
+- AllocationUnit: `mark_restriction`, `is_kept`
+- MarkDefinition: `cluster_behaviour`
+- Participant: `override_group_room`, `checked_in_at`
+  (`confirmation_token` is rightly excluded: it is a secret)
+
+`confirm_restore` reads `name_key` and `item_label_key` when it builds a
+restored category, but export never writes either, so both are always
+absent and a restored event loses its translated default type names and
+falls back to the stored English text. The read and the write have never
+been exercised against each other, which is how the asymmetry survived.
+
+Several of the dropped columns are allocation rules the organiser set, the
+same class of data as BACKUP-1: a unit's mark restriction and its
+keep-as-is lock both vanish on a round trip. Some of the others may be
+deliberate (`confirmed` and `is_archived` arguably should not survive into
+a restored draft), but none is documented as such, so this needs deciding
+column by column rather than in one sweep.
+
+`duplicate_event_config` in `event_service.py` already does the harder
+parts correctly and is the model to copy: it rewires `mark_restriction`
+through a `mark_id_map`, carries both name keys, and forces
+`confirmed=False`.
+
+Restore also writes placeholder ids into `event.created_by` and
+`notes.author_id`: the new event's own id sits in a column that means
+"which user did this". Nothing validates or resolves it, so it has been
+harmless, but it is not a real value.
+
+v1.0.4m adds the first round-trip test over this code. Extend it as each
+column is fixed.
+
+---
+
+## BACKUP-3 — Ids inside JSON fields are not renumbered on restore
+
+**Status:** Open. Found in session 86 phase 1 while reading the backup path for BACKUP-1 (v1.0.4m). Not fixed there.
+
+Restore renumbers every id that lives in its own column, through the five
+maps in `confirm_restore`. Ids that live inside a JSON field are copied
+across verbatim, so they still point at pre-restore ids that exist nowhere
+on the receiving instance. The rule each one expresses silently stops
+working, with nothing on screen to say so:
+
+- `participants.group_code_categories` — a list of group type ids, or NULL
+  for all of them
+- `participant_preference_requests.category_scope` — a list of group type
+  ids, unless it is the literal `"all"`, which is safe
+- `allocation_categories.settings.engine.mark_priorities` — entries of
+  `{id, behaviour}` keyed on a bare mark id, read by
+  `_mark_behaviour_for` in `allocation_service.py`
+
+An exclusion is not affected: it stores both of its ids as real columns,
+which is why v1.0.4m could map them cleanly.
+
+---
+
+## BACKUP-4 — Event data the backup does not carry at all
+
+**Status:** Open. Found in session 86 phase 1 while reading the backup path for BACKUP-1 (v1.0.4m). Not fixed there.
+
+Whole tables, not just columns, are outside the backup:
+
+- check-in fields and values (`checkin_fields`, `checkin_values`): the
+  event's check-in questions and every participant's answers
+- every note except published event-level ones: participant, unit and
+  category notes, and all unpublished notes, are dropped
+- staff event roles (`event_user_assignments`): possibly deliberate, since
+  users exist per instance and would not resolve on the receiving one
+
+The hosted export runs CE's `app.cli.export_all`, which calls
+`export_event_zip` per event, so the hosted GDPR data export inherits all
+of this unchanged. Fixing it in CE fixes it for hosted tenants with no
+control-plane change.
+
+---
+
+## BACKUP-5 — Allocation history is not in the backup
+
+**Status:** Open. Found in session 86 phase 1 while reading the backup path for BACKUP-1 (v1.0.4m). Not fixed there.
+
+`allocation_events` is not exported at all. After a restore an event has
+its exclusions and its placements in force and an empty history: no record
+of who placed or excluded whom, or when. From v1.0.4m that is stated in
+the CHANGELOG rather than left to be discovered, but it is still a gap.
+
+Exporting it needs three decisions first, none of them obvious:
+
+- actor ids (`actor_user_id`), since those users do not exist on the
+  receiving instance, and the existing placeholder pattern writes a value
+  that is not a user id
+- the `unit_name_snapshot` and `category_name_snapshot` columns, which are
+  organiser text and may name a person
+- ids inside the `meta` JSONB, including the `mark:<uuid>` cluster ids the
+  engine writes (see BACKUP-3)
+
+---
+
+## BACKUP-6 — participants.csv shows no exclusions
+
+**Status:** Open. Feature request, not a defect. Found in session 86 phase 1 while reading the backup path for BACKUP-1 (v1.0.4m).
+
+`GET /api/events/{event_id}/export/participants.csv` in `api/export.py`
+has no exclusion column, and runs no query for one. A spreadsheet of
+participants gives no sign that anyone is excluded from anything, so an
+organiser working from the CSV cannot see a decision they made in the app.
+
+The natural shape is one column listing the group types each participant
+is excluded from, matching how the existing `Marks` column flattens mark
+names into one comma-separated cell.
+
+---
+
+## VERSION-1 — `check-version-markers.py` does not read the `version.py` docstring
+
+**Status:** Open. Found in session 86 phase 1 while reading the version markers for v1.0.4m. Corrected by hand there, not fixed.
+
+`backend/app/version.py` names the version twice: in `__version__`, and in
+its own line-1 docstring. `scripts/bump-version.py` sets only the first,
+and `scripts/check-version-markers.py` never reads the second, so the
+docstring can drift without CI noticing.
+
+It already has. At v1.0.4l the docstring read `(v1.0.4k)`, one release
+stale. v1.0.4m sets it by hand, which fixes the value but not the cause.
+
+Two ways to close it, neither picked: have `bump-version.py` rewrite the
+docstring alongside `__version__`, or have `check-version-markers.py` read
+it as a fourth marker so a mismatch fails the CI `checks` job. The second
+is the stronger guard, but it only works if the first exists too.
