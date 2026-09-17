@@ -322,6 +322,10 @@ async def export_backup_zip(
              organisations or archiving a "shape" without personal data.
 
     Event Admin only.
+
+    v1.0.4s: the file carries every published note on the event, its
+    people, its group types and its units, plus this user's own private
+    notes. Another admin's private notes are never in it.
     """
     from app.services.backup_service import export_event_zip
 
@@ -336,7 +340,12 @@ async def export_backup_zip(
         raise HTTPException(status_code=404, detail={"key": "errors.event.not_found"})
 
     try:
-        zip_bytes = await export_event_zip(event_id, db, mode=mode)
+        # v1.0.4s: a private note is visible in the app only to its author,
+        # and any event admin can download this file. So the download
+        # carries the shared notes plus the downloader's own private ones,
+        # and nobody else's.
+        zip_bytes = await export_event_zip(
+            event_id, db, mode=mode, private_notes=current_user.id)
     except MoimioAppError:
         raise  # let the global handler convert to dict-detail
     except Exception as e:

@@ -37,6 +37,8 @@ from sqlalchemy import select
 
 from app.core.database import Base
 import app.models  # noqa: F401  — populate Base.metadata, as conftest does
+from app.models.checkin_field import CheckInField
+from app.models.checkin_value import CheckInValue
 from app.models.custom_field import CustomFieldDefinition, CustomFieldValue
 from app.models.event_field_config import EventFieldConfig
 from app.models.mark import MarkAssignment, MarkDefinition
@@ -229,9 +231,15 @@ async def test_3_every_declaration_is_legal():
 # ─── 4. Export agrees with the register ───────────────────────────────
 
 async def _add_the_remaining_rows(db, src) -> None:
-    """The v1.0.4m event leaves six members empty, so on its own it cannot
-    check them. Add one row of each here, on top of the imported builder,
-    so test 4 covers every member rather than half of them."""
+    """The v1.0.4m event leaves several members empty, so on its own it
+    cannot check them. Add rows here, on top of the imported builder, so
+    test 4 covers every member rather than half of them.
+
+    v1.0.4s: check-in joined the register, and a newly carried table has to
+    show a row or test 4 cannot check it against the register. Two fields
+    and two ticks, which is also what `checkin.json` needs to be a real
+    sample of both of its lists.
+    """
     author = (await db.execute(select(User).limit(1))).scalars().first()
     ev = src["event"]
     p1 = src["p1"]
@@ -261,6 +269,19 @@ async def _add_the_remaining_rows(db, src) -> None:
         preferred_participant_number=None, preferred_name="Quentin Two",
         preferred_details=None, category_scope="all", resolved=False,
     ))
+
+    # v1.0.4s: two check-in columns and a tick on each, so both of
+    # checkin.json's lists carry a row.
+    ci_fields = []
+    for field_name, order in (("Wristband", 0), ("Key handed over", 1)):
+        f = CheckInField(event_id=ev.id, field_name=field_name, sort_order=order)
+        db.add(f)
+        ci_fields.append(f)
+    await db.flush()
+    for f in ci_fields:
+        db.add(CheckInValue(
+            event_id=ev.id, participant_id=p1.id, field_id=f.id, checked=True,
+        ))
 
     # An event-level published note. No screen writes one (BACKUP-4), so
     # this is the only way notes.json is ever non-empty and the only way to

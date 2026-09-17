@@ -18,7 +18,8 @@ The archive contains:
                                participants.csv, and the allocation / marks
                                / preferences / custom-field / notes JSON)
 
-Every event is included, archived ones too — a complete export must not
+Every note is included, private ones too: this is the organisation's own
+copy of its own data. Every event is included, archived ones too — a complete export must not
 silently drop archived data. Exits 0 on success, non-zero on any failure
 (so an automated caller can tell a real export from a failed one).
 """
@@ -37,7 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import async_session_factory
 from app.models.event import Event
-from app.services.backup_service import export_event_zip
+from app.services.backup_service import ALL_PRIVATE_NOTES, export_event_zip
 
 
 async def build_archive(db: AsyncSession) -> bytes:
@@ -54,7 +55,13 @@ async def build_archive(db: AsyncSession) -> bytes:
     manifest_events = []
     with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         for event in events:
-            event_bytes = await export_event_zip(event.id, db, mode="full")
+            # v1.0.4s: every private note goes in. This is the leaving
+            # export: the organisation's own copy of its own data, produced
+            # from a shell that already has full database access. Holding
+            # somebody's private notes back here would mean handing a
+            # customer an incomplete copy of what they are owed.
+            event_bytes = await export_event_zip(
+                event.id, db, mode="full", private_notes=ALL_PRIVATE_NOTES)
             zf.writestr(f"events/{event.id}.zip", event_bytes)
             manifest_events.append(
                 {

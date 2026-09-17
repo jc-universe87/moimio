@@ -108,8 +108,14 @@ async def test_build_archive_orchestration(monkeypatch):
         _FakeEvent("22222222-2222-2222-2222-222222222222", "Event Two", archived=True),
     ]
 
-    async def fake_export_event_zip(event_id, db, mode="full"):
+    async def fake_export_event_zip(event_id, db, mode="full",
+                                     private_notes=None):
         assert mode == "full"
+        # v1.0.4s: the leaving export is the organisation's own copy of its
+        # own data, so it asks for every private note. The stub has to take
+        # the keyword to be called at all; asserting it keeps the stub
+        # honest about what build_archive really passes.
+        assert private_notes is export_all.ALL_PRIVATE_NOTES
         return f"zip-for-{event_id}".encode()
 
     monkeypatch.setattr(export_all, "export_event_zip", fake_export_event_zip)

@@ -1055,7 +1055,43 @@ untouched.
 
 ## BACKUP-4 — Event data the backup does not carry at all
 
-**Status:** Open. Found in session 86 phase 1 while reading the backup path for BACKUP-1 (v1.0.4m). Not fixed there.
+**Status:** ✅ CLOSED in v1.0.4s (2026-09-17). Check-in and notes are carried,
+and staff roles are recorded as deliberately not carried. Found in session 86
+phase 1 while reading the backup path for BACKUP-1 (v1.0.4m).
+
+**Resolution.** All three parts, in the order the entry raises them.
+
+- **Check-in.** `checkin_fields` and `checkin_values` join the register, in a
+  new optional `checkin.json` member shaped like `marks.json`. The columns go
+  in both modes, because they are part of the event's shape. The ticks go in
+  full backups only, and only for participants the export carries, so a
+  removed person's ticks stay behind exactly as their exclusions do. Restore
+  writes the columns straight after the field configs and the ticks straight
+  after the participants, and drops a duplicated (participant, column) line
+  before it can reach the table's UNIQUE constraint.
+- **Notes.** A note is now carried when what it is about is in the export:
+  the event, an exported participant, a group type or a unit. Restore
+  translates `notable_id` by its type instead of overwriting it with the
+  event, and copies `is_published` instead of forcing it True. A note whose
+  type is not one of those four, or whose target the file does not carry, is
+  skipped and counted, and the restore carries on.
+  - **Private notes.** A private note is visible in the app only to its
+    author, and any event admin can download a backup, so `export_event_zip`
+    gained a `private_notes` keyword whose default carries none. The per-event
+    download passes the downloader's id; the leaving export
+    (`app.cli.export_all`) passes `ALL_PRIVATE_NOTES`, because that file is
+    the organisation's own copy of its own data and is produced from a shell
+    that already has full database access. A restored private note stays
+    private, authored by whoever restored it.
+  - The `author_id` foreign key hazard this entry predicted was already fixed
+    in v1.0.4o, before any file could contain a note.
+- **Staff event roles.** `event_user_assignments` stays uncarried, and its
+  reason changes from `known_gap:BACKUP-4` to `not_meaningful_elsewhere`: a
+  permission must never come from a file. Who may see or change an event is
+  decided where it is restored, by inviting the team again. The restore
+  screen line that says so is in STRINGS-1.
+
+The original entry follows, as the record of what was found.
 
 Whole tables, not just columns, are outside the backup:
 
@@ -1578,6 +1614,15 @@ once, in one release, before v1.0.5.
   restore result, and the modal ignores keys it does not know, so the counts
   are already there and invisible. One or two keys, in the shape of the
   existing `portability.participants_found`.
+
+  **This must also cover v1.0.4q's `defaulted` counts**, which are the third
+  ledger the restore returns: a value the file carried that restore could not
+  use, so the column's own default applies instead. "Skipped" and
+  "defaulted" are different things to an organiser, and only the second one
+  leaves a row in place with a changed value, so the wording has to
+  distinguish them. v1.0.4s adds nothing new to the ledgers: a note it
+  cannot place and a duplicated check-in tick both count as skipped, under
+  `notes.json` and `checkin.json:values`.
 - **A backup file that cannot be read needs its own message.** v1.0.4o
   refuses an unreadable member with `errors.export.zip_missing_files`, "The
   backup ZIP is missing files: {files}", passing the member name. It is the
@@ -1613,6 +1658,21 @@ once, in one release, before v1.0.5.
   an action. So this needs one new key and a frontend change to navigate by
   id, not a wording change alone.
 
+### Added by v1.0.4s
+
+- **A rejected form field needs a translated message.** FORM-1 found the
+  public registration form showing FastAPI's raw 422 body, in English, with
+  internal field paths, under a translated heading. At least one key is
+  needed for the commonest case, in the shape of "Please enter a valid email
+  address", and the survey in FORM-1 decides whether the rest come from the
+  server as `{"key": ...}` or from one shared formatter in the frontend. The
+  key count is not settled until that decision is.
+
+- **Whatever DATE-1 settles about times and time zones** may need wording: a
+  label for a time-zone list if the free-text box becomes one, and any "shown
+  in the event's time zone" note a screen needs. Nothing is needed until that
+  survey decides, so this is a placeholder with no key count.
+
 ### Removed by v1.0.4r
 
 - **`prefs.scope`** is now unused in all six locale files, and should be deleted
@@ -1641,7 +1701,23 @@ Both lines above are now decided, and both are needed.
 
 ## BACKUP-11 — A structure-only backup still carries personal data
 
-**Status:** Open. Found in session 86 phase 1 while reading structure mode for the backup work (v1.0.4o). Not fixed there.
+**Status:** ✅ CLOSED in v1.0.4s (2026-09-17). A structure backup now leaves
+both fields out, and carries no notes either. Found in session 86 phase 1
+while reading structure mode for the backup work (v1.0.4o).
+
+**Resolution.** In structure mode the export drops `email_from_name` and
+`email_reply_to` from the event's settings before writing `event.json`. A
+full backup keeps both: that is the same organisation restoring its own
+event. The event row in the session is never touched, only the copy written
+to the file.
+
+The same release settled the larger question this entry sits beside: a
+structure backup carries **no notes at all**, whatever the caller asks for.
+Notes are what people wrote about each other and about the event, never part
+of its shape, and a structure backup is made to be shared outside the
+organisation.
+
+The original entry follows, as the record of what was found.
 
 Structure mode is offered as "Structure only (GDPR-safe)" with the hint
 "Event shape without any personal data. Share as a template between
@@ -1839,3 +1915,90 @@ a row with no limit holds the **JSON `null` literal**, not SQL NULL.
 `WHERE group_code_categories = 'null'::jsonb` is the test that works. Python
 reads both back as `None`, which is why this is invisible from the application
 side.
+
+---
+
+## FORM-1 — A rejected form field shows the server's raw validation error
+
+**Status:** Open. Found by Johannes's manual test in session 86. Belongs to the
+non-backup survey before v1.0.5.
+
+The public registration form was given the email `rest@gmail.com3242`, which
+the server rightly rejects. The form then showed:
+
+- the heading "Einige Felder müssen überprüft werden", correctly translated
+- underneath it, FastAPI's raw 422 body as JSON, in English, including
+  internal field paths such as `"loc":["body","email"]`
+
+So a registrant who mistypes their email is shown the inside of the server. It
+is in the wrong language, it names fields by their internal path, and it does
+not say which box to go back and fix.
+
+**Expected.** The email field itself is marked, with a translated message such
+as "Please enter a valid email address", and no raw JSON appears anywhere.
+
+**What the survey must do:**
+
+- **Find every form that can receive a 422, and how each one renders it.**
+  Registration is the one that was tested; the admin forms have their own
+  error handling and may differ.
+- **Decide where the fix belongs.** Either one shared formatter in the
+  frontend that turns a 422 body into per-field messages, or a server-side
+  validation-error handler that returns the app's own `{"key": ...}` shape so
+  every client gets a translatable message. The second is the shape the rest
+  of the app already uses for errors.
+- **Decide whether obvious mistakes should be caught before sending,** so a
+  mistyped email is marked as the registrant types rather than after a round
+  trip. That is a separate decision from how a 422 is rendered, and both are
+  needed.
+
+The wording this needs is filed in STRINGS-1.
+
+---
+
+## DATE-1 — Dates on screen ignore the user's date-format setting
+
+**Status:** Open. Found by Johannes's manual test in session 86, on the v1.0.4s
+build. Belongs to the non-backup survey before v1.0.5.
+
+The settings panel had **Sprache: Deutsch** and **Datumsformat: YYYY-MM-DD
+(ISO)**, with the **Zeitzone** box empty. The People list's "REGISTRIERT AM"
+column then showed `7/10/26, 2:09 PM` on every row: American month/day/year
+with a 12-hour clock. That is neither the chosen format nor German, so the
+preference is not reaching this column at all.
+
+**Expected:** every date and every time on screen follows the chosen format.
+
+There is already a shared formatter, and this column simply does not use it.
+`frontend/src/hooks/useDateFormat.jsx` holds `formatDate`, which reads the
+preference and handles all six values of `VALID_DATE_FORMATS`.
+`PeopleTable.jsx` imports it and uses it for the date of birth, but the
+"Registered at" cell calls
+`new Date(p.created_at).toLocaleString(undefined, {...})` instead, and
+`undefined` means "the browser's own locale".
+
+So this is not only a missed call. `formatDate` takes a date and returns a
+date: it has no notion of a time, and "Registered at" needs both. Whatever
+the survey decides has to cover times as well, which is why this is a survey
+item and not a one-line fix.
+
+**What the survey must do:**
+
+- **Find every place the frontend renders a date or a time, and which of them
+  read the preference.** The People list is the one that was tested. Eleven
+  files use the hook today, and eight still call `toLocaleDateString`,
+  `toLocaleString` or `toLocaleTimeString` directly: `AllocationHistory.jsx`,
+  `CheckInPanel.jsx`, `MarkAssignModal.jsx`, `NotesModal.jsx`,
+  `PeopleTable.jsx`, `RestoreModal.jsx`, `RegisterPage.jsx` and
+  `WebhooksPage.jsx`. Some of those may be correct; none of them was checked.
+- **Decide on one shared formatter that every screen uses,** covering times as
+  well as dates, so this cannot drift again. The hook's own comment already
+  defers long-form dates for want of `Intl.DateTimeFormat`, which is the same
+  decision.
+- **Look at the time zone box in the same panel.** It is free text, it was
+  empty, and the backend validates no zone anywhere (see BACKUP-2's
+  Resolution: `events.timezone` is carried through a backup as it is, because
+  there is nothing to validate it against). Decide whether a time is shown in
+  the user's zone or the event's, and whether the box should offer a list
+  instead of free text.
+- **Add any new strings to STRINGS-1.**

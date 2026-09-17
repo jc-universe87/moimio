@@ -554,7 +554,10 @@ async def test_13_no_backup_2_or_backup_8_gap_remains():
         for col in rule.columns.values()
         if col.reason and col.reason.startswith("known_gap:")
     })
+    # This release's own two gaps, and only those. An absolute list of
+    # what is left would make every later release come back and edit this
+    # test; each release proves its own work instead (Johannes, session 86).
     assert "known_gap:BACKUP-2" not in gaps
     assert "known_gap:BACKUP-8" not in gaps
-    # What is left is the work still to come, and nothing else.
-    assert gaps == ["known_gap:BACKUP-4"], gaps
+    # The "no known_gap at all" check belongs to the LAST backup release
+    # before v1.0.5, as BACKUP_REGISTER_DOC says. Not here, and not early.

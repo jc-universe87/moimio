@@ -8,6 +8,40 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4s] — 2026-09-17
+Check-in and notes now come back with a restore.
+
+### Fixed
+
+- **Notes on people, group types and rooms now come back with a restore.**
+  Only notes on the event itself were carried before, and no screen writes
+  one of those, so in practice a backup held no notes at all. A restored
+  note is also put back on the person, group type or room it was about,
+  where it used to be moved onto the event.
+
+- **Check-in columns and their ticks now come back.** The columns an
+  organiser had added to the check-in desk, and every tick against them,
+  were not in a backup at all, so a restored event arrived with an empty
+  check-in desk and nothing to say so.
+
+### Changed
+
+- **Private notes.** A private note is one only its author can read.
+  • An event backup contains the shared notes plus the downloader's own
+    private notes, and nobody else's.
+  • The export a customer receives on leaving contains everyone's notes,
+    because that file is the organisation's own copy of its own data.
+  • Private notes stay private after a restore, and belong to whoever
+    restored them. They used to come back shared.
+
+- **Structure-only backups contain no notes,** and leave out the event's
+  sender name and reply-to address. A structure backup is made to be
+  shared, and none of those is part of an event's shape.
+
+- **Team members and their roles are never taken from a backup.** Who may
+  see or change an event is decided where the event is restored, so invite
+  the team again after restoring.
+
 ## [1.0.4r] — 2026-09-17
 A hidden limit on group codes is retired.
 

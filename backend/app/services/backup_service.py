@@ -16,7 +16,7 @@ import zipfile
 from datetime import datetime, date
 from typing import NamedTuple
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import Base
@@ -26,6 +26,8 @@ from app.models.allocation import Allocation
 from app.models.allocation_category import AllocationCategory
 from app.models.allocation_category_exclusion import AllocationCategoryExclusion
 from app.models.allocation_unit import AllocationUnit
+from app.models.checkin_field import CheckInField
+from app.models.checkin_value import CheckInValue
 from app.models.custom_field import CustomFieldDefinition, CustomFieldValue
 from app.models.event import Event
 from app.models.event_field_config import EventFieldConfig
@@ -150,6 +152,11 @@ BACKUP_REGISTER: dict[str, Table] = {
         # where it was and keeps the guard's export check true.
         "timezone": Col(True, "copied"),
         "is_archived": Col(True, "copied"),
+        # v1.0.4s: a structure backup leaves email_from_name and
+        # email_reply_to out of this dict, and a full backup keeps both
+        # (BACKUP-11). The register records one decision per column and
+        # cannot express a key inside a JSON column, let alone one that
+        # depends on the mode, so it is written here instead.
         "settings": Col(True, "copied", raw=True),
         # Not exported.
         # The organiser re-ticks both Setup cards before reopening
@@ -223,6 +230,29 @@ BACKUP_REGISTER: dict[str, Table] = {
         "field_name": Col(True, "copied"),
         "is_enabled": Col(True, "copied"),
         "is_required": Col(True, "copied"),
+        "created_at": Col(True, "copied"),
+        "updated_at": Col(True, "copied"),
+    }),
+    # v1.0.4s: check-in. Two tables in one member, like marks.json. The
+    # fields are the columns an organiser added to the check-in desk; the
+    # values are one tick per person per column. Restore writes the fields
+    # straight after the field configs, and the values straight after the
+    # participants, which is where each one's references exist.
+    "checkin_fields": Table("checkin.json", "fields", {
+        "id": Col(True, "remapped"),
+        "event_id": Col(True, "parent"),
+        "field_name": Col(True, "copied"),
+        "sort_order": Col(True, "copied"),
+        "created_at": Col(True, "copied"),
+        "updated_at": Col(True, "copied"),
+    }),
+    "checkin_values": Table("checkin.json", "values", {
+        # Nothing refers to a value row, so its id is minted fresh.
+        "id": Col(True, "ignored", "new_id"),
+        "event_id": Col(True, "parent"),
+        "participant_id": Col(True, "remapped"),
+        "field_id": Col(True, "remapped"),
+        "checked": Col(True, "copied"),
         "created_at": Col(True, "copied"),
         "updated_at": Col(True, "copied"),
     }),
@@ -336,15 +366,17 @@ BACKUP_REGISTER: dict[str, Table] = {
     "notes": Table("notes.json", None, {
         "id": Col(True, "ignored", "new_id"),
         "notable_type": Col(True, "copied"),
-        # Overwritten with the restored event id instead of being remapped
-        # through the participant, category and unit maps.
-        "notable_id": Col(True, "parent", "known_gap:BACKUP-4"),
+        # v1.0.4s: translated by its type, through the participant, group
+        # type and unit maps, and set to the restored event for an
+        # event-level note. A note whose type is not one of those four, or
+        # whose target the file does not carry, is skipped and counted.
+        "notable_id": Col(True, "remapped"),
         "content": Col(True, "copied"),
-        # Forced True on restore, so an unpublished note would come back
-        # published. Unreachable today: no screen writes an event-level note,
-        # so the export filter (notable_id == event_id AND is_published)
-        # never matches and this member is always empty.
-        "is_published": Col(True, "ignored", "known_gap:BACKUP-4"),
+        # v1.0.4s: carried as it is. It was forced True on restore, so a
+        # private note came back published, which is the opposite of what
+        # its author chose. Which private notes are exported at all is the
+        # caller's choice: see `private_notes` on export_event_zip.
+        "is_published": Col(True, "copied"),
         # v1.0.4o: the restoring user. The original author has no account
         # on this instance, and the column is a real foreign key.
         "author_id": Col(True, "placeholder", "not_meaningful_elsewhere"),
@@ -355,9 +387,10 @@ BACKUP_REGISTER: dict[str, Table] = {
 
 # Event-scoped tables the backup does not carry at all.
 NOT_CARRIED: dict[str, str] = {
-    "checkin_fields": "known_gap:BACKUP-4",
-    "checkin_values": "known_gap:BACKUP-4",
-    "event_user_assignments": "known_gap:BACKUP-4",
+    # v1.0.4s: a permission must never come from a file. Who may see or
+    # change an event is decided on the receiving instance, by inviting the
+    # team again; the restore screen says so (STRINGS-1).
+    "event_user_assignments": "not_meaningful_elsewhere",
     "allocation_events": "known_gap:BACKUP-5",
 }
 
@@ -602,10 +635,44 @@ def _translate_mark_priorities(settings, mark_map: dict[str, uuid.UUID]):
 
 # ── Export ────────────────────────────────────────────────────────────────────
 
+# v1.0.4s: who may see a private note decides what a backup may carry.
+#
+# A private note is visible in the app only to its author: not to a
+# colleague, and not to a Super Admin. Any event admin can download an event
+# backup. So the caller has to say whose private notes belong in the file,
+# and the default says nobody, which means a caller that makes no choice
+# cannot leak one.
+#
+#   private_notes=None                  published notes only (the default)
+#   private_notes=<user id>             that user's private notes as well
+#   private_notes=ALL_PRIVATE_NOTES     every private note
+#
+# The last one belongs to the leaving export, which is the organisation's
+# own copy of its data and is produced from a shell that already has full
+# database access.
+
+
+class _EveryPrivateNote:
+    """The type of `ALL_PRIVATE_NOTES`.
+
+    A sentinel object rather than a string, so that no stray value can be
+    mistaken for the choice to carry every private note.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "ALL_PRIVATE_NOTES"
+
+
+ALL_PRIVATE_NOTES = _EveryPrivateNote()
+
+
 async def export_event_zip(
     event_id: uuid.UUID,
     db: AsyncSession,
     mode: str = "full",
+    private_notes: "uuid.UUID | _EveryPrivateNote | None" = None,
 ) -> bytes:
     """
     Build a backup ZIP for one event and return the raw bytes.
@@ -615,9 +682,14 @@ async def export_event_zip(
         db — async DB session
         mode — "full" (default, everything) or "structure" (v0.50r, GDPR-safe:
                event settings, categories, units, custom field definitions,
-               mark definitions, field configs, event-level notes; NO
+               mark definitions, field configs, check-in columns; NO
                participant PII, custom-field values, allocations, mark
-               assignments, or preferences tied to a participant)
+               assignments, preferences tied to a participant, check-in
+               ticks, or notes of any kind)
+        private_notes — whose private notes the file may carry. None (the
+               default) carries none, a user id carries that user's own, and
+               ALL_PRIVATE_NOTES carries every one. Published notes are
+               carried whatever this says. See the note above the sentinel.
 
     ZIP contents (all written; only the eleven pre-v1.0.4m members are
     required on read — see _parse_zip):
@@ -635,9 +707,22 @@ async def export_event_zip(
                                  pre-v1.0.4m files still restore.
         marks.json             — { definitions, assignments: [] in structure mode }
         preferences.json       — [] in structure mode
-        notes.json             — event-level team notes (kept in both modes —
-                                 they're organisational, not personal)
+        notes.json             — v1.0.4s: notes on the event, on exported
+                                 participants, on group types and on units.
+                                 [] in structure mode, and which private
+                                 notes it holds is the caller's choice
+                                 (`private_notes`).
+        checkin.json           — v1.0.4s: { fields, values }. The fields go
+                                 in both modes, the values in full mode
+                                 only, and only for exported participants.
+                                 Optional on read, so pre-v1.0.4s files
+                                 still restore.
         field_configs.json
+
+    v1.0.4s: structure mode also leaves `email_from_name` and
+    `email_reply_to` out of the event's settings. They are the organiser's
+    own address, not part of the event's shape, and a template is made to be
+    shared (BACKUP-11).
 
     Why "structure mode" keeps empty versions of participant-linked files:
     the restore path expects all files present (see _parse_zip). Empty
@@ -774,14 +859,66 @@ async def export_event_zip(
     )
     field_configs = list(fc_result.scalars().all())
 
-    # ── Load published notes ──
-    note_result = await db.execute(
-        select(Note).where(
-            Note.notable_id == event_id,
-            Note.is_published.is_(True),
-        )
+    # ── Load check-in columns and ticks (v1.0.4s) ──
+    # The columns are part of the event's shape, so they go in both modes.
+    # The ticks are personal, so they follow the participants: the
+    # `participant_ids` test is the same one the exclusions use, and it
+    # covers structure mode (no participants) and removed people (already
+    # filtered out of `participants`) without a filter of its own.
+    ci_result = await db.execute(
+        select(CheckInField)
+        .where(CheckInField.event_id == event_id)
+        .order_by(CheckInField.sort_order, CheckInField.id)
     )
-    notes = list(note_result.scalars().all())
+    checkin_fields = list(ci_result.scalars().all())
+
+    checkin_values: list[CheckInValue] = []
+    if participant_ids:
+        cv_result = await db.execute(
+            select(CheckInValue)
+            .where(
+                CheckInValue.event_id == event_id,
+                CheckInValue.participant_id.in_(participant_ids),
+            )
+            .order_by(CheckInValue.created_at, CheckInValue.id)
+        )
+        checkin_values = list(cv_result.scalars().all())
+
+    # ── Load notes (v1.0.4s) ──
+    # A note travels with what it is about. Every note whose target is in
+    # this export goes in: the event itself, an exported participant (so a
+    # removed person's notes stay out, as their exclusions do), a group
+    # type, or a unit. A note about anything else, or about a participant
+    # this file does not carry, is not in the export at all.
+    #
+    # A structure backup carries no notes. They are what people wrote about
+    # each other and about the event, never part of its shape, and a
+    # template is made to be shared (BACKUP-11).
+    #
+    # Which private notes go in is the caller's choice; see `private_notes`.
+    notes: list[Note] = []
+    if not structure_only:
+        reachable = [
+            and_(Note.notable_type == notable_type, Note.notable_id.in_(ids))
+            for notable_type, ids in (
+                ("event", [event_id]),
+                ("participant", participant_ids),
+                ("category", category_ids),
+                ("unit", unit_ids),
+            )
+            if ids
+        ]
+        note_stmt = select(Note).where(or_(*reachable))
+        if private_notes is not ALL_PRIVATE_NOTES:
+            allowed = Note.is_published.is_(True)
+            if private_notes is not None:
+                allowed = or_(allowed, Note.author_id == private_notes)
+            note_stmt = note_stmt.where(allowed)
+        # A stable order, as the exclusions have, so two backups of the same
+        # event are comparable.
+        note_result = await db.execute(
+            note_stmt.order_by(Note.created_at, Note.id))
+        notes = list(note_result.scalars().all())
 
     # ── Build participants CSV ──
     csv_buf = io.StringIO()
@@ -797,7 +934,16 @@ async def export_event_zip(
 
     # ── Assemble JSON payloads ──
     event_data = _row(event, *_row_fields("events"))
-    event_data["settings"] = event.settings or {}
+    # v1.0.4s (BACKUP-11): a structure backup is made to be shared, and the
+    # organiser's own sender name and reply-to address are their contact
+    # details, not part of the event's shape. A full backup keeps both: it
+    # is the same organisation restoring its own event. Copied first, so the
+    # event row in the session is never touched.
+    settings = dict(event.settings or {})
+    if structure_only:
+        for personal_key in ("email_from_name", "email_reply_to"):
+            settings.pop(personal_key, None)
+    event_data["settings"] = settings
     event_data["status"] = event.status.value if hasattr(event.status, "value") else str(event.status)
 
     custom_fields_data = {
@@ -858,6 +1004,17 @@ async def export_event_zip(
         for n in notes
     ]
 
+    checkin_data = {
+        "fields": [
+            _row(f, *_row_fields("checkin_fields"))
+            for f in checkin_fields
+        ],
+        "values": [
+            _row(v, *_row_fields("checkin_values"))
+            for v in checkin_values
+        ],
+    }
+
     manifest = {
         "backup_version": BACKUP_VERSION,
         # v0.50r: mode indicates whether this is a full backup (all data,
@@ -882,6 +1039,8 @@ async def export_event_zip(
             "preferences": len(preferences),
             "field_configs": len(field_configs),
             "notes": len(notes),
+            "checkin_fields": len(checkin_fields),
+            "checkin_values": len(checkin_values),
         },
     }
 
@@ -900,6 +1059,7 @@ async def export_event_zip(
         zf.writestr("field_configs.json", json.dumps(field_configs_data, indent=2, ensure_ascii=False))
         zf.writestr("preferences.json", json.dumps(preferences_data, indent=2, ensure_ascii=False))
         zf.writestr("notes.json", json.dumps(notes_data, indent=2, ensure_ascii=False))
+        zf.writestr("checkin.json", json.dumps(checkin_data, indent=2, ensure_ascii=False))
 
     return buf.getvalue()
 
@@ -909,7 +1069,13 @@ async def export_event_zip(
 # v1.0.4m: members that may be absent, with the value to use when they are.
 # An older file simply has no exclusions in it, which restores as "nobody
 # excluded"; see _parse_zip.
-_OPTIONAL_MEMBERS: dict[str, object] = {"allocation_exclusions.json": []}
+# v1.0.4s: checkin.json joins them, with a default that is a dict of two
+# lists. That is the case the v1.0.4o deep copy was written for: without it
+# a restore could mutate the module constant.
+_OPTIONAL_MEMBERS: dict[str, object] = {
+    "allocation_exclusions.json": [],
+    "checkin.json": {"fields": [], "values": []},
+}
 
 # v1.0.4o: the top-level shape every member must have. A member that cannot
 # be read at all is refused before anything is written (there is no sensible
@@ -927,12 +1093,14 @@ _MEMBER_SHAPES: dict[str, str] = {
     "marks.json": "object",
     "preferences.json": "array",
     "notes.json": "array",
+    "checkin.json": "object",
 }
 
 # Members that hold two tables: the keys inside them, and their shapes.
 _MEMBER_INNER: dict[str, tuple[tuple[str, str], ...]] = {
     "custom_fields.json": (("definitions", "array"), ("values", "object")),
     "marks.json": (("definitions", "array"), ("assignments", "array")),
+    "checkin.json": (("fields", "array"), ("values", "array")),
 }
 
 
@@ -1099,6 +1267,8 @@ async def confirm_restore(
     unit_map: dict[str, uuid.UUID] = {}
     mark_map: dict[str, uuid.UUID] = {}
     cf_map: dict[str, uuid.UUID] = {}           # custom field definition old → new
+    # v1.0.4s: check-in field old → new, so a tick can name its column.
+    checkin_field_map: dict[str, uuid.UUID] = {}
     # v1.0.4m: new unit id → new group type id. An allocation names a unit,
     # an exclusion names a group type, so deciding whether a placement is
     # excluded needs the step between them.
@@ -1198,6 +1368,30 @@ async def confirm_restore(
             return value[:length]
         return value
 
+
+    # THE WRITE ORDER. Each block is written where everything it names
+    # already exists, so no row is ever inserted pointing at an id that has
+    # not been minted yet:
+    #
+    #   1. the event
+    #   2. mark definitions          — a group type's mark priorities and a
+    #                                  unit's mark_restriction name a mark
+    #   3. custom field definitions
+    #   4. field configs
+    #   5. check-in columns          — v1.0.4s; a tick names one
+    #   6. group types, then units   — a participant's group code scope
+    #                                  names a group type
+    #   7. participants, with their custom field values
+    #   8. check-in ticks            — v1.0.4s; names a participant and a
+    #                                  check-in column
+    #   9. exclusions resolved       — before the placements, because an
+    #                                  exclusion outranks a placement
+    #  10. allocations
+    #  11. the exclusion rows themselves
+    #  12. mark assignments
+    #  13. preferences
+    #  14. notes                     — v1.0.4s; a note names a participant,
+    #                                  a group type, a unit or the event
 
     # ── Create event ──
     new_event_id = uuid.uuid4()
@@ -1327,6 +1521,39 @@ async def confirm_restore(
             **ts(fc_src, "updated_at", "event_field_configs", "updated_at"),
         )
         db.add(fc)
+    await db.flush()
+
+    # ── Check-in columns (v1.0.4s) ──
+    # Straight after the field configs: a check-in column names nothing but
+    # its event, and the ticks written after the participants need the map
+    # this block fills.
+    checkin_src = data["checkin.json"]
+    seen_ci_ids: set[str] = set()
+    for ci_src in checkin_src.get("fields", []):
+        if not isinstance(ci_src, dict):
+            skip("checkin.json:fields")
+            continue
+        old_id = _old_id(ci_src, "id")
+        if old_id is not None and old_id in seen_ci_ids:
+            skip("checkin.json:fields")  # duplicate old id: the first wins
+            continue
+        field_name = _field(ci_src, "field_name", "checkin_fields", "field_name")
+        if field_name is _SKIP:
+            skip("checkin.json:fields")
+            continue
+        new_ci_id = uuid.uuid4()
+        if old_id is not None:
+            checkin_field_map[old_id] = new_ci_id
+            seen_ci_ids.add(old_id)
+        db.add(CheckInField(
+            id=new_ci_id,
+            event_id=new_event_id,
+            field_name=fit(field_name, "checkin_fields", "field_name"),
+            sort_order=_field(
+                ci_src, "sort_order", "checkin_fields", "sort_order"),
+            **ts(ci_src, "created_at", "checkin_fields", "created_at"),
+            **ts(ci_src, "updated_at", "checkin_fields", "updated_at"),
+        ))
     await db.flush()
 
     # ── Allocation categories + units ──
@@ -1544,6 +1771,37 @@ async def confirm_restore(
 
     await db.flush()
 
+    # ── Check-in ticks (v1.0.4s) ──
+    # Straight after the participants, because a tick names a participant
+    # and a check-in column, and before the exclusions are resolved, which
+    # is where the participant-linked work starts.
+    seen_cv_pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
+    for cv_src in checkin_src.get("values", []):
+        if not isinstance(cv_src, dict):
+            skip("checkin.json:values")
+            continue
+        new_p_id = participant_map.get(_old_id(cv_src, "participant_id"))
+        new_field_id = checkin_field_map.get(_old_id(cv_src, "field_id"))
+        if not new_p_id or not new_field_id:
+            skip("checkin.json:values")
+            continue
+        # The table is UNIQUE on (participant, field). A duplicate in a
+        # hand-edited file is dropped here: letting one reach the constraint
+        # would roll the whole restore back over a single bad line.
+        if (new_p_id, new_field_id) in seen_cv_pairs:
+            skip("checkin.json:values")
+            continue
+        seen_cv_pairs.add((new_p_id, new_field_id))
+        db.add(CheckInValue(
+            event_id=new_event_id,
+            participant_id=new_p_id,
+            field_id=new_field_id,
+            checked=_field(cv_src, "checked", "checkin_values", "checked"),
+            **ts(cv_src, "created_at", "checkin_values", "created_at"),
+            **ts(cv_src, "updated_at", "checkin_values", "updated_at"),
+        ))
+    await db.flush()
+
     # ── Allocation category exclusions (v1.0.4m) ──
     # Resolved BEFORE the allocations loop, because an exclusion outranks a
     # placement: when a file says someone is both excluded from a group type
@@ -1701,12 +1959,27 @@ async def confirm_restore(
         )
         db.add(pref)
 
-    # ── Notes (published only, attached to new event id) ──
+    # ── Notes ──
     # v1.0.4o: author_id is a real foreign key to users, so the stand-in id
-    # written before this release made any note fail the whole restore. The
-    # author is now whoever is restoring: true on this instance, and the
-    # only non-null option, since the column is NOT NULL. With no actor
-    # there is no truthful value, so the line is skipped and counted.
+    # written before that release made any note fail the whole restore. The
+    # author is whoever is restoring: true on this instance, and the only
+    # non-null option, since the column is NOT NULL. With no actor there is
+    # no truthful value, so the line is skipped and counted.
+    #
+    # v1.0.4s: a note is put back on the thing it is about. `notable_id` is
+    # a plain UUID typed by `notable_type`, so which map to translate it
+    # through depends on the type, and an event-level note takes the
+    # restored event. A note of any other type, or one whose target this
+    # file does not carry, cannot be placed: it is skipped and counted,
+    # exactly as a note with no content is, and the restore carries on.
+    #
+    # `is_published` is carried as it is. Forcing it True published what
+    # somebody had chosen to keep private.
+    note_targets = {
+        "participant": participant_map,
+        "category": category_map,
+        "unit": unit_map,
+    }
     for note_src in data["notes.json"]:
         if not isinstance(note_src, dict):
             skip("notes.json")
@@ -1719,11 +1992,19 @@ async def confirm_restore(
         if notable_type is _SKIP or content is _SKIP:
             skip("notes.json")
             continue
+        if notable_type == "event":
+            new_notable_id = new_event_id
+        else:
+            new_notable_id = note_targets.get(notable_type, {}).get(
+                _old_id(note_src, "notable_id"))
+        if not new_notable_id:
+            skip("notes.json")
+            continue
         note = Note(
             notable_type=fit(notable_type, "notes", "notable_type"),
-            notable_id=new_event_id,
+            notable_id=new_notable_id,
             content=content,
-            is_published=True,
+            is_published=_field(note_src, "is_published", "notes", "is_published"),
             author_id=actor_user_id,
             **ts(note_src, "created_at", "notes", "created_at"),
             **ts(note_src, "updated_at", "notes", "updated_at"),

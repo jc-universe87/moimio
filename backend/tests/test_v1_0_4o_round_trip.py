@@ -33,6 +33,8 @@ from app.models.allocation import Allocation
 from app.models.allocation_category import AllocationCategory
 from app.models.allocation_category_exclusion import AllocationCategoryExclusion
 from app.models.allocation_unit import AllocationUnit
+from app.models.checkin_field import CheckInField
+from app.models.checkin_value import CheckInValue
 from app.models.custom_field import CustomFieldDefinition, CustomFieldValue
 from app.models.event import Event
 from app.models.event_field_config import EventFieldConfig
@@ -43,6 +45,7 @@ from app.models.preference_request import ParticipantPreferenceRequest
 from app.models.user import User, UserRole
 from app.services.allocation_service import add_exclusion
 from app.services.backup_service import (
+    ALL_PRIVATE_NOTES,
     BACKUP_REGISTER,
     confirm_restore,
     export_event_zip,
@@ -94,6 +97,8 @@ NATURAL_KEY = {
     "custom_field_definitions": "label",
     "custom_field_values": "participant email (one value each in the fixture)",
     "event_field_configs": "field_name",
+    "checkin_fields": "field_name",
+    "checkin_values": "participant email (one tick each in the fixture)",
     "allocation_categories": "name",
     "allocation_units": "name (unique across group types in the fixture)",
     "allocations": "participant email (one allocation each in the fixture)",
@@ -113,6 +118,19 @@ TRANSFORMS = {
     # (portability.restore_as_new_hint).
     ("events", "name"): lambda v: f"{v} (Restored)",
 }
+
+
+# v1.0.4s: one narrow exemption from the "must differ from the default"
+# rule below, and the only one.
+#
+# `notes.is_published` is a boolean whose two states are both meaningful:
+# True is a note the team shares, False is a private one. A private note
+# therefore HOLDS the column's default, and the fixture has to carry one,
+# because restore forcing every note published is the very fault v1.0.4s
+# fixed. So for this column the fixture rule is replaced: it must hold at
+# least one row in each state. Test 2 then proves both states round trip,
+# which is what the rule was for.
+BOTH_STATES_REQUIRED = {("notes", "is_published")}
 
 
 def _model_default(table: str, column: str):
@@ -165,9 +183,18 @@ def _cols(table: str, verb: str, *, gaps: bool = False) -> list[str]:
 
 # ─── The fixture ──────────────────────────────────────────────────────
 
-async def _build(db) -> dict:
+async def _build(db, extra_notes: bool = False) -> dict:
     """An event with at least two rows of every carried table, every
-    faithful column holding a non-default value."""
+    faithful column holding a non-default value.
+
+    `extra_notes` adds the notes v1.0.4s made carryable: one on a
+    participant, one on a group type, one on a unit, and one private note.
+    It is OFF by default on purpose. test_v1_0_4o_damaged_files.py imports
+    this builder and its note cases were written against a file holding the
+    two published event notes alone, so the net switches the keyword on for
+    its own two tests and leaves that file the fixture it was written
+    against.
+    """
     user = await _make_user(db, "restorer@test.local")
     author = await _make_user(db, "author@test.local")
 
@@ -405,17 +432,67 @@ async def _build(db) -> dict:
     }
     await db.flush()
 
-    # ── Notes: event-level and published, the only kind export carries ──
+    # ── Check-in (v1.0.4s) ──
+    # Two columns, each with a non-zero sort_order, because 0 is the
+    # column's own default. One tick each for Anna and Bruno, on different
+    # columns: keyed by participant alone, as the other link tables are, so
+    # a restore that pointed every tick at the wrong column shows up as a
+    # wrong `field_id` rather than as a missing row.
+    ci_fields = {}
+    for field_name, order in (("Wristband", 4), ("Key handed over", 5)):
+        f = CheckInField(event_id=ev.id, field_name=field_name,
+                         sort_order=order, created_at=T_ROW, updated_at=T_ROW)
+        db.add(f)
+        ci_fields[field_name] = f
+    await db.flush()
+
+    for email, field_name in (("anna@test.local", "Wristband"),
+                              ("bruno@test.local", "Key handed over")):
+        db.add(CheckInValue(
+            event_id=ev.id, participant_id=people[email].id,
+            field_id=ci_fields[field_name].id,
+            # False is the column's default, so True is what proves the
+            # tick was carried. A tick that is OFF is checked in
+            # test_v1_0_4s_checkin_and_notes.py, where the rule is not
+            # "differ from the default".
+            checked=True,
+            created_at=T_ROW, updated_at=T_ROW,
+        ))
+
+    # ── Notes ──
+    # Two published event notes, which is all export carried before
+    # v1.0.4s.
     for content in ("Minibus leaves at nine.", "Kitchen code is on the door."):
         db.add(Note(notable_type="event", notable_id=ev.id, content=content,
                     is_published=True, author_id=author.id,
                     created_at=T_ROW, updated_at=T_ROW))
+
+    if extra_notes:
+        # v1.0.4s: the three other types a note can be about, and one
+        # private note, so both states of `is_published` round trip.
+        # Contents are unique: the net matches a note by its content.
+        for notable_type, notable_id, content, published in (
+            ("participant", people["anna@test.local"].id,
+             "Anna is collecting the keys on Friday.", True),
+            ("category", cats["Bedrooms"].id,
+             "Bedrooms were re-numbered after the refit.", True),
+            ("unit", units["Lakeside"].id,
+             "Lakeside window does not close properly.", True),
+            ("participant", people["bruno@test.local"].id,
+             "Private: Bruno asked me not to seat him by the door.", False),
+        ):
+            db.add(Note(
+                notable_type=notable_type, notable_id=notable_id,
+                content=content, is_published=published, author_id=author.id,
+                created_at=T_ROW, updated_at=T_ROW,
+            ))
 
     await db.flush()
 
     return {
         "user": user, "author": author, "event": ev, "people": people,
         "cats": cats, "units": units, "marks": marks, "cfs": cfs,
+        "ci_fields": ci_fields,
     }
 
 
@@ -472,7 +549,18 @@ async def _snapshot(db, event_id: uuid.UUID) -> dict[str, dict]:
                      .where(EventFieldConfig.event_id == event_id))
     prefs = await rows(select(ParticipantPreferenceRequest)
                        .where(ParticipantPreferenceRequest.event_id == event_id))
-    notes = await rows(select(Note).where(Note.notable_id == event_id))
+
+    ci_fields = await rows(select(CheckInField)
+                           .where(CheckInField.event_id == event_id))
+    ci_values = await rows(select(CheckInValue)
+                           .where(CheckInValue.event_id == event_id))
+
+    # v1.0.4s: a note can be about the event, a participant, a group type or
+    # a unit, so the snapshot gathers all four. `notable_id` alone is enough
+    # to select on, because every id in the schema is a distinct UUID; the
+    # type still matters to the check, and test 2 resolves it by type.
+    note_targets = [event_id, *by_pid, *cat_ids, *[u.id for u in units]]
+    notes = await rows(select(Note).where(Note.notable_id.in_(note_targets)))
 
     return {
         "events": {"the event": ev},
@@ -482,6 +570,10 @@ async def _snapshot(db, event_id: uuid.UUID) -> dict[str, dict]:
             by_pid[v.participant_id]: v for v in cfvs
         },
         "event_field_configs": {f.field_name: f for f in fcs},
+        "checkin_fields": {f.field_name: f for f in ci_fields},
+        "checkin_values": {
+            by_pid[v.participant_id]: v for v in ci_values
+        },
         "allocation_categories": {c.name: c for c in cats},
         "allocation_units": {u.name: u for u in units},
         "allocations": {
@@ -504,7 +596,7 @@ async def _snapshot(db, event_id: uuid.UUID) -> dict[str, dict]:
 # ─── 1. The fixture is not lazy ───────────────────────────────────────
 
 async def test_1_the_fixture_is_not_lazy(db):
-    src = await _build(db)
+    src = await _build(db, extra_notes=True)
     snap = await _snapshot(db, src["event"].id)
 
     problems = []
@@ -521,6 +613,8 @@ async def test_1_the_fixture_is_not_lazy(db):
 
         for key, row in rows.items():
             for name in _cols(table, "copied"):
+                if (table, name) in BOTH_STATES_REQUIRED:
+                    continue  # a different rule, applied once per table below
                 value = getattr(row, name)
                 if value is None:
                     problems.append(
@@ -537,6 +631,17 @@ async def test_1_the_fixture_is_not_lazy(db):
                         f"file would produce the same value, so the round trip "
                         f"check would pass for the wrong reason."
                     )
+
+    # v1.0.4s: the exempt columns, checked their own way.
+    for table, name in sorted(BOTH_STATES_REQUIRED):
+        states = {getattr(row, name) for row in snap[table].values()}
+        if states != {True, False}:
+            problems.append(
+                f"{table}.{name} is {sorted(map(str, states))} across every "
+                f"row of the fixture. Both states are needed: one row in "
+                f"each, so that test 2 proves the value is carried rather "
+                f"than forced."
+            )
 
     # v1.0.4p: the three columns that hold ids inside JSON. A list of ids
     # that resolve to nothing proves nothing about remapping, so check the
@@ -589,10 +694,15 @@ async def test_1_the_fixture_is_not_lazy(db):
 # ─── 2. Every faithful column round trips ─────────────────────────────
 
 async def test_2_round_trip_is_faithful(db):
-    src = await _build(db)
+    src = await _build(db, extra_notes=True)
     before = await _snapshot(db, src["event"].id)
 
-    content = await export_event_zip(src["event"].id, db, mode="full")
+    # v1.0.4s: every private note goes in, so the private note in the
+    # fixture round trips and `is_published` is checked in both states. A
+    # caller that makes no choice carries no private note at all, which is
+    # tested in test_v1_0_4s_checkin_and_notes.py, not here.
+    content = await export_event_zip(
+        src["event"].id, db, mode="full", private_notes=ALL_PRIVATE_NOTES)
     result = await confirm_restore(content, db, actor_user_id=src["user"].id)
     new_event_id = uuid.UUID(result["new_event_id"])
     after = await _snapshot(db, new_event_id)
@@ -613,6 +723,28 @@ async def test_2_round_trip_is_faithful(db):
 
     def before_cf(fid):
         return {c.id: c.label for c in before["custom_field_definitions"].values()}[fid]
+
+    def before_checkin_field(fid):
+        return {f.id: f.field_name for f in before["checkin_fields"].values()}[fid]
+
+    # v1.0.4s: which map a note's `notable_id` goes through depends on its
+    # `notable_type`, so the expected value is built the same way: by type,
+    # through the source-to-restored correspondence by name, never through
+    # the id under test.
+    def expect_notable_id(note):
+        if note.notable_type == "event":
+            return new_event_id
+        if note.notable_type == "participant":
+            return after["participants"][before_email(note.notable_id)].id
+        if note.notable_type == "category":
+            return after["allocation_categories"][before_cat(note.notable_id)].id
+        if note.notable_type == "unit":
+            return after["allocation_units"][before_unit(note.notable_id)].id
+        raise AssertionError(
+            f"the fixture holds a note of type {note.notable_type!r}, which "
+            f"restore cannot place. Add the type to restore and here, or "
+            f"take it out of the fixture."
+        )
 
     # v1.0.4p: the three columns that hold ids inside JSON. The expected
     # value is built through the source-to-restored correspondence by NAME,
@@ -666,6 +798,11 @@ async def test_2_round_trip_is_faithful(db):
         return {m.id: m.name for m in before["mark_definitions"].values()}[mid]
 
     RESOLVE = {
+        ("notes", "notable_id"): expect_notable_id,
+        ("checkin_values", "participant_id"):
+            lambda r: after["participants"][before_email(r.participant_id)].id,
+        ("checkin_values", "field_id"):
+            lambda r: after["checkin_fields"][before_checkin_field(r.field_id)].id,
         # v1.0.4q: a real foreign key to a mark, translated through the name
         # correspondence, never through the id under test.
         ("allocation_units", "mark_restriction"):
@@ -760,6 +897,6 @@ async def test_2_round_trip_is_faithful(db):
                     )
 
     assert not problems, "\n".join(problems)
-    assert len(checked) == len(BACKUP_REGISTER) == 13, (
+    assert len(checked) == len(BACKUP_REGISTER) == 15, (
         f"checked {len(checked)} of {len(BACKUP_REGISTER)} carried tables"
     )
