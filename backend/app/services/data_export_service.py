@@ -20,10 +20,11 @@ Scope decisions (locked in design discussion before v0.73 landed):
 
   * Foreign keys are resolved to human-readable names. Marks become
     {name, colour}; allocations become {unit_name, category_name};
-    check-in values become {field_name, checked}. The export is for
-    the data subject, who has no database access — opaque UUIDs alone
-    would not satisfy "structured, commonly used and machine-readable"
-    in any practical sense.
+    exclusions become {category_name}; check-in values become
+    {field_name, checked}. The export is for the data subject, who has
+    no database access — opaque UUIDs alone would not satisfy
+    "structured, commonly used and machine-readable" in any practical
+    sense.
 
   * Soft-deleted participants ARE exportable. Unlike most participant
     queries elsewhere in the codebase (which filter
@@ -49,6 +50,7 @@ Returned dict shape (top-level keys, in this order):
       "marks": [...],                  # [{name, colour, assigned_at}, ...]
       "preference_requests": [...],    # [{preferred_*, resolved, ...}, ...]
       "allocations": [...],            # [{unit_name, category_name, created_at}, ...]
+      "exclusions": [...],             # v1.0.4v: [{category_name, created_at}, ...]
       "allocation_history": [...],     # coarsened audit trail
       "notes": [...],                  # only notable_type='participant', is_published=true
       "checkin_values": [...],         # [{field_name, checked, ...}, ...]
@@ -70,6 +72,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import MoimioAppError
 from app.models.allocation import Allocation
 from app.models.allocation_category import AllocationCategory
+from app.models.allocation_category_exclusion import AllocationCategoryExclusion
 from app.models.allocation_event import AllocationEvent
 from app.models.allocation_unit import AllocationUnit
 from app.models.checkin_field import CheckInField
@@ -255,6 +258,33 @@ async def export_participant_data(
             "updated_at": _iso(alloc.updated_at),
         })
 
+    # 6b. Exclusions (v1.0.4v) — the group types an organiser has kept
+    #     this person out of. The nearest relative of `allocations`, so it
+    #     sits beside it and is resolved the same way: the group type's
+    #     stored name and when the decision was recorded, never a raw id.
+    #     `created_by` is deliberately not here, for the same reason
+    #     allocation_history drops actor_user_id: which admin decided is
+    #     the controller's metadata, not the data subject's data.
+    excl_rows = await db.execute(
+        select(AllocationCategoryExclusion, AllocationCategory)
+        .join(
+            AllocationCategory,
+            AllocationCategoryExclusion.allocation_category_id
+            == AllocationCategory.id,
+        )
+        .where(
+            AllocationCategory.event_id == event_id,
+            AllocationCategoryExclusion.participant_id == participant_id,
+        )
+        .order_by(AllocationCategory.sort_order)
+    )
+    exclusions = []
+    for exclusion, category in excl_rows.all():
+        exclusions.append({
+            "category_name": category.name,
+            "created_at": _iso(exclusion.created_at),
+        })
+
     # 7. Allocation history (coarsened audit trail). Drop actor_user_id
     #    per the locked decision. Use the snapshotted unit/category
     #    names from the audit row itself, not a current join — the
@@ -374,6 +404,7 @@ async def export_participant_data(
         "marks": marks,
         "preference_requests": preference_requests,
         "allocations": allocations,
+        "exclusions": exclusions,
         "allocation_history": allocation_history,
         "notes": notes,
         "checkin_values": checkin_values,

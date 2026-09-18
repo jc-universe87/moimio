@@ -363,6 +363,52 @@ async def test_the_trial_run_writes_nothing(db):
     assert all("new_event_id" not in r for r in summary["restored"])
 
 
+# ─── 7b. the trial run always runs (v1.0.4v) ────────────────
+
+async def test_the_trial_run_runs_on_an_instance_with_events(db, tmp_path, capsys):
+    """Looking first must never need a flag whose name says "write".
+
+    Until v1.0.4v the non-empty refusal came before the dry-run branch, so
+    the safe preview was refused unless it was given --into-existing.
+    """
+    w = await _two_event_workspace(db)
+    data = await export_all.build_archive(db)
+    await db.commit()
+    path = tmp_path / "workspace.zip"
+    path.write_bytes(data)
+
+    before = await _counts(db)
+    # No --into-existing, and this instance already has two events.
+    code = await import_all.main_async(
+        str(path), "leaver@test.local", True, False)
+    await db.rollback()
+    out = capsys.readouterr().out
+
+    assert code == 0, "a trial run must not be refused"
+    assert await _counts(db) == before, "a trial run must write nothing"
+    # It says what a real run would need, and what each event would be called.
+    assert "--into-existing" in out
+    assert "Spring Retreat (Restored)" in out
+    assert "Autumn Conference (Restored)" in out
+
+
+async def test_a_real_run_on_an_instance_with_events_is_still_refused(
+        db, tmp_path):
+    w = await _two_event_workspace(db)
+    data = await export_all.build_archive(db)
+    await db.commit()
+    path = tmp_path / "workspace.zip"
+    path.write_bytes(data)
+
+    before = await _counts(db)
+    code = await import_all.main_async(
+        str(path), "leaver@test.local", False, False)
+    await db.rollback()
+
+    assert code == 1
+    assert await _counts(db) == before
+
+
 # ─── 8. the admin check ───────────────────────────────────────────────
 
 async def test_an_unknown_address_is_refused(db, tmp_path):

@@ -7,6 +7,14 @@ they run themselves.
 You will have one file: a whole-workspace export, usually called something
 like `moimio-export.zip`. One command puts all of it on your own server.
 
+If you are making that file yourself on the old server, rather than being
+handed it, run the export and then copy it out of the container:
+
+```bash
+docker compose exec backend python -m app.cli.export_all --out /tmp/moimio-export.zip
+docker compose cp backend:/tmp/moimio-export.zip .
+```
+
 > You need shell access to the machine running Moimio, and an admin account
 > already created there. If you have not installed Moimio yet, start with
 > the [Installation Guide](installation/README.md) and come back once you

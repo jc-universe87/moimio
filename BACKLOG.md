@@ -1239,7 +1239,44 @@ line for everyone.
 
 ## BACKUP-6 — participants.csv shows no exclusions
 
-**Status:** Open. Feature request, not a defect. Found in session 86 phase 1 while reading the backup path for BACKUP-1 (v1.0.4m).
+**Status:** ✅ CLOSED in v1.0.4v (2026-09-18). Feature request, not a defect. Found in session 86 phase 1 while reading the backup path for BACKUP-1 (v1.0.4m).
+
+**Resolution.** Both exports carry exclusions now.
+
+`participants.csv` has an **"Excluded From"** column, straight after
+`Marks` and before the custom fields, so no existing column moved. The cell
+holds the group type names the person is excluded from, stored names as
+they are, separated by `", "`, exactly as `Marks` does, and empty when
+there are none. It is built by one query joining
+`allocation_category_exclusions` to `allocation_categories` on the event,
+grouped in Python beside the marks lookup it copies. The header is a
+literal English list, so this needed no key and touched no locale file.
+
+A cancelled participant keeps their exclusions in the file. An exclusion
+records what an organiser decided about a person, and an unrelated status
+change does not undo it. Removed people were already out, because
+`list_participants` filters `deleted_at`.
+
+`data_export_service.export_participant_data` gained an **`exclusions`**
+key of `[{category_name, created_at}, ...]`, sitting beside `allocations`,
+its nearest relative, and resolved the same way: the group type's stored
+name, never a raw id. `created_by` is deliberately not in it, for the same
+reason `allocation_history` drops `actor_user_id` — which admin decided is
+the controller's metadata, not the data subject's data. The export is
+served as a raw JSON download with no presentation layer, so no label was
+needed and no translated string either. `EXPORT_SCHEMA_VERSION` was left at
+"1.0": an added key breaks no consumer.
+
+`test_v1_0_4v_exclusions_in_exports.py` holds the whole of it, asserting
+the entire header in order so a column that moves fails there.
+
+**This closes the backup and export work.** BACKUP-1 to BACKUP-11 are all
+resolved, the register in `backup_service.py` holds no gaps, and v1.0.4v is
+the last release of the series. What remains beside it is filed elsewhere:
+the strings in STRINGS-1, the roster PDF page, the converging serialiser in
+ARCH-1, and the hosted leaving email in SAAS-4.
+
+The original entry follows, as the record of what was found.
 
 `GET /api/events/{event_id}/export/participants.csv` in `api/export.py`
 has no exclusion column, and runs no query for one. A spreadsheet of
@@ -1530,8 +1567,11 @@ v1.0.4t settled applies unchanged.
 
 - **`--dry-run`** writes nothing at all: it opens the archive, reads each
   event file through `preview_restore`, and lists what would come back.
-- **`--into-existing`** is the only way to restore onto an instance that
-  already has events, archived ones included.
+  (v1.0.4v: it always runs, whatever the instance already holds, and shows
+  the name each event would end up with. Looking first must never need a
+  flag whose name says "write".)
+- **`--into-existing`** is the only way to *really* restore onto an
+  instance that already has events, archived ones included.
 - **Names.** On an instance with no events each event keeps its own name.
   With `--into-existing`, names get " (Restored)". This is
   `confirm_restore`'s new `suffix_name` keyword, whose default is the

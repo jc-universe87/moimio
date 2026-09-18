@@ -8,6 +8,27 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4v] — 2026-09-18
+Exclusions now show up in the two people exports.
+
+### Added
+
+- **The people spreadsheet now shows who is excluded from what.** Until now
+  an exclusion was visible only on the allocation board, so the file you
+  download from the People page said nothing about it. There is a new
+  "Excluded From" column, straight after "Marks", listing the group types
+  each person is kept out of. No other column has moved.
+
+- **A person's own data export now lists their exclusions too,** with the
+  group type and the date the decision was recorded.
+
+### Changed
+
+- **A trial run of a workspace restore now always runs,** even on a server
+  that already has events. It still writes nothing, and it now shows the
+  name each event would end up with, and says that a real run would need
+  the "--into-existing" option.
+
 ## [1.0.4u] — 2026-09-18
 Moving a whole workspace now takes one command.
 

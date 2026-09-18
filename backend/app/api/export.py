@@ -40,6 +40,11 @@ from app.models.allocation_unit import AllocationUnit
 # v1.0-pre #30: marks in CSV export — included as a comma-separated names
 # column so admins exporting the People list see participant tags too.
 from app.models.mark import MarkAssignment, MarkDefinition
+# v1.0.4v: exclusions in participants.csv — an exclusion is the one
+# decision an organiser records about a person that this file did not
+# mention. Same treatment as marks: the stored group type names, joined.
+from app.models.allocation_category import AllocationCategory
+from app.models.allocation_category_exclusion import AllocationCategoryExclusion
 from sqlalchemy import select as sa_select
 
 router = APIRouter(prefix="/api/events/{event_id}/export", tags=["export"])
@@ -131,6 +136,34 @@ async def export_participants_csv(
         for ma, md in ma_q.all():
             marks_lookup.setdefault(str(ma.participant_id), []).append(md.name)
 
+    # v1.0.4v: exclusions as a comma-separated group type names column.
+    # One query, grouped in Python, in the shape of the marks lookup above.
+    # The stored name, not a translation: the rest of this file is literal
+    # English and Marks uses stored names too.
+    #
+    # No status filter. An exclusion records what an organiser decided
+    # about a person, and a cancelled registration does not undo it.
+    # Removed people are already out, because `list_participants` filters
+    # them and this lookup is only ever read for a row that is in the file.
+    exclusions_lookup: dict[str, list[str]] = {}
+    if participants:
+        ex_q = await db.execute(
+            sa_select(AllocationCategoryExclusion, AllocationCategory)
+            .join(
+                AllocationCategory,
+                AllocationCategoryExclusion.allocation_category_id
+                == AllocationCategory.id,
+            )
+            .where(AllocationCategory.event_id == event_id)
+            .order_by(
+                AllocationCategory.sort_order,
+                AllocationCategoryExclusion.created_at,
+            )
+        )
+        for ex, cat in ex_q.all():
+            exclusions_lookup.setdefault(
+                str(ex.participant_id), []).append(cat.name)
+
     output = io.StringIO()
     writer = csv.writer(output)
 
@@ -154,6 +187,8 @@ async def export_participants_csv(
         "Church/Organisation", "Group Code", "GDPR Consent",
         "No.", "Status", "Checked In",
         "Marks",
+        # v1.0.4v: after Marks, before the custom fields. No column moves.
+        "Excluded From",
     ]
     for cf in custom_fields:
         header.append(cf.label)
@@ -171,6 +206,7 @@ async def export_participants_csv(
             p.registration_status.value if p.registration_status else "",
             "Yes" if p.checked_in else "No",
             ", ".join(marks_lookup.get(str(p.id), [])),
+            ", ".join(exclusions_lookup.get(str(p.id), [])),
         ]
         # Emit custom-field values by field id lookup
         cf_values = p.custom_fields  # {str(field_id): value}

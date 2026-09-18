@@ -24,7 +24,9 @@ What it does:
       every event as restored or failed, with the reason.
     • `--dry-run` writes nothing at all: no rows, no files, no side
       effects. It reads the archive, checks each event file can be read,
-      and lists what would come back.
+      and lists what would come back and what each event would be named.
+      It always runs, whatever this instance already holds, so looking
+      first never needs a flag that says "write".
 
 What it never does:
     • It never reads `team.json` or `webhooks.json`. Those two files are a
@@ -182,6 +184,13 @@ async def restore_archive(
                 if dry_run:
                     preview = preview_restore(event_bytes)
                     row["name"] = preview.get("event_name") or row["name"]
+                    # v1.0.4v: the name this event would end up with, so a
+                    # trial run on an instance that already has events shows
+                    # the suffix before a real run applies it.
+                    base = row["name"] or member
+                    row["would_be_named"] = (
+                        f"{base} (Restored)" if suffix_name else base
+                    )
                     row["counts"] = preview.get("counts", {})
                     restored.append(row)
                     continue
@@ -217,8 +226,16 @@ def print_summary(summary: dict) -> None:
         f"{len(summary['restored'])} of {summary['event_count']} "
         f"event(s) {verb}."
     )
+    if summary["dry_run"] and summary["suffix_name"]:
+        # suffix_name is set from "this instance already has events", which
+        # is the same condition a real run would refuse on.
+        print(
+            "This instance already has events, so a real run needs "
+            "--into-existing, and each event would be named as shown."
+        )
     for row in summary["restored"]:
-        name = row.get("new_event_name") or row.get("name") or row["member"]
+        name = (row.get("new_event_name") or row.get("would_be_named")
+                or row.get("name") or row["member"])
         suffix = ""
         if row.get("new_event_id"):
             suffix = f"  → {row['new_event_id']}"
@@ -265,7 +282,12 @@ async def main_async(
             return 1
 
         empty = await workspace_is_empty(db)
-        if not empty and not into_existing:
+        # v1.0.4v: the refusal guards a REAL run only. A trial run writes
+        # nothing, so refusing it made the safe way of looking first need a
+        # flag whose name says the opposite. It now always runs, whatever
+        # this instance holds, and its summary says what a real run would
+        # need and what each event would end up called.
+        if not dry_run and not empty and not into_existing:
             print(
                 "import refused: this instance already has events. Restoring "
                 "on top of them is deliberate, so pass --into-existing to do "
@@ -313,7 +335,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="write nothing at all; list what would be restored",
+        help=(
+            "write nothing at all; list what would be restored, and what "
+            "each event would be named. Always runs, whatever this instance "
+            "already holds"
+        ),
     )
     parser.add_argument(
         "--into-existing",
