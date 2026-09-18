@@ -2121,7 +2121,169 @@ v1.0.5.
 
 ## STRINGS-1 — Strings to deliver in one batch before v1.0.5
 
-**Status:** Open. New series, opened in session 86 during the backup work (v1.0.4o).
+**Status:** ✅ CLOSED in v1.0.4ze (2026-09-18) — delivered in one batch, as intended. New series, opened in session 86 during the backup work (v1.0.4o).
+
+**The six locale files were in sync before this release and are in sync after it.**
+Established, not assumed: 1203 keys in each of `en`, `de`, `ko`, `es`, `fr` and
+`pt-BR`, with no key missing from any and none extra in any. So nothing had to be
+filed, and the six-file check §6 asked for could be written as a real check rather
+than a English-only one.
+
+### The review table
+
+**Johannes reviews German and Korean.** The other three are mine; anything I was
+unsure of is marked ⚠ and listed at the end. Grouped by screen, because that is
+how a review is walked.
+
+---
+
+#### Registration form — the public one (FORM-1)
+
+| Key | English | German | Korean | |
+|---|---|---|---|---|
+| `errors.field.email` | Please enter a valid email address. | Bitte gib eine gültige E-Mail-Adresse ein. | 올바른 이메일 주소를 입력해 주세요. | new |
+| `errors.field.required` | This field is required. | Dieses Feld wird benötigt. | 필수 항목입니다. | new |
+| `errors.field.too_short` | This is too short. | Das ist zu kurz. | 너무 짧습니다. | new |
+| `errors.field.too_long` | This is too long. | Das ist zu lang. | 너무 깁니다. | new |
+| `errors.field.invalid` | This does not look right. | Das sieht nicht richtig aus. | 입력하신 내용을 다시 확인해 주세요. | new |
+| `errors.validation.summary` | Please check the fields marked below. | Bitte prüfe die unten markierten Felder. | 아래 표시된 항목을 확인해 주세요. | new |
+
+The German uses **du**, matching every other line a registrant reads.
+
+---
+
+#### The allocation board — excluding somebody (K-1)
+
+| Key | English | German | Korean | |
+|---|---|---|---|---|
+| `organise.exclude.left_locked_place` | {name} was removed from {unit}, which is locked. The place stays empty until you unlock it. | {name} wurde aus {unit} entfernt — diese Einheit ist gesperrt. Der Platz bleibt frei, bis du sie entsperrst. | {name}님을 {unit}에서 제외했습니다. 이 그룹은 잠겨 있어 잠금을 풀기 전까지 자리가 비어 있습니다. | new |
+| `organise.exclude.unlock_now` | Unlock it | Entsperren | 잠금 해제 | new |
+| `organise.exclude.undo` | Include | Wieder berücksichtigen | 다시 포함 | **kept — see below** |
+
+---
+
+#### The backup screen — choosing a mode
+
+| Key | English | German | Korean | |
+|---|---|---|---|---|
+| `backup.mode.full.hint` | Every part of the event: participants, allocations, responses, notes, check-in and history. For backup and restore. | Das ganze Event: Teilnehmer, Zuteilungen, Antworten, Notizen, Check-in und Verlauf. Für Sicherung und Wiederherstellung. | 행사 전체: 참가자, 배정, 응답, 메모, 체크인, 변경 이력. 백업 및 복원용. | **corrected** |
+
+The old line said "Everything" and named notes when the backup carried none. Both
+are now true: v1.0.4s added notes and check-in, v1.0.4t added history.
+
+---
+
+#### The restore screen and its result
+
+| Key | English | German | Korean | |
+|---|---|---|---|---|
+| `portability.restore_team_hint` | Team members and their roles are not part of a backup. Invite your team again after restoring. | Teammitglieder und ihre Rollen sind nicht Teil einer Sicherung. Lade dein Team nach der Wiederherstellung erneut ein. | 팀원과 권한은 백업에 포함되지 않습니다. 복원 후 팀원을 다시 초대해 주세요. | new |
+| `portability.restore_skipped` | {n} lines could not be read and were left out. | {n} Zeilen konnten nicht gelesen werden und wurden ausgelassen. | {n}개 항목을 읽지 못해 제외했습니다. | new |
+| `portability.restore_shortened` | {n} entries were too long and were shortened. | {n} Einträge waren zu lang und wurden gekürzt. | {n}개 항목이 너무 길어 줄였습니다. | new |
+| `portability.restore_defaulted` | {n} values could not be used, so the standard setting applies to them. | Bei {n} Werten wurde die Standardeinstellung verwendet, weil der Wert nicht lesbar war. | {n}개 값을 사용할 수 없어 기본값을 적용했습니다. | new |
+| `portability.open_restored_event` | Open the restored event | Wiederhergestelltes Event öffnen | 복원된 행사 열기 | new |
+| `portability.go_to_events` | Go to events | Zu den Events | 행사로 이동 | kept — still the second button |
+| `errors.export.zip_unreadable` | Part of the backup could not be read: {files} | Ein Teil der Sicherung konnte nicht gelesen werden: {files} | 백업의 일부를 읽지 못했습니다: {files} | new |
+
+**Skipped, shortened and defaulted are three different things** and the wording has
+to keep them apart: a skipped line is gone, a shortened one is there with less text
+in it, and a defaulted one is there with the standard setting in place of a value
+the file carried. The German for `defaulted` deliberately leads with what happened
+rather than with the number, because "Bei {n} Werten" reads better than a bare
+count.
+
+`errors.export.zip_unreadable` replaces the misuse of `zip_missing_files`, which
+said "missing" about a file that is present and unreadable — so an organiser went
+looking for something that was there. The old key stays: it is still correct for a
+genuinely absent member.
+
+---
+
+#### The leaving screen (Danger Zone, hosted only)
+
+| Key | English | German | Korean | |
+|---|---|---|---|---|
+| `danger_zone.modal.export_contents` | The export holds every event with all of its data, including everyone's notes — private ones too. It also lists your team and your own webhooks for reference, without passwords or secret keys. Nothing in those two lists is applied when you restore: invite your team again, and enter your webhook secrets again. | Der Export enthält jedes Event mit allen Daten, einschließlich aller Notizen — auch der privaten. Außerdem listet er zur Ansicht euer Team und eure eigenen Webhooks auf, ohne Passwörter und ohne geheime Schlüssel. Aus diesen beiden Listen wird beim Wiederherstellen nichts übernommen: ladet euer Team erneut ein und tragt eure Webhook-Schlüssel neu ein. | 내보내기 파일에는 모든 행사와 그 데이터가 들어 있으며, 비공개 메모를 포함한 모든 메모가 포함됩니다. 팀과 직접 등록한 웹훅도 참고용으로 함께 제공되며, 비밀번호와 비밀 키는 포함되지 않습니다. 이 두 목록은 복원 시 적용되지 않으므로, 팀원을 다시 초대하고 웹훅 비밀 키를 다시 입력해 주세요. | new |
+
+**German uses "ihr" here**, not "du": this screen addresses the organising team,
+and that split is deliberate — the surrounding `danger_zone.*` lines use "du"
+because they address the one account holder clicking the button, while this
+sentence is about what the whole team will have to redo. Flagged so Johannes can
+overrule it if he wants one form throughout.
+
+---
+
+#### Everywhere a date or time is shown (DATE-1)
+
+| Key | English | German | Korean | |
+|---|---|---|---|---|
+| `time.in_zone` | {time} ({zone}) | {time} ({zone}) | {time} ({zone}) | new — punctuation only, identical in all six |
+
+**No other new wording.** The zone name itself is the IANA string as stored
+(`Europe/Berlin`), not translated: it is an identifier, and translating it would
+make it useless for checking against anything else.
+
+---
+
+#### Grouping requests panel
+
+| Key | English | German | Korean | |
+|---|---|---|---|---|
+| `prefs.scope` | ~~Apply to~~ | ~~Anwenden auf~~ | ~~적용 범위~~ | **deleted** — unused since v1.0.4r removed the only thing that read it |
+
+**Correction: `organise.exclude.undo` was NOT deleted.** STRINGS-1 recorded it
+as "rendered nowhere" after v1.0.4x replaced the word on each excluded chip
+with a glyph. That was half true. It is still the **visible label on the bulk
+selection bar** — `AllocationBoard.jsx:2793`, where a selection that is
+entirely excluded offers "Include" — and deleting it would have put a
+bracketed raw key on that bar in all six languages. Caught by grepping for
+the key before removing it rather than trusting the entry. It stays, in all
+six, unchanged.
+
+---
+
+#### The roster PDFs — their own table, not the locale files
+
+These live in `PDF_TRANSLATIONS` in `backend/app/services/pdf_service.py`. The
+i18n validator never sees them, and the PDF's language is chosen independently of
+the interface language.
+
+| Key | English | German | Korean | |
+|---|---|---|---|---|
+| `unallocated.page_title` | NOT ALLOCATED | NICHT ZUGETEILT | 미배정 | new, PDF |
+| `unallocated.excluded` | EXCLUDED  ·  {n} {people} | AUSGENOMMEN  ·  {n} {people} | 제외됨  ·  {n}{people} | new, PDF |
+| `unallocated.unplaced` | NOT PLACED  ·  {n} {people} | NICHT ZUGETEILT  ·  {n} {people} | 배정 안 됨  ·  {n}{people} | new, PDF |
+
+The existing `unallocated.person` / `unallocated.people` supply `{people}`, as
+`unallocated.banner` already does. The Korean omits the space before `{people}`,
+matching how `unallocated.banner` is already written in that file.
+
+---
+
+### Unsure of, for later checking
+
+Marked ⚠ for a native speaker; **none is German or Korean**, which Johannes
+reviews himself.
+
+- **Spanish, French and Brazilian Portuguese** for every new key above. They are
+  careful translations, not machine output, and they follow the register each file
+  already uses — but I am not a native speaker of any of the three.
+- **`errors.field.invalid`** in all three: "This does not look right" is
+  deliberately vague because it is the fallback for a rejection whose cause is not
+  one of the named five, and vagueness is harder to translate than a specific
+  statement.
+- **`portability.restore_defaulted`** in all three: "the standard setting applies
+  to them" is a hard idea to say briefly in any language.
+
+### What each item needed beyond wording
+
+| Item | Code it needed |
+|---|---|
+| **FORM-1** | A `RequestValidationError` handler in `main.py` returning the app's `{key, params}` shape; `api.js` taught to stop stringifying FastAPI's array; per-field marking on the registration form, using the error state it already had for the extra-people cards |
+| **DATE-1** | `formatDateTime` and `formatTime` beside `formatDate`, 24-hour, resolving the event's zone with the user's as fallback; the eight files that called the browser's formatter directly converted |
+| **PDF page** | Exclusions loaded in `_load_pdf_data` (reusing `list_excluded_participant_ids`), `unallocated` split into two, the block renderer rewritten to take a label, and `render_signin` calling it for the first time |
+| **K-1** | The exclusion endpoint reports which **kept** units it vacated — computed in the endpoint, because `add_exclusion` has 39 callers and changing its signature would reach into six signed-off test files |
+| **STRINGS-1's corrections** | The restore modal reads the three ledgers it was already being sent; its success button navigates by `new_event_id`; `_unreadable()` raises the new key |
 
 Six locale files, and the i18n validator only checks one direction: it never
 checks that the other five match English. Johannes reviews DE and KO himself
