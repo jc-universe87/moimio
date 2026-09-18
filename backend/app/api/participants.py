@@ -34,6 +34,42 @@ router = APIRouter(tags=["participants"])
 
 # ─── Public registration (no auth) ───
 
+async def _publish_board_change(event_id, kind: str, **extra) -> None:
+    """Tell open allocation boards that who belongs on them has changed.
+    v1.0.4zb (STREAM-2).
+
+    Publishes on the same `organise:<event_id>` topic `api/allocations.py`
+    uses, because the board already refetches on any message it receives
+    (AllocationBoard.jsx:406-418) — so this needs no frontend change at all.
+
+    Called ONLY from the writes that change who belongs on a board, not from
+    everything that writes a participant:
+
+      - patch_participant   — the cancel path, and renames, gender and group
+                              code, every one of which a board chip renders
+      - delete_participant  — a soft-deleted person must leave every board
+      - batch_commit        — a bulk import adds people and told nobody;
+                              one publish per commit, not per row
+
+    Deliberately NOT from public_register or the confirm path: both already
+    publish on `registration:`, which EventDetailPage turns into a roster
+    refetch. Not from check-in, which publishes on `checkin:` and does not
+    change who belongs. Not from group-code reassignment, resend, or preview.
+
+    Fire and forget: the write has already succeeded and a publish failure
+    must not fail the request.
+    """
+    try:
+        from app.core.pubsub import broker
+        await broker.publish(
+            f"organise:{event_id}",
+            {"type": "allocation_changed", "kind": kind,
+             "event_id": str(event_id), **extra},
+        )
+    except Exception as e:
+        logger.warning("organise_pubsub_publish_failed", error=str(e), kind=kind)
+
+
 @router.post(
     "/api/events/{event_id}/register",
     response_model=ParticipantResponse,
@@ -333,6 +369,14 @@ async def patch_participant(
     # v1.0.0y: a status change (e.g. cancelled → active) can lift the
     # active roster past the cap; signal once if so. No-op otherwise.
     await maybe_signal_over_cap(db, participant.event_id)
+    # v1.0.4zb (STREAM-2): a cancellation, a rename, a gender or group-code
+    # change — every one of them is rendered on a board chip, and until now
+    # another organiser's board kept showing the old version, or kept showing
+    # somebody who had cancelled, until something unrelated forced a refetch.
+    await _publish_board_change(
+        participant.event_id, "participant_changed",
+        participant_id=str(participant.id),
+    )
     return participant
 
 
@@ -438,6 +482,11 @@ async def delete_participant(
         "participant_deleted",
         participant_id=str(participant_id),
         deleted_by=str(current_user.id),
+    )
+    # v1.0.4zb (STREAM-2): they are off the roster; take them off open boards.
+    await _publish_board_change(
+        participant.event_id, "participant_deleted",
+        participant_id=str(participant_id),
     )
 
 
@@ -621,6 +670,12 @@ async def batch_commit(
     # v1.0.0y: a batch can add many at once and cross the cap in one go;
     # check once after the whole batch (not per row). No-op when no cap.
     await maybe_signal_over_cap(db, event_id)
+    # v1.0.4zb (STREAM-2): an import puts people on the board and told nobody.
+    # Once per commit, not per row, for the same reason the cap check is.
+    if result.get("created"):
+        await _publish_board_change(
+            event_id, "participants_imported", created=result["created"],
+        )
     return result
 
 

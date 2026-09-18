@@ -472,7 +472,6 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
       ) : (
         <div className="grid gap-4 pb-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
           {categories.map((cat, idx) => {
-            const allocated = cat.allocated_count || 0;
             // v1.0.4k: this tile is arithmetic, not a filter. Excluded
             // participants stay in `totalParticipants` and can never be
             // in `allocated`, so before this every exclusion inflated
@@ -483,13 +482,16 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
             // it.
             const excludedCount = cat.excluded_count || 0;
             const eligibleTotal = Math.max(0, totalParticipants - excludedCount);
-            // Deliberately NOT clamped: DASH-1 (this figure can go
-            // negative in an overlapping group type, because
-            // allocated_count counts rows, not people) is filed and
-            // stays filed. Clamping here would hide its symptom without
-            // fixing its cause.
-            const unassigned = eligibleTotal - allocated;
-            const pct = eligibleTotal > 0 ? Math.round((allocated / eligibleTotal) * 100) : 0;
+            // v1.0.4zb (DASH-1): subtract distinct PEOPLE, not allocation rows.
+            // `allocated_count` counts rows and is right for the units grid; in
+            // an overlapping group type one person holds several, so
+            // subtracting it from a head-count under-reported the unassigned
+            // figure and could go below zero. `placed_people_count` is the
+            // distinct count, added to the category payload in the same
+            // release. Still not clamped — there is nothing left to clamp.
+            const placedPeople = cat.placed_people_count || 0;
+            const unassigned = eligibleTotal - placedPeople;
+            const pct = eligibleTotal > 0 ? Math.round((placedPeople / eligibleTotal) * 100) : 0;
             const isDragOver = dragOverCatId === cat.id && dragCatId !== cat.id;
             const canMoveUp = idx > 0;
             const canMoveDown = idx < categories.length - 1;
@@ -617,12 +619,17 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
                 </div>
                 <div className="mb-2">
                   <div className="flex justify-between text-xs text-gray-500 mb-1">
-                    <span><span className="font-semibold text-body">{allocated}</span> {t('organise.assigned')}</span>
+                    <span><span className="font-semibold text-body">{placedPeople}</span> {t('organise.assigned')}</span>
                     <span className="flex items-center gap-2">
                       <span className="text-pending">{unassigned} {t('organise.unassigned')}</span>
                       {/* v1.0.4k: shown so the tile still reconciles —
                           assigned + unassigned + excluded is the whole
-                          active list. */}
+                          active list.
+                          v1.0.4zb: which is why this counts PEOPLE too. Using
+                          the row count here while `unassigned` counted people
+                          would have left the three not adding up in an
+                          overlapping group type. Every figure on this tile is
+                          now a number of people. */}
                       {excludedCount > 0 && <span>{t('organise.excluded_count', { n: excludedCount })}</span>}
                     </span>
                   </div>

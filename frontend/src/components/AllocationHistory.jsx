@@ -206,6 +206,16 @@ export function collapseMoves(rows) {
       // the include row immediately before the assign and that row
       // breaks the pair. See the test file for both sequences.
       && next.source !== 'participant_excluded'
+      // v1.0.4zb (HIST-1): both rows must belong to the SAME group type.
+      // This feed is scoped to one participant but spans every group type,
+      // and the test above compares only unit names — so removing somebody
+      // from Room A and later placing them in Team 1, two unrelated actions
+      // in two different group types, rendered as "Moved from Room A to
+      // Team 1". The v1.0.4k guard above closed only the route exclusions
+      // made easy to hit. `category_id` has been on the serialised row since
+      // it existed (allocation_events_service.py:169), so this needs nothing
+      // from the backend.
+      && cur.category_id === next.category_id
     );
     if (isMovePair) {
       out.push({

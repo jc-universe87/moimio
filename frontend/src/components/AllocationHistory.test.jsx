@@ -25,6 +25,10 @@ const row = (o) => ({
   source: o.source || 'manual',
   unit_name: o.unit ?? '',
   category_name: o.category ?? 'Rooms',
+  // v1.0.4zb (HIST-1): the feed spans every group type, so a pair must
+  // share one before it can be read as a move. Left undefined unless a
+  // case says otherwise, which is how the rows above still pair.
+  category_id: o.categoryId,
   actor_display_name: 'Org',
   occurred_at: o.at || '2026-09-16T10:00:00Z',
   meta: null,
@@ -95,5 +99,33 @@ describe('collapseMoves — exclusion sequences', () => {
       row({ id: '1', type: 'unassign', unit: 'Room A' }),
     ]);
     expect(items.map(i => i.kind)).toEqual(['assign', 'unassign']);
+  });
+});
+
+describe('collapseMoves — group types (v1.0.4zb, HIST-1)', () => {
+  it('does not invent a move across two different group types', () => {
+    // The feed is scoped to one participant but spans every group type, and
+    // the pairing test compares unit names. Removing somebody from Room A
+    // and later placing them in Team 1 — two unrelated actions, two
+    // different group types — used to render as "Moved from Room A to
+    // Team 1". Neither row carries the exclusion source, so v1.0.4k's guard
+    // never saw this one.
+    const items = collapseMoves([
+      row({ id: '2', type: 'assign', unit: 'Team 1', category: 'Small Groups', categoryId: 'c2' }),
+      row({ id: '1', type: 'unassign', unit: 'Room A', category: 'Rooms', categoryId: 'c1' }),
+    ]);
+    expect(items.map(i => i.kind)).toEqual(['assign', 'unassign']);
+    expect(items.some(i => i.kind === 'move')).toBe(false);
+  });
+
+  it('still collapses a genuine move within one group type', () => {
+    // The thing the fix must not break.
+    const items = collapseMoves([
+      row({ id: '2', type: 'assign', unit: 'Room B', category: 'Rooms', categoryId: 'c1' }),
+      row({ id: '1', type: 'unassign', unit: 'Room A', category: 'Rooms', categoryId: 'c1' }),
+    ]);
+    expect(items.map(i => i.kind)).toEqual(['move']);
+    expect(items[0].from_unit).toBe('Room A');
+    expect(items[0].to_unit).toBe('Room B');
   });
 });

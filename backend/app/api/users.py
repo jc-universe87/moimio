@@ -4,7 +4,7 @@ import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import select
+from sqlalchemy import select, delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -144,5 +144,30 @@ async def delete_user(
         raise HTTPException(status_code=400, detail={"key": "errors.users.cannot_delete_self"})
     if user.role == UserRole.SUPER_ADMIN and current_user.role != UserRole.SUPER_ADMIN:
         raise HTTPException(status_code=403, detail={"key": "errors.users.cannot_delete_super"})
+
+    # v1.0.4zb (USER-1): sweep what they wrote, before the row goes.
+    #
+    # Their UNPUBLISHED notes are deleted: a draft is that person's own
+    # working note and nobody else was ever meant to read it. This is not
+    # tidying — the visibility rule is "published, or mine" (api/notes.py:59,
+    # :137), and `author_id` is about to become NULL, which matches nobody.
+    # A null-author draft would be visible to no one and unreachable forever.
+    #
+    # Their PUBLISHED notes stay, and the foreign key's ON DELETE SET NULL
+    # (migration 104zb0000) leaves them with no author — the same honest
+    # answer v1.0.4t gives for history from a departed user. Authorship is
+    # never reassigned: that would make the record say somebody wrote what
+    # they did not (session 86, D3).
+    #
+    # One transaction with the delete below, so a note is never orphaned by a
+    # sweep that succeeded while the delete failed.
+    from app.models.note import Note
+    await db.execute(
+        sa_delete(Note).where(
+            Note.author_id == user.id,
+            Note.is_published.is_(False),
+        )
+    )
+
     await db.delete(user)
     await db.flush()

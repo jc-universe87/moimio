@@ -8,6 +8,37 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4zb] — 2026-09-18
+The counts, and telling everyone who needs to know.
+
+### Fixed
+
+- **The dashboard counts only people who are still coming.** Somebody who
+  cancelled, or who was removed, was still being counted as excluded from a
+  group type, which made the number still to place look smaller than it was and
+  the percentage complete look higher. Their exclusion is kept, as it should be
+  — it simply is not counted any more.
+
+- **A count can no longer go below zero.** Where one person can be in several
+  groups at once, the figure still to place was worked out from the number of
+  places filled rather than the number of people in them, so it could drop past
+  nothing. Every figure on a group type's tile now counts people.
+
+- **The history no longer shows moves that did not happen.** Taking somebody out
+  of one group type and later placing them in another was read as a single move
+  between the two, inventing a journey nobody made. A move is now only a move
+  within one group type.
+
+- **Your board notices when somebody cancels.** If a colleague cancels or
+  removes a person, or imports a batch of new ones, while you have the
+  allocation board open, your screen now keeps up instead of showing the old
+  list until you reload.
+
+- **A user who has written notes can be deleted.** It used to fail outright.
+  Their unfinished notes go with them, because nobody else was ever meant to
+  read a draft. Notes they published stay, and show no author, in the same way
+  a restored event shows history from somebody who has since left.
+
 ## [1.0.4za] — 2026-09-18
 You can see and grab every scrollbar again.
 

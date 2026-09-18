@@ -29,8 +29,17 @@ class Note(Base):
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # ─── Author ───
-    author_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    # v1.0.4zb (USER-1): nullable, with ON DELETE SET NULL. A published note
+    # outlives the person who wrote it and shows no author, exactly as
+    # v1.0.4t does for history from a departed user; authorship is never
+    # reassigned, because that would make the record say somebody wrote what
+    # they did not. Unpublished notes are swept before the user row goes
+    # (api/users.py), so a null author here always means a PUBLISHED note —
+    # which matters, because the visibility rule is "published, or mine" and
+    # a null author matches nobody.
+    author_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     # ─── Timestamps ───

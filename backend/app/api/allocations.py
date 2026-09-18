@@ -15,7 +15,7 @@ from app.api.deps import get_current_user, ensure_event_writable, require_event_
 from app.services.permissions import get_event_permissions, has_write
 from app.services.engine_service import run_engine, commit_proposal, clear_category_allocations
 from app.services.allocation_service import (
-    create_category, list_categories, update_category, delete_category,
+    create_category, list_categories, update_category, delete_category, get_category,
     create_unit, list_units, get_unit, delete_unit, update_unit,
     assign_participant, move_participant, unassign_participant,
     get_allocations_by_category, get_all_allocations,
@@ -133,6 +133,25 @@ async def api_list_categories_public(
     return [{"id": str(c["id"]), "name": c["name"], "item_label": c.get("item_label", "")} for c in cats]
 
 
+async def _category_as_listed(db: AsyncSession, event_id: uuid.UUID, category_id):
+    """The category in the shape `list_categories()` uses (v1.0.4zb, DASH-2).
+
+    Create and update used to answer with the raw ORM row, which carries none
+    of the aggregates the list adds — `unit_count`, `allocated_count`,
+    `placed_people_count`, `excluded_count`, `total_capacity`. Two endpoints
+    answering differently about the same thing is a trap for whichever caller
+    stops re-listing first, so all three now speak one shape.
+
+    One extra query. Falls back to the raw row if the category somehow is not
+    in the list, so a caller never gets nothing.
+    """
+    listed = await list_categories(db, event_id)
+    for entry in listed:
+        if str(entry["id"]) == str(category_id):
+            return entry
+    return await get_category(db, category_id)
+
+
 @router.post("/allocation-categories/", status_code=201)
 async def api_create_category(
     event_id: uuid.UUID,
@@ -154,7 +173,8 @@ async def api_create_category(
         max_so = result.scalar()
         payload["sort_order"] = (max_so if max_so is not None else -1) + 1
     await _publish_organise_change(event_id, "category_created")
-    return await create_category(db, event_id, **payload)
+    created = await create_category(db, event_id, **payload)
+    return await _category_as_listed(db, event_id, created.id)
 
 
 @router.get("/allocation-categories/export")
@@ -200,7 +220,8 @@ async def api_update_category(
 ):
     await ensure_event_writable(db, event_id, current_user)
     await _publish_organise_change(event_id, "category_updated")
-    return await update_category(db, category_id, **data.model_dump(exclude_unset=True))
+    await update_category(db, category_id, **data.model_dump(exclude_unset=True))
+    return await _category_as_listed(db, event_id, category_id)
 
 
 @router.delete("/allocation-categories/{category_id}", status_code=204)

@@ -10,7 +10,7 @@ user context (tests, migrations).
 
 import uuid
 
-from sqlalchemy import select, func, case
+from sqlalchemy import select, func, case, distinct
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import MoimioAppError
@@ -23,7 +23,7 @@ from app.models.allocation_unit import AllocationUnit
 from app.models.allocation import Allocation
 from app.models.allocation_category_exclusion import AllocationCategoryExclusion
 from app.models.allocation_event import AllocationEventSource, AllocationEventType
-from app.models.participant import Participant
+from app.models.participant import Participant, RegistrationStatus
 from app.services.allocation_events_service import record_allocation_event
 
 logger = get_logger(__name__)
@@ -95,15 +95,53 @@ async def list_categories(db: AsyncSession, event_id: uuid.UUID) -> list[dict]:
     )
     alloc_counts = {row.category_id: row.allocated_count for row in allocs_q.all()}
 
+    # Aggregate 2b (v1.0.4zb, DASH-1): distinct PEOPLE placed per category.
+    # `allocated_count` above counts allocation ROWS and must keep doing so —
+    # the units grid wants places used. But an overlapping group type lets one
+    # person hold several places, so subtracting rows from a head-count
+    # under-reported the unassigned figure and, once rows passed people, went
+    # below zero. The dashboard tile subtracts THIS one.
+    placed_q = await db.execute(
+        select(
+            AllocationUnit.category_id,
+            func.count(distinct(Allocation.participant_id)).label("placed_people"),
+        )
+        .select_from(Allocation)
+        .join(AllocationUnit, Allocation.unit_id == AllocationUnit.id)
+        .where(AllocationUnit.category_id.in_(cat_ids))
+        .group_by(AllocationUnit.category_id)
+    )
+    placed_people = {row.category_id: row.placed_people for row in placed_q.all()}
+
     # Aggregate 3 (v1.0.4i): excluded participants per category. Kept as
     # its own query for the same reason as the other two: joining it in
     # would multiply rows.
+    #
+    # v1.0.4zb (DASH-3, ruled option A): count only exclusions belonging to
+    # somebody still on the roster. Nothing removes an exclusion row when a
+    # participant leaves — cancelling sets a status and soft-deleting stamps
+    # `deleted_at`, and both leave the row behind. Two surfaces subtract this
+    # number from a total they have ALREADY filtered by status, so each stale
+    # row was taken off twice.
+    #
+    # Filtered rather than deleted, deliberately: an exclusion records what an
+    # organiser decided about a person, and an unrelated change to that
+    # person's registration status must not erase it. Same reasoning as
+    # v1.0.4v, which put exclusions into both people exports.
     excl_q = await db.execute(
         select(
             AllocationCategoryExclusion.allocation_category_id,
             func.count(AllocationCategoryExclusion.id).label("excluded_count"),
         )
-        .where(AllocationCategoryExclusion.allocation_category_id.in_(cat_ids))
+        .join(
+            Participant,
+            AllocationCategoryExclusion.participant_id == Participant.id,
+        )
+        .where(
+            AllocationCategoryExclusion.allocation_category_id.in_(cat_ids),
+            Participant.deleted_at.is_(None),
+            Participant.registration_status != RegistrationStatus.CANCELLED,
+        )
         .group_by(AllocationCategoryExclusion.allocation_category_id)
     )
     excl_counts = {row.allocation_category_id: row.excluded_count for row in excl_q.all()}
@@ -127,6 +165,8 @@ async def list_categories(db: AsyncSession, event_id: uuid.UUID) -> list[dict]:
             "sort_order": cat.sort_order, "is_default": cat.is_default,
             "confirmed": cat.confirmed,
             "unit_count": unit_count, "allocated_count": allocated,
+            # v1.0.4zb (DASH-1): distinct people, for anything that subtracts.
+            "placed_people_count": placed_people.get(cat.id, 0),
             "excluded_count": excl_counts.get(cat.id, 0),
             "total_capacity": total_capacity if has_total else None,
             # v1.0.4: present means "this name is ours, render it translated".
