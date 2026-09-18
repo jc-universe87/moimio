@@ -455,7 +455,12 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   // two gave a tight one. Nothing was ever stored per event.
   // The value is written imperatively, so React cannot clear it — cleanup does.
   useEffect(() => {
-    if (isMobileView || panelFloating) return;
+    // v1.0.4x (PANEL-2): with no units the right panel is not a grid at all,
+    // it is the empty-state card — about 170px. Clamping a list of ninety-seven
+    // people to that is worse than not clamping. React runs the previous
+    // cleanup before re-running this effect, so losing the last unit releases
+    // the clamp rather than keeping a stale one.
+    if (isMobileView || panelFloating || units.length === 0) return;
     const rightEl = rightPanelRef.current;
     const leftEl = leftPanelRef.current;
     if (!rightEl || !leftEl) return;
@@ -2363,6 +2368,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
             selectedIds={selectedPeople}
             onToggleSelect={toggleSelect}
             onInclude={handleInclude}
+            onOpenInsight={setInsightParticipant}
             onDropExclude={handleDropExclude}
             onDragEnterBlock={() => setDragOverUnit(null)}
           />

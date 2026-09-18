@@ -8,6 +8,28 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4x] — 2026-09-18
+The list of excluded people, rebuilt in one pass.
+
+### Fixed
+
+- **Excluded people's names are readable again.** The word beside each name has
+  become a small button, so the name has the room it needed. In German, where
+  that word was longest, most names were being cut short.
+
+- **You can open an excluded person's details** from the list, the same way you
+  can anywhere else on the board: their contact details, their notes and their
+  history. Somebody excluded from one group type is still taking part in the
+  event, and their record should not become hard to reach because of it.
+
+- **A long excluded list stays inside its card** and scrolls, instead of running
+  off the bottom of it. Twenty-six excluded people used to spill out onto the
+  page.
+
+- **The people list no longer shrinks to nothing** on a group type that has no
+  rooms or groups set up yet. It was being matched to the height of the "add
+  your first one" card beside it.
+
 ## [1.0.4w] — 2026-09-18
 Screens that had stopped fitting, a name that changed when you opened it, and a quieter log.
 

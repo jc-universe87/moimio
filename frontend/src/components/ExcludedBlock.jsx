@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { useI18n } from '../hooks/useI18n';
 
+// v1.0.4x: same test the board uses to gate its drag affordances (see
+// AllocationBoard.jsx:31). Hover-revealed controls are unreachable without a
+// hover, so where there is none both controls stay visible instead.
+const HAS_FINE_POINTER = typeof window !== 'undefined'
+  && typeof window.matchMedia === 'function'
+  && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
 /**
  * ExcludedBlock — the participants kept out of this group type.
  *
@@ -16,6 +23,26 @@ import { useI18n } from '../hooks/useI18n';
  * Every chip carries its own undo control. An exclusion that cannot be
  * found cannot be reversed, and reversibility is the whole reason this
  * block exists rather than the excluded simply vanishing from the pool.
+ *
+ * v1.0.4x — one pass over the row (EXCL-2, EXCL-3). The undo control used
+ * to be a WORD beside a truncating name, and in a 256px panel the longer
+ * locales left the name barely readable. It is now a glyph, and the name
+ * has the row to itself. A details control joins it, so an excluded
+ * person's panel is reachable from here as it is from every other row on
+ * the board. Both are revealed on hover and on keyboard focus, the idiom
+ * the board names at AllocationBoard.jsx:2318-2321, and both stay visible
+ * where there is no hover.
+ *
+ * No new string: the undo control already carried
+ * `organise.exclude.undo_title` as its accessible name, so a screen reader
+ * hears exactly what it heard before, and the details control reuses
+ * `insight.open`. `organise.exclude.undo`, the old visible word, is now
+ * rendered nowhere — it is deleted with the rest of release z's batch, not
+ * here, because the six locale files are that release's.
+ *
+ * Drag OUT of the block was considered and dropped for good (EXCL-1): the
+ * stopPropagation calls below are what stop a drop vanishing into the
+ * panel behind, and letting a drag escape would mean unpicking them.
  *
  * DROP TARGET — and the trap it avoids. The left panel's root element
  * carries onDragOver / onDrop for "drop here to unassign", so anything
@@ -35,12 +62,23 @@ import { useI18n } from '../hooks/useI18n';
  *   onToggleSelect  — (participantId) => void; same handler the pool
  *                     chips use
  *   onInclude       — (participantId) => void; lift one exclusion
+ *   onOpenInsight   — (participant) => void; v1.0.4x. Opens the same
+ *                     InsightPanel the pool chips open. Somebody excluded
+ *                     from one group type is still a participant of the
+ *                     event, and their details and history must not become
+ *                     unreachable because of it.
  *   onDropExclude   — () => void; a participant was dropped on the block
  *   onDragEnterBlock— () => void; lets the board clear the pool's own
  *                     drop highlight, which may already be lit from the
  *                     pointer passing over the pool on its way here
  */
-export default function ExcludedBlock({ people, canEdit, selectedIds, onToggleSelect, onInclude, onDropExclude, onDragEnterBlock }) {
+// Revealed on hover and on keyboard focus anywhere in the row; always
+// visible where there is no hover to reveal them with.
+const REVEAL = HAS_FINE_POINTER
+  ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+  : 'opacity-100';
+
+export default function ExcludedBlock({ people, canEdit, selectedIds, onToggleSelect, onInclude, onOpenInsight, onDropExclude, onDragEnterBlock }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -104,7 +142,8 @@ export default function ExcludedBlock({ people, canEdit, selectedIds, onToggleSe
       )}
 
       {open && (
-        <div className="flex flex-col gap-0.5 px-1.5 pb-1.5">
+        <div className="flex flex-col gap-0.5 px-1.5 pb-1.5 overflow-y-auto"
+          style={{ maxHeight: '40vh', overscrollBehavior: 'contain' }}>
           {list.map(p => {
           const pid = String(p.id);
           const isSel = !!(selectedIds && selectedIds.has(pid));
@@ -116,17 +155,30 @@ export default function ExcludedBlock({ people, canEdit, selectedIds, onToggleSe
                 ? { background: 'rgba(70,130,180,0.12)', boxShadow: 'inset 0 0 0 1px var(--io-accent)', color: 'var(--text-primary)' }
                 : { background: 'rgba(0,0,0,0.03)', color: 'var(--text-muted)' }}>
               <span className="truncate">{p.first_name} {p.last_name}</span>
-              {canEdit && (
+              <span className="flex items-center shrink-0">
+                {/* Details. Always offered, including on read-only
+                    surfaces: reading somebody's panel is not a write. */}
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); if (onInclude) onInclude(pid); }}
-                  aria-label={t('organise.exclude.undo_title')}
-                  title={t('organise.exclude.undo_title')}
-                  className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-card hover:bg-black/5 dark:hover:bg-white/10"
-                  style={{ color: 'var(--io-accent)' }}>
-                  {t('organise.exclude.undo')}
+                  onClick={(e) => { e.stopPropagation(); if (onOpenInsight) onOpenInsight(p); }}
+                  aria-label={t('insight.open')}
+                  title={t('insight.open')}
+                  className={`shrink-0 text-[12px] leading-none px-1 transition-opacity focus:opacity-100 ${REVEAL}`}
+                  style={{ color: 'var(--text-subtle)' }}>
+                  ⓘ
                 </button>
-              )}
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); if (onInclude) onInclude(pid); }}
+                    aria-label={t('organise.exclude.undo_title')}
+                    title={t('organise.exclude.undo_title')}
+                    className={`shrink-0 text-[12px] leading-none px-1 transition-opacity focus:opacity-100 ${REVEAL}`}
+                    style={{ color: 'var(--io-accent)' }}>
+                    ↩
+                  </button>
+                )}
+              </span>
             </div>
           );
           })}
