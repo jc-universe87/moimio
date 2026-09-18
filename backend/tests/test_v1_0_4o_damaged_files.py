@@ -51,7 +51,12 @@ from tests.test_v1_0_4o_round_trip import _build
 pytestmark = pytest.mark.asyncio
 
 EXCL_MEMBER = "allocation_exclusions.json"
-REFUSAL_KEY = "errors.export.zip_missing_files"
+# v1.0.4ze (STRINGS-1): its own key at last. This used to borrow
+# `zip_missing_files`, which said "missing" about a member that is
+# present and unreadable — so an organiser went looking for a file that
+# was there. `zip_missing_files` still exists and is still correct for a
+# member that genuinely is not in the archive.
+REFUSAL_KEY = "errors.export.zip_unreadable"
 
 
 # ─── ZIP surgery ──────────────────────────────────────────────────────

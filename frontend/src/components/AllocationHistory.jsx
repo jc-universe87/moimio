@@ -4,6 +4,7 @@ import { useI18n } from '../hooks/useI18n';
 import { formatRelativeTime } from '../utils/relativeTime';
 import { reasoningLine } from '../services/placementReason';
 import { formatNamesList } from '../utils/formatNamesList';
+import { useDateFormat } from '../hooks/useDateFormat';
 
 /**
  * AllocationHistory — per-participant audit timeline.
@@ -257,9 +258,10 @@ export function collapseMoves(rows) {
 }
 
 function HistoryItem({ item, t, lang, participantId }) {
+  const { formatDateTime } = useDateFormat();
   const rel = formatRelativeTime(item.occurred_at, lang, t('history.justNow'));
   const absoluteTitle = item.occurred_at
-    ? new Date(item.occurred_at).toLocaleString()
+    ? formatDateTime(item.occurred_at)
     : '';
 
   // v1.0.4k: `exclude` and `include` rows have been written since

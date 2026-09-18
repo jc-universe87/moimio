@@ -39,10 +39,16 @@ callsite mentioned in a comment will be checked. This is intentional:
 keep the validator simple and the codebase free of stale references
 even in comments.
 
-Parity between en.json and the other 5 locale files is NOT checked
-here — that's the splitter's responsibility (split-translations.py),
-and during v0.70 the non-EN locales are deliberately stale pending
-the operator's translation-overhaul ship.
+Parity between en.json and the other five IS checked, from v1.0.4ze.
+
+It was not before: the note here said parity was the splitter's
+business and that the non-EN locales were deliberately stale pending a
+translation overhaul. That overhaul happened (v1.0.4ze delivered every
+outstanding string in all six at once), and the files are in sync — so
+the check that would have been noise before is a real guard now. A key
+present in en.json and missing from German is a bracketed raw key on
+a German screen, which is exactly the class of bug this script exists
+to catch, in the one direction it could not see.
 """
 
 import argparse
@@ -211,6 +217,37 @@ def check_default_type_names(quiet: bool) -> bool:
     return False
 
 
+OTHER_LANGS = ["de", "ko", "es", "fr", "pt-BR"]
+
+
+def check_locale_parity(en_keys: set) -> list:
+    """Every key in en.json must exist in all five other locale files, and
+    none of them may carry a key English does not.
+
+    Returns a list of human-readable problems; empty means they agree.
+    """
+    problems = []
+    for lang in OTHER_LANGS:
+        path = EN_JSON.parent / f"{lang}.json"
+        if not path.exists():
+            problems.append(f"{lang}.json is missing entirely")
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            problems.append(f"{lang}.json is not valid JSON: {e}")
+            continue
+        if not isinstance(data, dict):
+            problems.append(f"{lang}.json must be a flat object")
+            continue
+        keys = set(data)
+        for k in sorted(en_keys - keys):
+            problems.append(f"{lang}.json is missing {k!r}")
+        for k in sorted(keys - en_keys):
+            problems.append(f"{lang}.json has {k!r}, which en.json does not")
+    return problems
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -231,6 +268,10 @@ def main() -> None:
 
     en_keys = load_en_keys()
 
+    # v1.0.4ze: parity across all six. Same failure as a missing English
+    # key, one language further out.
+    parity_problems = check_locale_parity(en_keys)
+
     all_static, all_template, all_var = [], [], []
     for path in iter_source_files():
         s, t, v = scan_file(path)
@@ -248,8 +289,9 @@ def main() -> None:
             "template_callsites": all_template,
             "var_callsites": all_var,
             "misses": misses,
+            "locale_parity": parity_problems,
         }, indent=2))
-        sys.exit(1 if misses else 0)
+        sys.exit(1 if (misses or parity_problems) else 0)
 
     # Human-readable mode
     if not args.quiet:
@@ -286,8 +328,19 @@ def main() -> None:
     if drift:
         sys.exit(1)
 
+    # v1.0.4ze: parity across all six locale files.
+    if parity_problems:
+        for msg in parity_problems:
+            print(f"  {msg}", file=sys.stderr)
+        print("A key present in en.json and missing elsewhere renders as a "
+              "bracketed raw key on that language's screens.", file=sys.stderr)
+        print("Add it to all six files (per TRANSLATION_RULE.md), or remove "
+              "it from all six.", file=sys.stderr)
+        sys.exit(1)
+
     if not args.quiet:
-        print("validate-i18n-keys: OK — every static callsite resolves.")
+        print("validate-i18n-keys: OK — every static callsite resolves, "
+              "and all six locale files agree.")
     sys.exit(0)
 
 

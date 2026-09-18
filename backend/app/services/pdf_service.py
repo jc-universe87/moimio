@@ -142,6 +142,9 @@ PDF_TRANSLATIONS: dict[str, dict[str, str]] = {
         "cover.tagline":        "Gathered for {event}  ·  moimio.app",
         "footer.page":          "Page {n} of {total}",
         "unallocated.banner":   "NEEDS ALLOCATION  ·  {n} {people}",
+        "unallocated.page_title": "NOT ALLOCATED",
+        "unallocated.excluded":  "EXCLUDED  ·  {n} {people}",
+        "unallocated.unplaced":  "NOT PLACED  ·  {n} {people}",
         "unallocated.person":   "person",
         "unallocated.people":   "people",
         "units.empty":          "No groups defined.",
@@ -170,6 +173,9 @@ PDF_TRANSLATIONS: dict[str, dict[str, str]] = {
         "cover.tagline":        "Erstellt für {event}  ·  moimio.app",
         "footer.page":          "Seite {n} von {total}",
         "unallocated.banner":   "ZUTEILUNG OFFEN  ·  {n} {people}",
+        "unallocated.page_title": "NICHT ZUGETEILT",
+        "unallocated.excluded":  "AUSGENOMMEN  ·  {n} {people}",
+        "unallocated.unplaced":  "NICHT ZUGETEILT  ·  {n} {people}",
         "unallocated.person":   "Person",
         "unallocated.people":   "Personen",
         "units.empty":          "Keine Gruppen definiert.",
@@ -198,6 +204,9 @@ PDF_TRANSLATIONS: dict[str, dict[str, str]] = {
         "cover.tagline":        "{event}을(를) 위해 · moimio.app",
         "footer.page":          "{n} / {total} 쪽",
         "unallocated.banner":   "배정 필요  ·  {n}{people}",
+        "unallocated.page_title": "미배정",
+        "unallocated.excluded":  "제외됨  ·  {n}{people}",
+        "unallocated.unplaced":  "배정 안 됨  ·  {n}{people}",
         "unallocated.person":   "명",
         "unallocated.people":   "명",
         "units.empty":          "그룹이 정의되지 않았습니다.",
@@ -226,6 +235,9 @@ PDF_TRANSLATIONS: dict[str, dict[str, str]] = {
         "cover.tagline":        "Reunidos para {event}  ·  moimio.app",
         "footer.page":          "Página {n} de {total}",
         "unallocated.banner":   "POR ASIGNAR  ·  {n} {people}",
+        "unallocated.page_title": "SIN ASIGNAR",
+        "unallocated.excluded":  "EXCLUIDOS  ·  {n} {people}",
+        "unallocated.unplaced":  "SIN UBICAR  ·  {n} {people}",
         "unallocated.person":   "persona",
         "unallocated.people":   "personas",
         "units.empty":          "Sin grupos definidos.",
@@ -254,6 +266,9 @@ PDF_TRANSLATIONS: dict[str, dict[str, str]] = {
         "cover.tagline":        "Reunidos para {event}  ·  moimio.app",
         "footer.page":          "Página {n} de {total}",
         "unallocated.banner":   "PRECISAM DE ALOCAÇÃO  ·  {n} {people}",
+        "unallocated.page_title": "NÃO ALOCADOS",
+        "unallocated.excluded":  "EXCLUÍDOS  ·  {n} {people}",
+        "unallocated.unplaced":  "SEM VAGA  ·  {n} {people}",
         "unallocated.person":   "pessoa",
         "unallocated.people":   "pessoas",
         "units.empty":          "Nenhum grupo definido.",
@@ -282,6 +297,9 @@ PDF_TRANSLATIONS: dict[str, dict[str, str]] = {
         "cover.tagline":        "Rassemblés pour {event}  ·  moimio.app",
         "footer.page":          "Page {n} sur {total}",
         "unallocated.banner":   "À RÉPARTIR  ·  {n} {people}",
+        "unallocated.page_title": "NON RÉPARTIS",
+        "unallocated.excluded":  "EXCLUS  ·  {n} {people}",
+        "unallocated.unplaced":  "NON PLACÉS  ·  {n} {people}",
         "unallocated.person":   "personne",
         "unallocated.people":   "personnes",
         "units.empty":          "Aucun groupe défini.",
@@ -582,6 +600,20 @@ async def _build_category_data(
         and p.registration_status.value != "cancelled"
     ]
 
+    # v1.0.4ze (PDF-3): split the unallocated in two. Until now the roster
+    # lumped together somebody the organiser deliberately kept out of this
+    # group type and somebody the engine simply could not place, which are
+    # different facts and want different answers on the day.
+    #
+    # Reuses the service the exclusion work already built rather than a
+    # fourth query over the same table.
+    from app.services.allocation_service import list_excluded_participant_ids
+    excluded_ids = {
+        str(pid) for pid in await list_excluded_participant_ids(db, category_id)
+    }
+    excluded = [p for p in unallocated if str(p.id) in excluded_ids]
+    unplaced = [p for p in unallocated if str(p.id) not in excluded_ids]
+
     confirmed_total = len([
         p for p in all_participants
         if p.registration_status and p.registration_status.value != "cancelled"
@@ -642,6 +674,9 @@ async def _build_category_data(
         "units": units,
         "unit_members": unit_members,
         "unallocated": unallocated,
+        # v1.0.4ze (PDF-3)
+        "excluded": excluded,
+        "unplaced": unplaced,
         "confirmed_total": confirmed_total,
         "allocated_total": len(allocated_pids),
         # v0.87 #27: marks data for the renderer.
@@ -844,9 +879,52 @@ def _draw_cover(pdf: MoimioPDF, data: dict, exported_by: str | None) -> None:
     pdf.set_auto_page_break(auto=prev_auto_break, margin=prev_break_margin)
 
 
+def _render_not_allocated_page(pdf: MoimioPDF, data: dict, compact: bool) -> None:
+    """The "Not allocated" page: two labelled blocks, the excluded and the
+    engine-unplaced. v1.0.4ze (PDF-3).
+
+    The second block is omitted entirely when nobody is unplaced — an empty
+    band saying nothing is worse than no band. The page itself is omitted
+    when neither block has anybody in it, which is the ordinary case for a
+    finished allocation.
+
+    The sign-in sheet gets this page too, for the first time: somebody who
+    is not in a group still walks through the door, and the person on the
+    desk needs a line to tick.
+    """
+    excluded = data.get("excluded") or []
+    unplaced = data.get("unplaced") or []
+    if not excluded and not unplaced:
+        return
+
+    pdf.add_page()
+    pdf.set_font(pdf._font_family, "B", 14)
+    pdf.set_text_color(*DEEP_NAVY)
+    pdf.cell(0, 8, pdf.safe(_pdf_t(pdf.lang, "unallocated.page_title")),
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+    if excluded:
+        _render_unallocated_block(pdf, excluded, compact,
+                                  label_key="unallocated.excluded")
+        pdf.ln(3)
+    if unplaced:
+        _render_unallocated_block(pdf, unplaced, compact,
+                                  label_key="unallocated.unplaced")
+
+
 # ─── Unallocated block ───────────────────────────────────────────────────
-def _render_unallocated_block(pdf: MoimioPDF, unallocated: list, compact: bool) -> None:
-    """Burgundy-banded unallocated section. Rendered before units."""
+def _render_unallocated_block(
+    pdf: MoimioPDF, unallocated: list, compact: bool,
+    label_key: str = "unallocated.banner",
+) -> None:
+    """Burgundy-banded section of people who are not in a group.
+
+    v1.0.4ze (PDF-3): `label_key` names the band, so the same renderer draws
+    "EXCLUDED" and "NOT PLACED" as well as the original combined banner.
+    Names only, no reasons — the page says who is not placed, not why, which
+    is a conversation and not a column.
+    """
     banner_h = 8
     x0 = pdf.get_x()
     y0 = pdf.get_y()
@@ -861,7 +939,7 @@ def _render_unallocated_block(pdf: MoimioPDF, unallocated: list, compact: bool) 
     people_word = _pdf_t(pdf.lang, "unallocated.person" if n == 1 else "unallocated.people")
     pdf.cell(
         0, 5,
-        pdf.safe(_pdf_t(pdf.lang, "unallocated.banner", n=n, people=people_word)),
+        pdf.safe(_pdf_t(pdf.lang, label_key, n=n, people=people_word)),
     )
     pdf.set_xy(x0, y0 + banner_h + 1.5)
 
@@ -909,9 +987,6 @@ def render_compact(
         _draw_cover(pdf, data, exported_by)
     pdf.add_page()
 
-    if data["unallocated"]:
-        _render_unallocated_block(pdf, data["unallocated"], compact=True)
-        pdf.ln(4)
 
     if not data["units"]:
         pdf.set_font(pdf._font_family, "I", 10)
@@ -973,6 +1048,11 @@ def render_compact(
 
     # v0.87 #27: marks legend at the bottom of the PDF (no-op if no marks).
     _render_marks_legend(pdf, data.get("legend_marks") or [])
+
+    # v1.0.4ze (PDF-3): the "Not allocated" page, last, so the groups
+    # come first and this reads as an appendix. Draws nothing when
+    # everybody is placed.
+    _render_not_allocated_page(pdf, data, compact=True)
 
     return bytes(pdf.output())
 
@@ -1150,9 +1230,6 @@ def render_detailed(
         _draw_cover(pdf, data, exported_by)
     pdf.add_page()
 
-    if data["unallocated"]:
-        _render_unallocated_block(pdf, data["unallocated"], compact=False)
-        pdf.ln(4)
 
     if not data["units"]:
         pdf.set_font(pdf._font_family, "I", 10)
@@ -1275,6 +1352,11 @@ def render_detailed(
 
     # v0.87 #27: marks legend.
     _render_marks_legend(pdf, data.get("legend_marks") or [])
+
+    # v1.0.4ze (PDF-3): the "Not allocated" page, last, so the groups
+    # come first and this reads as an appendix. Draws nothing when
+    # everybody is placed.
+    _render_not_allocated_page(pdf, data, compact=False)
 
     return bytes(pdf.output())
 
@@ -1446,6 +1528,11 @@ def render_signin(
 
     # v0.87 #27: marks legend.
     _render_marks_legend(pdf, data.get("legend_marks") or [])
+
+    # v1.0.4ze (PDF-3): the "Not allocated" page, last, so the groups
+    # come first and this reads as an appendix. Draws nothing when
+    # everybody is placed.
+    _render_not_allocated_page(pdf, data, compact=True)
 
     return bytes(pdf.output())
 

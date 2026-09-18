@@ -30,6 +30,12 @@ function RegisterForm() {
   });
   const [customValues, setCustomValues] = useState({});
   const [error, setError] = useState(null);
+  // v1.0.4ze (FORM-1, D7): the main form's own field errors, keyed by
+  // field name. Set either by the pre-flight below or by the server's
+  // per-field map; cleared as the registrant types. The extra-person
+  // cards have had exactly this since v0.70d-3c-8a — it was simply
+  // never applied to the form's own boxes.
+  const [fieldErrors, setFieldErrors] = useState({});
   const [success, setSuccess] = useState(false);
   const [confirmationRequired, setConfirmationRequired] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -81,6 +87,8 @@ function RegisterForm() {
         if (catRes.ok) setCategories(await catRes.json());
       }
     } catch (err) {
+      // v1.0.4ze (FORM-1): mark the boxes the server named.
+      if (err?.fieldErrors) setFieldErrors(err.fieldErrors);
       setError(err);
     } finally {
       setLoading(false);
@@ -134,6 +142,22 @@ function RegisterForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    setFieldErrors({});
+    // v1.0.4ze (FORM-1, D7): catch an obviously wrong address before the
+    // round trip. Deliberately the loosest possible shape test — something
+    // before an @, something after it, a dot and at least two more
+    // characters. It is not here to be clever about what an address may
+    // legally be; it is here to catch "rest@gmail.com3242" without ever
+    // rejecting a real one. Anything subtler is the server's business, and
+    // the server now answers in a language the registrant reads.
+    const email = (formData.email || '').trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      setFieldErrors({ email: 'errors.field.email' });
+      setError({ i18nKey: 'errors.validation.summary' });
+      document.getElementById('register-error-banner')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     setSubmitting(true);
     try {
       // v0.70d-3c-9: pre-flight runs FIRST, before any submission
@@ -454,7 +478,24 @@ function RegisterForm() {
               <label className="block text-sm font-semibold text-gray-600 mb-1">
                 {t('register.email')} <span style={{ color: 'var(--alert-burgundy)' }}>*</span>
               </label>
-              <input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} />
+              <input type="email" name="email" value={formData.email}
+                onChange={(e) => {
+                  if (fieldErrors.email) {
+                    setFieldErrors(prev => { const n = { ...prev }; delete n.email; return n; });
+                  }
+                  handleChange(e);
+                }}
+                required aria-invalid={!!fieldErrors.email}
+                className={fieldErrors.email
+                  ? `${inputClass} border-2`
+                  : inputClass}
+                style={fieldErrors.email
+                  ? { borderColor: 'var(--alert-burgundy)' } : undefined} />
+              {fieldErrors.email && (
+                <p className="text-xs mt-1" style={{ color: 'var(--alert-burgundy)' }}>
+                  {t(fieldErrors.email)}
+                </p>
+              )}
             </div>
 
             {/* Optional built-in fields */}

@@ -1,5 +1,6 @@
 import { useI18n } from '../hooks/useI18n';
 import { formatRelativeTime } from '../utils/relativeTime';
+import { useDateFormat } from '../hooks/useDateFormat';
 
 /**
  * MarkAssignModal — assign/unassign marks to a participant.
@@ -22,6 +23,7 @@ export default function MarkAssignModal({
   canAssign = true,
 }) {
   const { t, lang } = useI18n();
+  const { formatDateTime } = useDateFormat();
   const pid = String(participant.id);
 
   // Quick lookup: markId → the (single) assignment row for THIS participant.
@@ -94,7 +96,7 @@ export default function MarkAssignModal({
                   ? formatRelativeTime(assignment.assigned_at, lang, justNow)
                   : null;
                 auditTooltip = assignment.assigned_at
-                  ? new Date(assignment.assigned_at).toLocaleString()
+                  ? formatDateTime(assignment.assigned_at)
                   : null;
                 if (assignment.assigned_by_name && rel) {
                   auditLine = t('marks.assigned_by_and_time', {

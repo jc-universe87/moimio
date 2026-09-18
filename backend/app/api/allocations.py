@@ -448,6 +448,35 @@ async def api_add_exclusion(
     current_user: User = Depends(require_event_admin_dep()),
 ):
     await ensure_event_writable(db, event_id, current_user)
+
+    from app.models.allocation import Allocation
+    from app.models.allocation_unit import AllocationUnit
+
+    # v1.0.4ze (K-1): which KEPT units this is about to empty.
+    #
+    # Excluding somebody takes them out of every unit they hold in this
+    # group type, a locked one included (v1.0.4j, deliberately). The unit's
+    # lock stays on, so the place they vacated stays empty across engine
+    # runs and nothing on screen connects the two — an organiser sees a
+    # locked room with a free bed and no reason for it.
+    #
+    # Read here rather than inside `add_exclusion` because that function has
+    # 39 callers and changing its return type would reach into six
+    # signed-off test files for a message.
+    kept_q = await db.execute(
+        select(AllocationUnit.id, AllocationUnit.name)
+        .join(Allocation, Allocation.unit_id == AllocationUnit.id)
+        .where(
+            Allocation.participant_id == data.participant_id,
+            AllocationUnit.category_id == category_id,
+            AllocationUnit.is_kept.is_(True),
+        )
+        .order_by(AllocationUnit.sort_order)
+    )
+    vacated_kept = [
+        {"id": str(uid), "name": name} for uid, name in kept_q.all()
+    ]
+
     row = await add_exclusion(
         db, category_id, data.participant_id, actor_user_id=current_user.id
     )
@@ -459,6 +488,8 @@ async def api_add_exclusion(
         "id": str(row.id),
         "category_id": str(row.allocation_category_id),
         "participant_id": str(row.participant_id),
+        # Empty in the ordinary case; the screen says nothing then.
+        "vacated_kept_units": vacated_kept,
     }
 
 

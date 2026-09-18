@@ -6,6 +6,7 @@ import { useConfirmOverlay } from '../components/ConfirmOverlay';
 import WebhookSecretModal from '../components/WebhookSecretModal';
 import EmptyState from '../components/EmptyState';
 import TranslatedError from '../components/TranslatedError';
+import { useDateFormat } from '../hooks/useDateFormat';
 
 /**
  * WebhooksPage — v1.0.0g.
@@ -23,6 +24,7 @@ import TranslatedError from '../components/TranslatedError';
  */
 export default function WebhooksPage() {
   const { t } = useI18n();
+  const { formatDateTime } = useDateFormat();
   const { user } = useAuth();
   const { confirm, ConfirmOverlay } = useConfirmOverlay();
 
@@ -624,8 +626,8 @@ function DeliveriesPanel({ loading, deliveries, onRefresh, t }) {
                     style={{ color: 'var(--text-subtle)' }}
                   >
                     {d.attempted_at
-                      ? new Date(d.attempted_at).toLocaleString()
-                      : new Date(d.created_at).toLocaleString()}
+                      ? formatDateTime(d.attempted_at)
+                      : formatDateTime(d.created_at)}
                   </td>
                 </tr>
               ))}

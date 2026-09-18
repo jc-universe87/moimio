@@ -54,6 +54,16 @@ async function request(path, options = {}) {
       // t() can't resolve the key. Use the params dict as a coarse
       // fallback summary.
       message = `[${i18nKey}]`;
+    } else if (Array.isArray(data?.detail)) {
+      // v1.0.4ze (FORM-1): FastAPI's own validation body is a LIST of
+      // {loc, msg, type}. The old `else` below stringified it, which is how
+      // a registrant who mistyped an email address was shown
+      // `"loc":["body","email"]` under a translated heading. The server now
+      // answers in the app's own shape (main.py), so this branch only
+      // catches anything that still slips through — an unconverted endpoint,
+      // or a FastAPI internal — and it must never print the array.
+      i18nKey = 'errors.validation.summary';
+      message = `[${i18nKey}]`;
     } else {
       message = data?.detail || `Request failed (${res.status})`;
     }
@@ -61,6 +71,12 @@ async function request(path, options = {}) {
     httpErr.status = res.status;
     if (i18nKey) {
       httpErr.i18nKey = i18nKey;
+      // v1.0.4ze (FORM-1): the per-field map, when the server sent one. The
+      // form marks the box; `primary` still carries the sentence.
+      if (data?.detail && typeof data.detail === 'object'
+          && data.detail.fields) {
+        httpErr.fieldErrors = data.detail.fields;
+      }
       if (i18nParams) httpErr.i18nParams = i18nParams;
     }
     // v0.70d-2d-1 (L1): 502 / 503 / 504 are upstream-gone scenarios —

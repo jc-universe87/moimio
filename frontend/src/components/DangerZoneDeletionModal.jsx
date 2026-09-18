@@ -117,6 +117,14 @@ function ConfirmView({ t, typed, setTyped, matches, error, submitting, onConfirm
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
           {t('danger_zone.modal.timeline')}
         </p>
+        {/* v1.0.4ze (STRINGS-1): what the export actually contains, said
+            BEFORE they click rather than discovered afterwards. BACKUP-4
+            settled that it carries everyone's notes including private
+            ones; v1.0.4u added the team and webhook reference lists and
+            that restoring applies neither. */}
+        <p className="text-xs text-subtle mb-4 leading-relaxed">
+          {t('danger_zone.modal.export_contents')}
+        </p>
 
         {error && (
           <TranslatedError err={error} variant="compact" />

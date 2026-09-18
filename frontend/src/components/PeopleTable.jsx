@@ -215,7 +215,12 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
   // ↑ shape: null when closed; when open: { participant, field, fieldLabel, oldValue, newValue, payload }
   const [statusEditing, setStatusEditing] = useState(null);
 
-  const { formatDate } = useDateFormat();
+  // v1.0.4ze (DATE-1): this table has `eventId`, not the event, so there is
+  // no zone to pass and the formatter falls back to the user's own — the
+  // documented fallback, not an oversight. Threading the event through
+  // here is a change to a signed-off screen and is filed rather than
+  // taken (DATE-2).
+  const { formatDate, formatTime, formatDateTime } = useDateFormat();
   const { t, lang } = useI18n();
   const { showToast, ToastHost } = useToast();
   const colLabel = (col) => (col.label.includes('.') ? t(col.label) : col.label);
@@ -1021,10 +1026,10 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
           </button>
         );
       case 'registered_at':
-        return <span className="text-xs" style={{ color: 'var(--text-subtle)' }}>{p.created_at ? new Date(p.created_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '—'}</span>;
+        return <span className="text-xs" style={{ color: 'var(--text-subtle)' }}>{p.created_at ? formatDateTime(p.created_at) : '—'}</span>;
       case 'checked_in':
         return p.checked_in
-          ? <span className="text-xs font-semibold" style={{ color: 'var(--io-accent)' }}>✓ {p.checked_in_at ? new Date(p.checked_in_at).toLocaleString(undefined, { timeStyle: 'short' }) : ''}</span>
+          ? <span className="text-xs font-semibold" style={{ color: 'var(--io-accent)' }}>✓ {p.checked_in_at ? formatTime(p.checked_in_at) : ''}</span>
           : <span style={{ color: 'var(--text-subtle)' }}>—</span>;
       case 'notes': {
         const nc = getNoteCount(p.id);

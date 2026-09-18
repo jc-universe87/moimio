@@ -8,6 +8,39 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4ze] — 2026-09-18
+The wording, in one batch, in all six languages.
+
+### Fixed
+
+- **A form that tells you what is wrong,** in your own language, beside the box
+  that is wrong. A mistyped email address used to produce a line of program code
+  under a heading you could read. An obviously wrong address is now caught before
+  anything is sent at all.
+
+- **Dates and times in the format you chose,** everywhere. Several columns
+  ignored the setting completely and used whatever your browser preferred, so a
+  German organiser who had chosen ISO saw American dates. Times are shown in the
+  event's own time zone, with the zone named so nobody has to guess, and always
+  on a 24-hour clock.
+
+- **The roster PDF now has a page for everybody who is not in a group,** split
+  between the people you excluded and the people the allocation could not place.
+  The sign-in sheet has it too, so somebody who is not in a group still has a line
+  to tick at the door.
+
+- **When excluding somebody empties a place in a locked group,** Moimio now says
+  so and offers to unlock it. The place used to stay empty across every run with
+  nothing on screen explaining why.
+
+- **A dozen corrections to wording that was wrong, missing or misleading**, in all
+  six languages. Among them: the backup description no longer claims to carry
+  things it did not; a restore now says how many lines it could not read, shortened
+  or had to fall back on; the restore screen says team roles are not part of a
+  backup, and offers to open the event it just restored rather than sending you to
+  a list to find it; and the leaving screen says what your export will contain
+  before you click, not after.
+
 ## [1.0.4zd] — 2026-09-18
 Deleting a user works, whatever they have done.
 

@@ -31,8 +31,8 @@ const REG_DISPLAY_COLS = [
   { id: 'reg_address', label: 'people.col.address', field: 'address', render: (p) => p.address || '—' },
   { id: 'reg_dob', label: 'people.col.dob', field: 'date_of_birth', render: null }, // uses formatDate
   { id: 'reg_message', label: 'people.col.message', field: 'message', render: (p) => p.message || '—' },
-  { id: 'reg_registered_at', label: 'people.col.registered_at', field: null, render: (p) => p.created_at ? new Date(p.created_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '—' },
-  { id: 'reg_checkin_at', label: 'checkin.col.checkin_time', field: null, render: (p) => p.checked_in_at ? new Date(p.checked_in_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '—' },
+  { id: 'reg_registered_at', label: 'people.col.registered_at', field: null, render: (p, fmt) => p.created_at ? fmt(p.created_at) : '—' },
+  { id: 'reg_checkin_at', label: 'checkin.col.checkin_time', field: null, render: (p, fmt) => p.checked_in_at ? fmt(p.checked_in_at) : '—' },
 ];
 
 export default function CheckInPanel({ eventId, userId, participantList, isAdmin, canCreateColumns, canViewColumns, marksPerm, noteCounts, onOpenNotes }) {
@@ -136,7 +136,9 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
   // removed too. The top-of-panel progress indicator below the
   // search bar uses checkedInCount + activeParticipantList.length
   // directly, no separate fetch needed.
-  const { formatDate } = useDateFormat();
+  // v1.0.4ze (DATE-1): see PeopleTable — `eventId` only, so the user's
+  // zone is the fallback. DATE-2 carries the event through.
+  const { formatDate, formatDateTime } = useDateFormat();
   const { t, lang } = useI18n();
   const colLabel = (label) => label.includes('.') ? t(label) : label;
   const { confirm, ConfirmOverlay } = useConfirmOverlay();
@@ -469,7 +471,7 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
       // v1.0-pre #3: read through getCheckedInAt so optimistic flips show
       // immediately, not only after the parent refetches participantList.
       const ts = getCheckedInAt(p);
-      return <span className="text-muted text-xs">{ts ? new Date(ts).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '—'}</span>;
+      return <span className="text-muted text-xs">{ts ? formatDateTime(ts) : '—'}</span>;
     }
     // v1.0.0e: group_code badge gets a hover/tap tooltip listing the
     // other participants sharing the same code in this event. Special-
@@ -494,7 +496,7 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
       );
     }
     if (!col.render) return <span className="text-muted text-xs">—</span>;
-    return <span className="text-muted text-xs">{col.render(p)}</span>;
+    return <span className="text-muted text-xs">{col.render(p, formatDateTime)}</span>;
   };
 
   return (

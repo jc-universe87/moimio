@@ -1318,14 +1318,15 @@ _MEMBER_INNER: dict[str, tuple[tuple[str, str], ...]] = {
 def _unreadable(*members: str):
     """Refuse the file, naming the members at fault.
 
-    `zip_missing_files` is the closest existing key: it is about the backup
-    ZIP rather than a generic failure, it names the member through its
-    `files` parameter, and it already surfaces as a 422 at both preview and
-    confirm. It says "missing" where the truth is "present but unreadable",
-    which is why STRINGS-1 carries a specific message for this case.
+    v1.0.4ze: its own key at last. This used to borrow
+    `zip_missing_files` — "The backup ZIP is missing files: {files}" — which
+    said "missing" where the truth is "present and unreadable", so an
+    organiser went looking for a file that was there. `zip_missing_files`
+    stays and is still correct for a member that genuinely is not in the
+    archive; this one is for a member that is.
     """
     return MoimioAppError(
-        "errors.export.zip_missing_files",
+        "errors.export.zip_unreadable",
         params={"files": ", ".join(sorted(members))},
         status_code=422,
     )

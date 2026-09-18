@@ -5,6 +5,9 @@ const DateFormatContext = createContext(null);
 
 export function DateFormatProvider({ children }) {
   const [dateFormat, setDateFormat] = useState('DD/MM/YYYY');
+  // v1.0.4ze (DATE-1): the user's zone, as the fallback when an event has
+  // none. Stored since v1.0.0k and, until this release, read by nothing.
+  const [timezone, setTimezone] = useState(null);
 
   const loadPrefs = useCallback(async () => {
     // Only try if we have a token
@@ -12,6 +15,7 @@ export function DateFormatProvider({ children }) {
     try {
       const data = await prefsApi.get();
       if (data?.date_format) setDateFormat(data.date_format);
+      if (data?.timezone) setTimezone(data.timezone);
     } catch {
       // Not logged in or prefs not available
     }
@@ -44,12 +48,90 @@ export function DateFormatProvider({ children }) {
     }
   }, [dateFormat]);
 
+  // v1.0.4ze (DATE-1). `formatDate` takes a date and returns a date; the
+  // columns that needed a TIME called the browser's own formatter with
+  // `undefined` as the locale, which means "whatever this browser thinks" —
+  // which is how a German organiser with ISO selected saw `7/10/26, 2:09 PM`.
+  //
+  // Decisions this implements, settled in session 86:
+  //   D8  times show in the EVENT's zone, named on screen, with the user's
+  //       as the fallback. Almost every time this product shows is a fact
+  //       about an event, and an unlabelled hour's difference on a check-in
+  //       time is worse than a labelled one.
+  //   D9  24-hour everywhere. Right for five of the six locales, defensible
+  //       for the sixth, and it avoids a preference that would need a
+  //       migration.
+  //
+  // A zone that is empty or that this browser does not recognise falls back
+  // silently — to the user's, then to the browser's. Never an error, never a
+  // blocked save, and no zone picker: that is after v1.0.5 if it is wanted.
+  const resolveZone = useCallback((eventZone) => {
+    for (const z of [eventZone, timezone]) {
+      if (!z) continue;
+      try {
+        new Intl.DateTimeFormat('en', { timeZone: z }).format(new Date());
+        return z;
+      } catch {
+        // Not a zone this browser knows. Try the next one.
+      }
+    }
+    return undefined;  // the browser's own
+  }, [timezone]);
+
+  const formatTime = useCallback((value, eventZone) => {
+    if (!value) return '';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return String(value);
+    const zone = resolveZone(eventZone);
+    try {
+      return new Intl.DateTimeFormat('en-GB', {
+        hour: '2-digit', minute: '2-digit', hour12: false,
+        ...(zone ? { timeZone: zone } : {}),
+      }).format(d);
+    } catch {
+      return new Intl.DateTimeFormat('en-GB', {
+        hour: '2-digit', minute: '2-digit', hour12: false,
+      }).format(d);
+    }
+  }, [resolveZone]);
+
+  // The date half has to be read in the same zone, or a time near midnight
+  // lands on the wrong day.
+  const formatDateTime = useCallback((value, eventZone) => {
+    if (!value) return '';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return String(value);
+    const zone = resolveZone(eventZone);
+    let y, m, day;
+    try {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        ...(zone ? { timeZone: zone } : {}),
+      }).formatToParts(d);
+      const get = (t) => parts.find(p => p.type === t)?.value || '';
+      y = get('year'); m = get('month'); day = get('day');
+    } catch {
+      y = String(d.getFullYear());
+      m = String(d.getMonth() + 1).padStart(2, '0');
+      day = String(d.getDate()).padStart(2, '0');
+    }
+    return `${formatDate(`${y}-${m}-${day}`)} ${formatTime(value, eventZone)}`;
+  }, [formatDate, formatTime, resolveZone]);
+
+  // The zone as it should be NAMED beside a time (D8). Returns the resolved
+  // zone id, or '' when there is nothing worth naming.
+  const zoneLabel = useCallback(
+    (eventZone) => resolveZone(eventZone) || '', [resolveZone]);
+
   const updateFormat = (newFormat) => {
     setDateFormat(newFormat);
   };
 
   return (
-    <DateFormatContext.Provider value={{ dateFormat, formatDate, updateFormat, reloadPrefs: loadPrefs }}>
+    <DateFormatContext.Provider value={{
+      dateFormat, formatDate, formatTime, formatDateTime, zoneLabel,
+      updateFormat, reloadPrefs: loadPrefs,
+    }}>
       {children}
     </DateFormatContext.Provider>
   );
@@ -57,6 +139,13 @@ export function DateFormatProvider({ children }) {
 
 export function useDateFormat() {
   const ctx = useContext(DateFormatContext);
-  if (!ctx) return { dateFormat: 'DD/MM/YYYY', formatDate: (d) => d, updateFormat: () => {}, reloadPrefs: () => {} };
+  if (!ctx) return {
+    dateFormat: 'DD/MM/YYYY',
+    formatDate: (d) => d,
+    formatTime: (d) => (d ? String(d) : ''),
+    formatDateTime: (d) => (d ? String(d) : ''),
+    zoneLabel: () => '',
+    updateFormat: () => {}, reloadPrefs: () => {},
+  };
   return ctx;
 }

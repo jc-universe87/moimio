@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
 from app.core.exceptions import MoimioAppError
+from fastapi.exceptions import RequestValidationError
 from app.core.logging import setup_logging, get_logger
 from app.core.middleware import CorrelationIDMiddleware
 from app.core.database import engine, async_session_factory
@@ -111,6 +112,63 @@ async def moimio_app_error_handler(request: Request, exc: MoimioAppError) -> JSO
         status_code=exc.status_code,
         content={"detail": exc.to_detail()},
     )
+
+# v1.0.4ze (FORM-1): FastAPI answers its own validation failures with a LIST
+# of {loc, msg, type} dicts, in English, naming internal field paths. The
+# public registration form was rendering that list under a correctly
+# translated heading, so a registrant who mistyped an email address was shown
+# the inside of the server.
+#
+# This turns it into the shape the rest of the app already uses — the same
+# {key, params} detail MoimioAppError produces — plus a per-field map so the
+# form can mark the box that is wrong rather than printing a paragraph.
+#
+# The mapping is deliberately small. Five keys cover everything the public
+# form can produce; anything else falls to `errors.field.invalid`, which is
+# vague on purpose because its cause is unknown by definition.
+_FIELD_ERROR_KEYS = {
+    "missing": "errors.field.required",
+    "string_too_short": "errors.field.too_short",
+    "string_too_long": "errors.field.too_long",
+    "value_error": "errors.field.invalid",
+}
+
+
+def _field_error_key(err: dict) -> str:
+    """One error's i18n key. Email is special-cased because it is the
+    commonest rejection by a wide margin and deserves to say so."""
+    loc = err.get("loc") or ()
+    field = str(loc[-1]) if loc else ""
+    etype = str(err.get("type") or "")
+    if "email" in field.lower():
+        return "errors.field.email"
+    return _FIELD_ERROR_KEYS.get(etype, "errors.field.invalid")
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    fields: dict[str, str] = {}
+    for err in exc.errors():
+        loc = [str(p) for p in (err.get("loc") or ()) if p != "body"]
+        if not loc:
+            continue
+        # First error per field wins: the form marks one message per box.
+        fields.setdefault(".".join(loc), _field_error_key(err))
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": {
+                "key": "errors.validation.summary",
+                "params": {},
+                # Not part of the {key, params} contract, so an older client
+                # that only reads `key` still gets a translated sentence.
+                "fields": fields,
+            }
+        },
+    )
+
 
 # ─── Routers ───
 # Always-on routers

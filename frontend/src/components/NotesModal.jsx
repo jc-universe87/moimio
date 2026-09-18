@@ -4,6 +4,7 @@ import { useConfirmOverlay } from './ConfirmOverlay';
 import { EditIconButton, DeleteIconButton } from './RowActions';
 import { useI18n } from '../hooks/useI18n';
 import TranslatedError from './TranslatedError';
+import { useDateFormat } from '../hooks/useDateFormat';
 
 export default function NotesModal({ entityType, entityId, entityName, onClose }) {
   const [notesList, setNotesList] = useState([]);
@@ -14,6 +15,7 @@ export default function NotesModal({ entityType, entityId, entityName, onClose }
   const [error, setError] = useState(null);
   const { confirm, ConfirmOverlay } = useConfirmOverlay();
   const { t } = useI18n();
+  const { formatDateTime } = useDateFormat();
 
   useEffect(() => { loadNotes(); }, [entityType, entityId]);
 
@@ -81,7 +83,7 @@ export default function NotesModal({ entityType, entityId, entityName, onClose }
                         <span className="text-[10px] text-subtle">
                           {note.author_name || t('history.actor.removed')}
                         </span>
-                        <span className="text-[10px] text-subtle">{new Date(note.created_at).toLocaleString()}</span>
+                        <span className="text-[10px] text-subtle">{formatDateTime(note.created_at)}</span>
                       </div>
                     </div>
                     <DeleteIconButton onClick={() => handleDelete(note.id)} title={t('common.delete')} />

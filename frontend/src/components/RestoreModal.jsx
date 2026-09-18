@@ -2,6 +2,8 @@ import { useState, useRef } from 'react';
 import { useI18n } from '../hooks/useI18n';
 import { getToken } from '../services/api';
 import TranslatedError from './TranslatedError';
+import { useDateFormat } from '../hooks/useDateFormat';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * RestoreModal — upload a Moimio backup ZIP, preview contents, confirm restore.
@@ -12,6 +14,13 @@ import TranslatedError from './TranslatedError';
  */
 export default function RestoreModal({ onClose, onDone }) {
   const { t } = useI18n();
+  const { formatDateTime } = useDateFormat();
+  const navigate = useNavigate();
+  // The ledgers arrive keyed by ZIP member ({"notes.json": 2}); the
+  // organiser wants one number, and the member names are in the server
+  // log for whoever needs them.
+  const sumOf = (ledger) => Object.values(ledger || {})
+    .reduce((a, b) => a + (Number(b) || 0), 0);
   const fileRef = useRef(null);
 
   // 'idle' | 'previewing' | 'preview_ready' | 'restoring' | 'done'
@@ -135,6 +144,30 @@ export default function RestoreModal({ onClose, onDone }) {
                 <p className="font-semibold text-body text-sm">{result.new_event_name}</p>
                 <p>{t('portability.participants_found').replace('{n}', result.counts?.participants ?? 0)}</p>
                 <p>{t('portability.allocations_found').replace('{n}', result.counts?.allocations ?? 0)}</p>
+                {/* v1.0.4ze (STRINGS-1): the three ledgers the restore has
+                    returned since v1.0.4o and v1.0.4q. The modal ignores keys
+                    it does not know, so these have been arriving and staying
+                    invisible. They are three different things and are said
+                    separately: a skipped line is gone, a shortened one is
+                    there with less text in it, and a defaulted one is there
+                    with the standard setting in place of a value the file
+                    carried. Shown only when non-zero — a clean restore should
+                    say nothing. */}
+                {sumOf(result.skipped) > 0 && (
+                  <p style={{ color: 'var(--alert-burgundy)' }}>
+                    {t('portability.restore_skipped').replace('{n}', sumOf(result.skipped))}
+                  </p>
+                )}
+                {sumOf(result.shortened) > 0 && (
+                  <p style={{ color: 'var(--alert-burgundy)' }}>
+                    {t('portability.restore_shortened').replace('{n}', sumOf(result.shortened))}
+                  </p>
+                )}
+                {sumOf(result.defaulted) > 0 && (
+                  <p style={{ color: 'var(--alert-burgundy)' }}>
+                    {t('portability.restore_defaulted').replace('{n}', sumOf(result.defaulted))}
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -156,12 +189,16 @@ export default function RestoreModal({ onClose, onDone }) {
               {preview && (
                 <div className="bg-neutral-tint rounded-xl p-4 space-y-2">
                   <p className="font-semibold text-body text-sm">{preview.event_name}</p>
-                  <p className="text-xs text-subtle">{t('portability.exported_at')}: {preview.exported_at ? new Date(preview.exported_at).toLocaleString() : '—'}</p>
+                  <p className="text-xs text-subtle">{t('portability.exported_at')}: {preview.exported_at ? formatDateTime(preview.exported_at) : '—'}</p>
                   <div className="pt-1 grid grid-cols-2 gap-1.5 text-xs text-muted">
                     <span>👤 {t('portability.participants_found').replace('{n}', preview.counts?.participants ?? 0)}</span>
                     <span>📦 {t('portability.allocations_found').replace('{n}', preview.counts?.allocations ?? 0)}</span>
                   </div>
                   <p className="text-[10px] text-subtle pt-1 italic">{t('portability.restore_as_new_hint')}</p>
+                  {/* v1.0.4ze (STRINGS-1): BACKUP-4 settled that team roles are
+                      never carried, so say so before the restore rather than
+                      leaving the organiser to notice. */}
+                  <p className="text-[10px] text-subtle italic">{t('portability.restore_team_hint')}</p>
                 </div>
               )}
             </>
@@ -171,10 +208,23 @@ export default function RestoreModal({ onClose, onDone }) {
         {/* Footer */}
         <div className="px-5 py-3 border-t border-card flex justify-end gap-2">
           {stage === 'done' ? (
-            <button onClick={onDone}
-              className="px-4 py-2 rounded-xl bg-deep-navy text-white text-xs font-semibold hover:bg-mid-navy transition-colors">
-              {t('portability.go_to_events')}
-            </button>
+            <>
+              {/* v1.0.4ze (STRINGS-1): straight to the event. Since v1.0.4q a
+                  restored event keeps its original dates, so it sits in the
+                  list where the original sat rather than at the top, and an
+                  organiser restoring a two-year-old event had to hunt for it.
+                  The result has carried `new_event_id` all along. */}
+              {result?.new_event_id && (
+                <button onClick={() => navigate(`/admin/events/${result.new_event_id}`)}
+                  className="px-4 py-2 rounded-xl bg-deep-navy text-white text-xs font-semibold hover:bg-mid-navy transition-colors">
+                  {t('portability.open_restored_event')}
+                </button>
+              )}
+              <button onClick={onDone}
+                className="px-4 py-2 rounded-xl border border-card text-muted text-xs font-semibold hover:border-steel-blue hover:text-accent transition-colors">
+                {t('portability.go_to_events')}
+              </button>
+            </>
           ) : (
             <>
               <button onClick={onClose}

@@ -1190,7 +1190,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     const name = findName(pid);
     const held = unitNamesHeldBy(pid);
     try {
-      await catApi.addExclusion(eventId, category.id, pid);
+      const res = await catApi.addExclusion(eventId, category.id, pid);
       setSelectedPeople(prev => {
         if (!prev.has(pid)) return prev;
         const next = new Set(prev);
@@ -1208,6 +1208,27 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
       } else {
         showToast(t('organise.toast.excluded', { name }), 'success');
       }
+
+      // v1.0.4ze (K-1): excluding somebody comes out of a LOCKED unit too,
+      // and the lock stays on — so the place they vacated stays empty
+      // across engine runs with nothing on screen connecting the two. Say
+      // it here, where the organiser still has the context, and offer the
+      // one action that fixes it. Not a permanent badge on the unit: this
+      // is an occasional event, and chrome for it would be worse.
+      const vacated = res?.vacated_kept_units || [];
+      for (const unit of vacated) {
+        const ok = await confirm({
+          // The sentence is the message, not the title: the overlay renders
+          // a title bold and short, and this is neither.
+          message: t('organise.exclude.left_locked_place', { name, unit: unit.name }),
+          confirmLabel: t('organise.exclude.unlock_now'),
+        });
+        if (!ok) continue;
+        try {
+          await allocationUnits.update(eventId, category.id, unit.id, { is_kept: false });
+        } catch (err) { showToast(err, 'error'); }
+      }
+      if (vacated.length > 0) await loadAll();
     } catch (err) { showToast(err, 'error'); }
   };
 
