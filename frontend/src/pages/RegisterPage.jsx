@@ -142,7 +142,7 @@ function RegisterForm() {
   // v1.0.4ze (FORM-1, D7): the loosest possible shape test for an address —
   // something before an @, something after it, a dot and at least two more
   // characters. It is not here to be clever about what an address may legally
-  // be; it is here to catch "rest@gmail.com3242" without ever rejecting a real
+  // be; it is here to catch "rest@example.com3242" without ever rejecting a real
   // one. Anything subtler is the server's business, and the server answers in
   // a language the registrant reads.
   //

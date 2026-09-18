@@ -169,8 +169,8 @@ more important as the engine accumulates correctness fixes
 
 ### What's happening
 
-Running `pytest` against the production-style backend container on
-Nipogi yields **33 passed, 96 skipped** with every skip reporting
+Running `pytest` against the production-style backend container on a
+developer machine yields **33 passed, 96 skipped** with every skip reporting
 the same reason:
 
 ```
@@ -187,7 +187,7 @@ serving real data.
 
 The "128 passed" figure from earlier CHANGELOG entries (v1.0.0i and
 v1.0.0k) must have been recorded on a machine where a test Postgres
-was configured. On Nipogi today, none is.
+was configured. On a plain developer machine, none is.
 
 ### What to do
 
@@ -2717,7 +2717,7 @@ shipped half of it. Found by Johannes's manual test in session 86. Belongs to th
 
 **Reopened and closed in v1.0.4zf (2026-09-18).** Johannes ran v1.0.4ze's twelve
 browser checks. Ten passed; **checks 1 and 2 failed, and they are one fault.** With
-`rest@gmail.com3242` the banner appeared and read *"Bitte prüfe die unten markierten
+`rest@example.com3242` the banner appeared and read *"Bitte prüfe die unten markierten
 Felder."* — and **no field was marked**: no border, no message under the box,
 nothing saying which box was meant. Correcting the address did not clear it. That is
 worse than the raw error it replaced, because the raw error at least named the
@@ -2786,7 +2786,7 @@ is the safety net; catching it first is the fix.
 Both scheduled for **v1.0.4z**, with their strings.
 non-backup survey before v1.0.5.
 
-The public registration form was given the email `rest@gmail.com3242`, which
+The public registration form was given the email `rest@example.com3242`, which
 the server rightly rejects. The form then showed:
 
 - the heading "Einige Felder müssen überprüft werden", correctly translated
@@ -3064,8 +3064,8 @@ no browser on this machine.
 ## SAAS-4 — The hosted leaving email does not say how to use the export
 
 **Status:** Open. Opened in session 86 alongside v1.0.4u, which closed
-BACKUP-10. **Not a change to this repo.** It is a wording change in
-`~/dev/moimio-saas`, filed here so it is not lost.
+BACKUP-10. **Not a change to this repo.** It is a wording change in the hosted
+product, filed here so it is not lost.
 
 v1.0.4u gives a leaving customer a whole-workspace export and one command
 that restores all of it onto their own Moimio, plus a documentation page
@@ -3432,29 +3432,16 @@ See **SAAS-5** for the hosted side, which was checked and is not affected today.
 
 ---
 
-## SAAS-5 — A tenant's log level is the control plane's log level
+## SAAS-5 — A tenant's log level comes from the wrong place
 
-**Status:** Open. **Not this repo.** Found by the read-only hosted check in the v1.0.4w brief, session 86.
+**Status:** Open. **Not this repo, and not a CE change.** Found by the read-only
+hosted check in the v1.0.4w brief, session 86.
 
-Checked and **not affected today**: the hosted control plane runs at `INFO`
-(`~/dev/moimio-saas/.env:3`), its own default is `INFO`
-(`app/config.py:18`), and `.env.example:5` is `INFO` too. So no tenant is
-running with statement logging on.
-
-The finding is the wiring, not the current value.
-`app/provisioning/env_render.py:130` renders every tenant's `LOG_LEVEL` as
-`settings.log_level` — **the control plane's own setting**, passed straight
-through. So if an operator ever sets `LOG_LEVEL=DEBUG` on the control plane, for
-their own debugging, every tenant provisioned from then on inherits it, and with
-CE's `echo` behaviour (see **OPS-1**) that puts participant names, emails and
-dates of birth into every one of those tenants' logs. One knob, two very
-different consequences, and the second is invisible from where the knob is.
-
-**What it wants:** a tenant log level that is its own setting, defaulted to
-`INFO` and not derived from the control plane's. A constant would do; it does not
-need to be configurable per tenant.
-
-No CE code changes. Filed here so it is not lost, as SAAS-4 is.
+A tenant's `LOG_LEVEL` is not a setting of its own. **The detail is tracked in
+the hosted product's own backlog**, where the code it concerns lives; it is
+named here only so the CE record shows why nothing was changed in CE. See
+**OPS-1** for the CE half, which is done: statement logging is off by default
+as of v1.0.4w.
 
 ---
 

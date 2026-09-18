@@ -51,7 +51,7 @@ async def test_a_rejected_field_answers_in_the_apps_own_shape(db):
 
     status, body = await _post_registration(
         {"first_name": "Alice", "last_name": "Test",
-         "email": "rest@gmail.com3242", "gdpr_consent": True},
+         "email": "rest@example.com3242", "gdpr_consent": True},
         ev.id,
     )
 

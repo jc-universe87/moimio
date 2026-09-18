@@ -33,7 +33,7 @@ import RegisterPage from './RegisterPage';
 
 const EVENT_ID = '11111111-1111-1111-1111-111111111111';
 
-// What the server really answers for `rest@gmail.com3242`, copied from a
+// What the server really answers for `rest@example.com3242`, copied from a
 // live call against the running stack.
 const VALIDATION_422 = {
   detail: {
@@ -103,7 +103,7 @@ const tickConsent = () => {
 };
 
 /** Everything the server needs, correctly filled. */
-function fillValid(email = 'rest@gmail.com') {
+function fillValid(email = 'rest@example.com') {
   set('first_name', 'Test');
   set('last_name', 'Rest');
   set('email', email);
@@ -133,7 +133,7 @@ beforeEach(() => {
 
 describe('the rejected field is marked', () => {
   it('shows the field\'s own message, not only the summary', async () => {
-    await submitWith('rest@gmail.com3242');
+    await submitWith('rest@example.com3242');
     // The specific message, beside the box — this is what was missing.
     await waitFor(() => {
       expect(screen.getByText(en['errors.field.email'])).toBeInTheDocument();
@@ -141,7 +141,7 @@ describe('the rejected field is marked', () => {
   });
 
   it('marks the input itself', async () => {
-    const emailInput = await submitWith('rest@gmail.com3242');
+    const emailInput = await submitWith('rest@example.com3242');
     await waitFor(() => {
       expect(emailInput).toHaveAttribute('aria-invalid', 'true');
     });
@@ -151,20 +151,20 @@ describe('the rejected field is marked', () => {
   });
 
   it('shows the summary banner as well', async () => {
-    await submitWith('rest@gmail.com3242');
+    await submitWith('rest@example.com3242');
     await waitFor(() => {
       expect(screen.getByText(en['errors.validation.summary'])).toBeInTheDocument();
     });
   });
 
   it('clears the mark, the message and the banner as it is corrected', async () => {
-    const emailInput = await submitWith('rest@gmail.com3242');
+    const emailInput = await submitWith('rest@example.com3242');
     await waitFor(() => {
       expect(screen.getByText(en['errors.field.email'])).toBeInTheDocument();
     });
 
     fireEvent.change(emailInput, {
-      target: { name: 'email', value: 'rest@gmail.com' },
+      target: { name: 'email', value: 'rest@example.com' },
     });
 
     await waitFor(() => {
@@ -223,7 +223,7 @@ describe('the form does its own checking', () => {
     await renderForm();
     set('first_name', 'Test');
     set('last_name', 'Rest');
-    set('email', 'rest@gmail.com');
+    set('email', 'rest@example.com');
     submitForm();
 
     await waitFor(() => {
