@@ -8,7 +8,7 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
-## [1.0.4zf] — 2026-09-18
+## [1.0.4zg] — 2026-09-18
 The wording, in one batch, in all six languages.
 
 ### Fixed
@@ -18,6 +18,13 @@ The wording, in one batch, in all six languages.
   under a heading you could read. The box itself is now outlined, the reason is
   written under it, and both go as soon as you correct it. An obviously wrong
   address is caught before anything is sent at all.
+
+- **The registration form speaks for itself.** Leaving a box empty used to bring
+  up a message from the browser, written in whatever language the browser is in:
+  a German form told people "Please fill out this field." in English, and no
+  part of Moimio could translate it. Moimio now makes those checks itself, in
+  the language you are reading, on the box that is wrong. The consent box and
+  any question the organiser added are marked the same way.
 
 - **Dates and times in the format you chose,** everywhere. Several columns
   ignored the setting completely and used whatever your browser preferred, so a

@@ -125,6 +125,8 @@ function RegisterForm() {
   };
 
   const handleCustomChange = (fieldId, value) => {
+    // v1.0.4zg: same clearing rule as every other field (2.7.3 of v1.0.4zf).
+    clearFieldError(`cf_${fieldId}`);
     setCustomValues(prev => ({ ...prev, [fieldId]: value }));
   };
 
@@ -137,98 +139,162 @@ function RegisterForm() {
   const isFieldEnabled = (name) => fields.find(f => f.field_name === name)?.is_enabled || false;
   const isFieldRequired = (name) => fields.find(f => f.field_name === name)?.is_required || false;
 
+  // v1.0.4ze (FORM-1, D7): the loosest possible shape test for an address —
+  // something before an @, something after it, a dot and at least two more
+  // characters. It is not here to be clever about what an address may legally
+  // be; it is here to catch "rest@gmail.com3242" without ever rejecting a real
+  // one. Anything subtler is the server's business, and the server answers in
+  // a language the registrant reads.
+  //
+  // v1.0.4zg (FORM-2): lifted out of handleSubmit unchanged, because the same
+  // test is now one of several this form makes for itself.
+  const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  // v1.0.4zg (FORM-2): everything the browser used to check, checked here.
+  //
+  // The form carries `noValidate`, so Chrome's own bubbles never appear —
+  // "Please fill out this field." is written in the BROWSER's language, and a
+  // page cannot translate it or even read it. Moimio has its own messages in
+  // six languages and marks the box that is wrong (v1.0.4zf), so the browser's
+  // are redundant, first and foreign all at once.
+  //
+  // `required` stays on every input. It is what a screen reader announces, and
+  // it is the fact of the field; it is the bubble that goes, not the fact.
+  //
+  // Returns a map of field name to message KEY, in the shape `fieldErrors`
+  // already holds, so the marking, the message and the clearing are the ones
+  // v1.0.4zf built rather than a second way of doing it.
+  const validatePrimary = () => {
+    const errs = {};
+    const blank = (name) => !String(formData[name] ?? '').trim();
+
+    if (blank('first_name')) errs.first_name = 'errors.field.required';
+    if (blank('last_name')) errs.last_name = 'errors.field.required';
+    if (blank('email')) errs.email = 'errors.field.required';
+    else if (!EMAIL_SHAPE.test((formData.email || '').trim())) errs.email = 'errors.field.email';
+
+    // The built-in optional fields, each required only if the organiser said
+    // so. OPTIONAL_FIELDS is declared further down the component body; this
+    // function runs on submit, long after that, so the reference is resolved.
+    for (const { name } of OPTIONAL_FIELDS) {
+      if (isFieldEnabled(name) && isFieldRequired(name) && blank(name)) {
+        errs[name] = 'errors.field.required';
+      }
+    }
+
+    // The custom fields an organiser can add. Keyed `cf_<id>` so they cannot
+    // collide with a built-in name — the same prefix the extra-person cards
+    // have used since v1.0.0k. A boolean is answered, not ticked: either
+    // radio counts as filled, which is what `required` on a radio group meant.
+    for (const cf of customFields) {
+      if (!cf.is_required) continue;
+      const v = customValues[cf.id];
+      const filled = cf.field_type === 'boolean'
+        ? (v === 'true' || v === 'false')
+        : !!(v && String(v).trim());
+      if (!filled) errs[`cf_${cf.id}`] = 'errors.field.required';
+    }
+
+    // The consent box. `errors.participant.gdpr_required` is the message the
+    // server already answers with for exactly this, in all six languages, so
+    // there is nothing to invent.
+    if (!formData.gdpr_consent) errs.gdpr_consent = 'errors.participant.gdpr_required';
+
+    return errs;
+  };
+
+  // The extra-person cards, unchanged in substance — lifted out of
+  // handleSubmit so both halves of the form are checked in one pass. These
+  // cards sit OUTSIDE the <form> element, so the browser never validated them
+  // in the first place; this is what has always caught them.
+  const validateExtras = () => extraPersons.map((ep) => {
+    const errs = {};
+    if (!ep.first_name?.trim()) errs.first_name = true;
+    if (!ep.last_name?.trim()) errs.last_name = true;
+    if (!ep.email?.trim()) errs.email = true;
+    if (!ep.gdpr_consent) errs.gdpr_consent = true;
+    if (isFieldEnabled('gender') && isFieldRequired('gender') && !ep.gender) errs.gender = true;
+    if (isFieldEnabled('date_of_birth') && isFieldRequired('date_of_birth') && !ep.date_of_birth) errs.date_of_birth = true;
+    // v1.0.0k #6: extend required-field check to phone, address,
+    // country, church_organisation. Previously only name, email,
+    // gdpr, gender, DOB were validated for extras — if the
+    // organiser had marked phone required, the extras would
+    // silently submit empty.
+    if (isFieldEnabled('phone') && isFieldRequired('phone') && !ep.phone?.trim()) errs.phone = true;
+    if (isFieldEnabled('address') && isFieldRequired('address') && !ep.address?.trim()) errs.address = true;
+    if (isFieldEnabled('country') && isFieldRequired('country') && !ep.country?.trim()) errs.country = true;
+    if (isFieldEnabled('church_organisation') && isFieldRequired('church_organisation') && !ep.church_organisation?.trim()) errs.church_organisation = true;
+    // v1.0.0k #5: required custom fields validated per-person.
+    // Errors keyed as `cf_${cf.id}` so they don't collide with
+    // built-in field names. epInputClass + epCustomFieldClass
+    // pick the same prefix.
+    for (const cf of customFields) {
+      if (cf.is_required) {
+        const v = ep.customValues?.[cf.id];
+        // Boolean fields are "filled" if set to either 'true' or
+        // 'false'. Other types: any non-empty string.
+        if (cf.field_type === 'boolean') {
+          if (v !== 'true' && v !== 'false') errs[`cf_${cf.id}`] = true;
+        } else {
+          if (!v || !String(v).trim()) errs[`cf_${cf.id}`] = true;
+        }
+      }
+    }
+    return errs;
+  });
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
     setFieldErrors({});
-    // v1.0.4ze (FORM-1, D7): catch an obviously wrong address before the
-    // round trip. Deliberately the loosest possible shape test — something
-    // before an @, something after it, a dot and at least two more
-    // characters. It is not here to be clever about what an address may
-    // legally be; it is here to catch "rest@gmail.com3242" without ever
-    // rejecting a real one. Anything subtler is the server's business, and
-    // the server now answers in a language the registrant reads.
-    const email = (formData.email || '').trim();
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
-      setFieldErrors({ email: 'errors.field.email' });
-      setError({ i18nKey: 'errors.validation.summary' });
-      document.getElementById('register-error-banner')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-    setSubmitting(true);
-    try {
-      // v0.70d-3c-9: pre-flight runs FIRST, before any submission
-      // building. If extras are incomplete: scroll to first error,
-      // expand collapsed cards with errors, refuse to submit.
-      // 8a moved the validation in but kept it AFTER the primary
-      // submission was built; this version makes it the first thing
-      // so behaviour is unambiguous.
-      const epErrors = extraPersons.map((ep) => {
-        const errs = {};
-        if (!ep.first_name?.trim()) errs.first_name = true;
-        if (!ep.last_name?.trim()) errs.last_name = true;
-        if (!ep.email?.trim()) errs.email = true;
-        if (!ep.gdpr_consent) errs.gdpr_consent = true;
-        if (isFieldEnabled('gender') && isFieldRequired('gender') && !ep.gender) errs.gender = true;
-        if (isFieldEnabled('date_of_birth') && isFieldRequired('date_of_birth') && !ep.date_of_birth) errs.date_of_birth = true;
-        // v1.0.0k #6: extend required-field check to phone, address,
-        // country, church_organisation. Previously only name, email,
-        // gdpr, gender, DOB were validated for extras — if the
-        // organiser had marked phone required, the extras would
-        // silently submit empty.
-        if (isFieldEnabled('phone') && isFieldRequired('phone') && !ep.phone?.trim()) errs.phone = true;
-        if (isFieldEnabled('address') && isFieldRequired('address') && !ep.address?.trim()) errs.address = true;
-        if (isFieldEnabled('country') && isFieldRequired('country') && !ep.country?.trim()) errs.country = true;
-        if (isFieldEnabled('church_organisation') && isFieldRequired('church_organisation') && !ep.church_organisation?.trim()) errs.church_organisation = true;
-        // v1.0.0k #5: required custom fields validated per-person.
-        // Errors keyed as `cf_${cf.id}` so they don't collide with
-        // built-in field names. epInputClass + epCustomFieldClass
-        // pick the same prefix.
-        for (const cf of customFields) {
-          if (cf.is_required) {
-            const v = ep.customValues?.[cf.id];
-            // Boolean fields are "filled" if set to either 'true' or
-            // 'false'. Other types: any non-empty string.
-            if (cf.field_type === 'boolean') {
-              if (v !== 'true' && v !== 'false') errs[`cf_${cf.id}`] = true;
-            } else {
-              if (!v || !String(v).trim()) errs[`cf_${cf.id}`] = true;
-            }
-          }
-        }
-        return errs;
-      });
-      const firstErrorIdx = epErrors.findIndex(e => Object.keys(e).length > 0);
+
+    // v1.0.4zg (FORM-2): one pass over the whole form, this form's own half
+    // and the extra-person cards together, before anything is sent.
+    const errs = validatePrimary();
+    const epErrors = validateExtras();
+    const firstErrorIdx = epErrors.findIndex(x => Object.keys(x).length > 0);
+    if (Object.keys(errs).length > 0 || firstErrorIdx >= 0) {
+      setFieldErrors(errs);
+      setExtraPersonErrors(epErrors);
+      const incompleteCount = epErrors.filter(x => Object.keys(x).length > 0).length;
+      // The summary wins when this form's own half has anything wrong: it
+      // says "check the fields marked below", and the cards below are marked
+      // too. The count message is for the case where only the cards are.
+      setError(Object.keys(errs).length > 0
+        ? { i18nKey: 'errors.validation.summary' }
+        : { i18nKey: 'errors.register.extra_people_incomplete', i18nParams: { count: incompleteCount } });
+      // Auto-expand any collapsed extra-person card that has errors
+      // so the user can see the highlighted fields.
       if (firstErrorIdx >= 0) {
-        setExtraPersonErrors(epErrors);
-        const incompleteCount = epErrors.filter(e => Object.keys(e).length > 0).length;
-        setError({ i18nKey: 'errors.register.extra_people_incomplete', i18nParams: { count: incompleteCount } });
-        // Auto-expand any collapsed extra-person card that has errors
-        // so the user can see the highlighted fields.
         setCollapsedPersons(prev => {
           const next = new Set(prev);
-          epErrors.forEach((errs, i) => {
-            if (Object.keys(errs).length > 0) next.delete(i);
-          });
+          epErrors.forEach((x, i) => { if (Object.keys(x).length > 0) next.delete(i); });
           return next;
         });
-        setSubmitting(false);
-        // Scroll to first errored extra-person card after a tick so React
-        // has rendered the highlight + expansion change.
-        setTimeout(() => {
-          const el = document.getElementById(`extra-person-${firstErrorIdx}`);
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          } else {
-            // Fallback: scroll to the page-level error banner at top of form
-            const errEl = document.getElementById('register-error-banner');
-            if (errEl) errEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-        }, 50);
-        return;
       }
-      // All extras valid — proceed to building primary submission.
+      // The first failing box, not the top of the page. After a tick, so
+      // React has rendered the marks and any expansion.
+      setTimeout(() => {
+        const el = document.querySelector('#register-form [aria-invalid="true"]')
+          || (firstErrorIdx >= 0 ? document.getElementById(`extra-person-${firstErrorIdx}`) : null)
+          || document.getElementById('register-error-banner');
+        if (!el) return;
+        // Guarded: this runs inside a timer, where a throw is swallowed and
+        // the focus below would be lost with it. jsdom has no scrollIntoView.
+        if (typeof el.scrollIntoView === 'function') {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        if (typeof el.focus === 'function') el.focus({ preventScroll: true });
+      }, 50);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // v1.0.4zg (FORM-2): the pre-flight that used to sit here — the
+      // extra-person cards — now runs in `validateExtras`, in one pass with
+      // this form's own fields, before anything is submitted at all.
+      // Everything is checked by the time we get here.
       const submission = {
         first_name: formData.first_name, last_name: formData.last_name,
         email: formData.email, gdpr_consent: formData.gdpr_consent,
@@ -438,7 +504,15 @@ function RegisterForm() {
     setFieldErrors(prev => {
       const next = { ...prev };
       delete next[field];
-      if (Object.keys(next).length === 0) setError(null);
+      if (Object.keys(next).length === 0) {
+        // v1.0.4zg: the banner goes with the last field error — unless the
+        // extra-person cards still have some, in which case it becomes
+        // theirs rather than disappearing while they are still marked.
+        const n = extraPersonErrors.filter(x => x && Object.keys(x).length > 0).length;
+        setError(n > 0
+          ? { i18nKey: 'errors.register.extra_people_incomplete', i18nParams: { count: n } }
+          : null);
+      }
       return next;
     });
   };
@@ -501,7 +575,15 @@ function RegisterForm() {
           {/* v1.0.4c: demo-workspace notice above the public form. Renders
               nothing unless capabilities.demo_notice. */}
           <DemoNotice />
-          <form id="register-form" onSubmit={handleSubmit} className="moimio-form space-y-4">
+          {/* v1.0.4zg (FORM-2): `noValidate` turns off the browser's own
+              constraint validation, whose bubbles are written in the
+              BROWSER's language — a German registrant in an English Chrome
+              was told "Please fill out this field." and the page could
+              neither translate it nor suppress it any other way. Moimio
+              checks the same things itself in `validatePrimary`, in the
+              registrant's language, on the box that is wrong. `required`
+              stays on the inputs: it is what a screen reader announces. */}
+          <form id="register-form" onSubmit={handleSubmit} noValidate className="moimio-form space-y-4">
             {/* Required: name + email */}
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -571,14 +653,20 @@ function RegisterForm() {
             })}
 
             {/* Custom EAV fields */}
+            {/* v1.0.4zg (FORM-2): these are marked like every other field now.
+                They were the one part of the form the browser was still
+                policing on its own — a required custom field had `required`
+                and nothing else. */}
             {customFields.map(cf => (
               <div key={cf.id}>
                 <label className="block text-sm font-semibold text-gray-600 mb-1">
                   {cf.label} {cf.is_required && <span style={{ color: 'var(--alert-burgundy)' }}>*</span>}
                 </label>
                 {cf.field_type === 'select' && cf.options?.choices ? (
-                  <select value={customValues[cf.id] || ''} onChange={e => handleCustomChange(cf.id, e.target.value)}
-                    required={cf.is_required} className={inputClass}>
+                  <select name={`cf_${cf.id}`} value={customValues[cf.id] || ''}
+                    onChange={e => handleCustomChange(cf.id, e.target.value)}
+                    required={cf.is_required} aria-invalid={!!fieldErrors[`cf_${cf.id}`]}
+                    className={fieldInputClass(`cf_${cf.id}`)}>
                     <option value="">{t('common.select')}</option>
                     {cf.options.choices.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                   </select>
@@ -591,23 +679,26 @@ function RegisterForm() {
                     <label className="flex items-center gap-2 text-sm text-gray-600">
                       <input type="radio" name={`cf_${cf.id}`} checked={customValues[cf.id] === 'true'}
                         onChange={() => handleCustomChange(cf.id, 'true')}
-                        required={cf.is_required}
+                        required={cf.is_required} aria-invalid={!!fieldErrors[`cf_${cf.id}`]}
                         className="h-4 w-4 text-steel-blue border-gray-300 focus:ring-steel-blue" />
                       {t('common.yes')}
                     </label>
                     <label className="flex items-center gap-2 text-sm text-gray-600">
                       <input type="radio" name={`cf_${cf.id}`} checked={customValues[cf.id] === 'false'}
                         onChange={() => handleCustomChange(cf.id, 'false')}
-                        required={cf.is_required}
+                        required={cf.is_required} aria-invalid={!!fieldErrors[`cf_${cf.id}`]}
                         className="h-4 w-4 text-steel-blue border-gray-300 focus:ring-steel-blue" />
                       {t('common.no')}
                     </label>
                   </div>
                 ) : (
                   <input type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : 'text'}
+                    name={`cf_${cf.id}`}
                     value={customValues[cf.id] || ''} onChange={e => handleCustomChange(cf.id, e.target.value)}
-                    required={cf.is_required} className={inputClass} />
+                    required={cf.is_required} aria-invalid={!!fieldErrors[`cf_${cf.id}`]}
+                    className={fieldInputClass(`cf_${cf.id}`)} />
                 )}
+                {fieldError(`cf_${cf.id}`)}
               </div>
             ))}
 
@@ -736,13 +827,22 @@ function RegisterForm() {
             </div>
 
             {/* GDPR */}
-            <div className="flex items-start gap-3 bg-gray-50 rounded-lg p-3">
-              <input type="checkbox" name="gdpr_consent" checked={formData.gdpr_consent}
-                onChange={handleChange} required
-                className="mt-0.5 h-4 w-4 text-steel-blue border-gray-300 rounded focus:ring-steel-blue" />
-              <label className="text-xs text-gray-600 leading-relaxed">
-                {t('register.gdpr')} <span style={{ color: 'var(--alert-burgundy)' }}>*</span>
-              </label>
+            {/* v1.0.4zg (FORM-2): marked in the pattern the extra-person cards
+                use for the same box — the panel itself carries the outline,
+                because a 16px checkbox cannot show one. */}
+            <div>
+              <div className={fieldErrors.gdpr_consent
+                ? "flex items-start gap-3 bg-burgundy/10 border border-burgundy rounded-lg p-3"
+                : "flex items-start gap-3 bg-gray-50 rounded-lg p-3"}>
+                <input type="checkbox" name="gdpr_consent" checked={formData.gdpr_consent}
+                  onChange={(e) => { clearFieldError('gdpr_consent'); handleChange(e); }} required
+                  aria-invalid={!!fieldErrors.gdpr_consent}
+                  className="mt-0.5 h-4 w-4 text-steel-blue border-gray-300 rounded focus:ring-steel-blue" />
+                <label className="text-xs text-gray-600 leading-relaxed">
+                  {t('register.gdpr')} <span style={{ color: 'var(--alert-burgundy)' }}>*</span>
+                </label>
+              </div>
+              {fieldError('gdpr_consent')}
             </div>
 
             <button type="submit" disabled={submitting}
@@ -788,7 +888,10 @@ function RegisterForm() {
               }
             };
             return (
-              <div key={idx} className="mt-4 border border-gray-200 rounded-xl overflow-hidden">
+              // v1.0.4zg: the id `handleSubmit` has scrolled to since v0.70d.
+              // It was never on any element, so the scroll always fell through
+              // to the banner at the top instead of the card that is wrong.
+              <div key={idx} id={`extra-person-${idx}`} className="mt-4 border border-gray-200 rounded-xl overflow-hidden">
                 {/* Header — always visible */}
                 <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
                   <button type="button"
@@ -844,13 +947,13 @@ function RegisterForm() {
                         <label className="block text-xs text-gray-500 mb-1">{t('register.first_name')} <span style={{ color: 'var(--alert-burgundy)' }}>*</span></label>
                         <input type="text" value={ep.first_name} required
                           onChange={e => updateEp({ first_name: e.target.value })}
-                          className={epInputClass(idx, 'first_name')} />
+                          aria-invalid={!!extraPersonErrors[idx]?.['first_name']} className={epInputClass(idx, 'first_name')} />
                       </div>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">{t('register.last_name')} <span style={{ color: 'var(--alert-burgundy)' }}>*</span></label>
                         <input type="text" value={ep.last_name} required
                           onChange={e => updateEp({ last_name: e.target.value })}
-                          className={epInputClass(idx, 'last_name')} />
+                          aria-invalid={!!extraPersonErrors[idx]?.['last_name']} className={epInputClass(idx, 'last_name')} />
                       </div>
                     </div>
 
@@ -859,14 +962,14 @@ function RegisterForm() {
                       <label className="block text-xs text-gray-500 mb-1">{t('register.email')} <span style={{ color: 'var(--alert-burgundy)' }}>*</span></label>
                       <input type="email" value={ep.email} required
                         onChange={e => updateEp({ email: e.target.value })}
-                        className={epInputClass(idx, 'email')} />
+                        aria-invalid={!!extraPersonErrors[idx]?.['email']} className={epInputClass(idx, 'email')} />
                     </div>
 
                     {/* Optional fields — same as primary form */}
                     {isFieldEnabled('gender') && (
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">{t('register.gender')}{isFieldRequired('gender') && <span className="ml-1" style={{ color: 'var(--alert-burgundy)' }}>*</span>}</label>
-                        <select value={ep.gender || ''} onChange={e => updateEp({ gender: e.target.value })} className={epInputClass(idx, 'gender')}>
+                        <select value={ep.gender || ''} onChange={e => updateEp({ gender: e.target.value })} aria-invalid={!!extraPersonErrors[idx]?.['gender']} className={epInputClass(idx, 'gender')}>
                           <option value="">{t('register.gender.select')}</option>
                           <option value="male">{t('register.gender.male')}</option>
                           <option value="female">{t('register.gender.female')}</option>
@@ -879,7 +982,7 @@ function RegisterForm() {
                         <label className="block text-xs text-gray-500 mb-1">{t('register.dob')}{isFieldRequired('date_of_birth') && <span className="ml-1" style={{ color: 'var(--alert-burgundy)' }}>*</span>}</label>
                         <input type="date" value={ep.date_of_birth || ''}
                           onChange={e => updateEp({ date_of_birth: e.target.value })}
-                          className={epInputClass(idx, 'date_of_birth')} />
+                          aria-invalid={!!extraPersonErrors[idx]?.['date_of_birth']} className={epInputClass(idx, 'date_of_birth')} />
                       </div>
                     )}
 
@@ -888,7 +991,7 @@ function RegisterForm() {
                         <label className="block text-xs text-gray-500 mb-1">{t('register.phone')}{isFieldRequired('phone') && <span className="ml-1" style={{ color: 'var(--alert-burgundy)' }}>*</span>}</label>
                         <input type="tel" value={ep.phone || ''}
                           onChange={e => updateEp({ phone: e.target.value })}
-                          className={epInputClass(idx, 'phone')} />
+                          aria-invalid={!!extraPersonErrors[idx]?.['phone']} className={epInputClass(idx, 'phone')} />
                       </div>
                     )}
 
@@ -897,7 +1000,7 @@ function RegisterForm() {
                         <label className="block text-xs text-gray-500 mb-1">{t('register.address')}{isFieldRequired('address') && <span className="ml-1" style={{ color: 'var(--alert-burgundy)' }}>*</span>}</label>
                         <input type="text" value={ep.address || ''}
                           onChange={e => updateEp({ address: e.target.value })}
-                          className={epInputClass(idx, 'address')} />
+                          aria-invalid={!!extraPersonErrors[idx]?.['address']} className={epInputClass(idx, 'address')} />
                       </div>
                     )}
 
@@ -906,7 +1009,7 @@ function RegisterForm() {
                         <label className="block text-xs text-gray-500 mb-1">{t('register.country')}{isFieldRequired('country') && <span className="ml-1" style={{ color: 'var(--alert-burgundy)' }}>*</span>}</label>
                         <input type="text" value={ep.country || ''}
                           onChange={e => updateEp({ country: e.target.value })}
-                          className={epInputClass(idx, 'country')} />
+                          aria-invalid={!!extraPersonErrors[idx]?.['country']} className={epInputClass(idx, 'country')} />
                       </div>
                     )}
 
@@ -915,7 +1018,7 @@ function RegisterForm() {
                         <label className="block text-xs text-gray-500 mb-1">{t('register.church')}{isFieldRequired('church_organisation') && <span className="ml-1" style={{ color: 'var(--alert-burgundy)' }}>*</span>}</label>
                         <input type="text" value={ep.church_organisation || ''}
                           onChange={e => updateEp({ church_organisation: e.target.value })}
-                          className={epInputClass(idx, 'church_organisation')} />
+                          aria-invalid={!!extraPersonErrors[idx]?.['church_organisation']} className={epInputClass(idx, 'church_organisation')} />
                       </div>
                     )}
 
@@ -937,7 +1040,8 @@ function RegisterForm() {
                           {cf.field_type === 'select' && cf.options?.choices ? (
                             <select value={value}
                               onChange={e => updateEp({ customValues: { ...(ep.customValues || {}), [cf.id]: e.target.value } })}
-                              required={cf.is_required} className={cfClass}>
+                              required={cf.is_required} aria-invalid={!!extraPersonErrors[idx]?.[errKey]}
+                              className={cfClass}>
                               <option value="">{t('common.select')}</option>
                               {cf.options.choices.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                             </select>
@@ -962,7 +1066,8 @@ function RegisterForm() {
                             <input type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : 'text'}
                               value={value}
                               onChange={e => updateEp({ customValues: { ...(ep.customValues || {}), [cf.id]: e.target.value } })}
-                              required={cf.is_required} className={cfClass} />
+                              required={cf.is_required} aria-invalid={!!extraPersonErrors[idx]?.[errKey]}
+                              className={cfClass} />
                           )}
                         </div>
                       );

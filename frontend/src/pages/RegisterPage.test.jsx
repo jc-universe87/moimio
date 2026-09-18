@@ -15,6 +15,14 @@
  * provider it wraps itself in, and `fetch` for the event it loads on mount;
  * the submit goes through the real api client, which is mocked at the
  * network boundary so the server's actual 422 shape is what is exercised.
+ *
+ * v1.0.4zg (FORM-2) adds the second half. The form carries `noValidate`,
+ * because Chrome's own bubbles are written in Chrome's language — a German
+ * registrant was told "Please fill out this field." in English, and no page
+ * can translate or suppress that text. Turning the browser's check off is one
+ * attribute; the work is that Moimio must now check everything it was
+ * checking. These tests are what says it does: nothing leaves the page while
+ * a check fails, and a complete form still goes.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -77,6 +85,32 @@ async function renderForm(opts) {
   }, { timeout: 3000 });
   return emailInput;
 }
+
+const registerPosts = () =>
+  (global.fetch.mock?.calls || []).filter(
+    ([url, opts]) => opts?.method === 'POST' && String(url).includes('/register'));
+
+const set = (name, value) => {
+  const el = document.querySelector(`[name="${name}"]`);
+  expect(el, `no control named ${name}`).not.toBeNull();
+  fireEvent.change(el, { target: { name, value } });
+  return el;
+};
+
+const tickConsent = () => {
+  const consent = document.querySelector('input[name="gdpr_consent"]');
+  if (consent && !consent.checked) fireEvent.click(consent);
+};
+
+/** Everything the server needs, correctly filled. */
+function fillValid(email = 'rest@gmail.com') {
+  set('first_name', 'Test');
+  set('last_name', 'Rest');
+  set('email', email);
+  tickConsent();
+}
+
+const submitForm = () => fireEvent.submit(document.querySelector('#register-form'));
 
 async function submitWith(email) {
   const emailInput = await renderForm();
@@ -148,5 +182,110 @@ describe('nothing is marked when nothing is wrong', () => {
     expect(emailInput).toHaveAttribute('aria-invalid', 'false');
     expect(emailInput.className).toContain('border-gray-200');
     expect(screen.queryByText(en['errors.field.email'])).toBeNull();
+  });
+});
+
+// ─── v1.0.4zg (FORM-2): the browser stops being asked ────────────────────
+
+describe('the form does its own checking', () => {
+  it('does not ask the browser to validate', async () => {
+    await renderForm();
+    const form = document.querySelector('#register-form');
+    expect(form).not.toBeNull();
+    // The attribute IS the fix for the English bubbles; if it comes off,
+    // Chrome speaks over Moimio again, in its own language.
+    expect(form.noValidate).toBe(true);
+  });
+
+  it('keeps `required` on the inputs — it is what a screen reader announces', async () => {
+    await renderForm();
+    for (const name of ['first_name', 'last_name', 'email', 'gdpr_consent']) {
+      expect(document.querySelector(`[name="${name}"]`).required).toBe(true);
+    }
+  });
+
+  it('catches an empty required field itself, and sends nothing', async () => {
+    await renderForm();
+    submitForm();
+
+    await waitFor(() => {
+      expect(screen.getAllByText(en['errors.field.required']).length).toBeGreaterThan(0);
+    });
+    const email = document.querySelector('input[name="email"]');
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(email.className).toContain('border-burgundy');
+    expect(screen.getByText(en['errors.validation.summary'])).toBeInTheDocument();
+    // The one that matters: it never left the page.
+    expect(registerPosts()).toHaveLength(0);
+  });
+
+  it('asks for consent in Moimio\'s words, not the browser\'s', async () => {
+    await renderForm();
+    set('first_name', 'Test');
+    set('last_name', 'Rest');
+    set('email', 'rest@gmail.com');
+    submitForm();
+
+    await waitFor(() => {
+      expect(screen.getByText(en['errors.participant.gdpr_required'])).toBeInTheDocument();
+    });
+    expect(document.querySelector('input[name="gdpr_consent"]'))
+      .toHaveAttribute('aria-invalid', 'true');
+    expect(registerPosts()).toHaveLength(0);
+  });
+
+  it('catches a malformed address without asking the server', async () => {
+    await renderForm();
+    fillValid('nope@nope');
+    submitForm();
+
+    await waitFor(() => {
+      expect(screen.getByText(en['errors.field.email'])).toBeInTheDocument();
+    });
+    expect(registerPosts()).toHaveLength(0);
+  });
+
+  it('clears each mark as it is corrected', async () => {
+    await renderForm();
+    submitForm();
+    await waitFor(() => {
+      expect(screen.getAllByText(en['errors.field.required']).length).toBeGreaterThan(0);
+    });
+
+    fillValid();
+
+    await waitFor(() => {
+      expect(screen.queryByText(en['errors.field.required'])).toBeNull();
+    });
+    expect(screen.queryByText(en['errors.validation.summary'])).toBeNull();
+    expect(document.querySelector('input[name="email"]'))
+      .toHaveAttribute('aria-invalid', 'false');
+  });
+
+  it('still submits a form with nothing wrong with it', async () => {
+    await renderForm({ rejectSubmit: false });
+    fillValid();
+    submitForm();
+
+    await waitFor(() => expect(registerPosts()).toHaveLength(1));
+  });
+
+  it('checks an extra person\'s card in the same pass', async () => {
+    await renderForm();
+    fillValid();
+    fireEvent.click(screen.getByText(new RegExp(en['register.add_person'])));
+
+    // The card carries the primary's email but no name and no consent.
+    const card = document.getElementById('extra-person-0');
+    expect(card, 'the card the scroll aims at').not.toBeNull();
+    submitForm();
+
+    await waitFor(() => {
+      expect(card.querySelectorAll('[aria-invalid="true"]').length).toBeGreaterThan(0);
+    });
+    expect(screen.getByText(
+      en['errors.register.extra_people_incomplete'].replace('{count}', '1'),
+    )).toBeInTheDocument();
+    expect(registerPosts()).toHaveLength(0);
   });
 });

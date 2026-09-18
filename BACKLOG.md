@@ -2279,7 +2279,8 @@ language. v1.0.4zf asks the browser instead, in the interface language:
 the browser has no short name it gives the offset form, which ships as it is. No
 table of abbreviations is built, and **the IANA identifier can no longer appear**.
 
-**Still true after zf, and worth knowing: no screen renders the zone at all.**
+**Filed as DATE-3 in v1.0.4zg. Still true after zf: no screen renders the zone
+at all.**
 `zoneLabel` and `time.in_zone` have exactly three references in the whole
 frontend, all three inside `useDateFormat.jsx` itself — the definition, the
 provider's export and the fallback. Nothing consumes either. So D8's "named on
@@ -2287,7 +2288,8 @@ screen" is built and wired to nothing, and v1.0.4ze's CHANGELOG line claiming ti
 are shown with the zone named was wrong when written. The formatter is correct and
 ready; **a screen has to ask for it.** Filed here rather than fixed, because
 v1.0.4zf's §2.6 is scoped to what fills `{zone}` and choosing which screens name a
-zone is a design question, not a correction.
+zone is a design question, not a correction. **DATE-3 records what it would take
+and the recommendation; it is after v1.0.5.**
 
 ---
 
@@ -2754,8 +2756,13 @@ name, email, the gender select and every optional field the server can reject, e
 also carrying `aria-invalid`. **No new string:** the five `errors.field.*` keys and
 `errors.validation.summary` all shipped in v1.0.4ze.
 
-**Pinned by `frontend/src/pages/RegisterPage.test.jsx`**, five tests, the form
-rendered for real against the server's actual 422 body. Note for anyone writing
+**See also FORM-2**, filed in v1.0.4zg: this entry is about what the SERVER
+answers and how the form shows it; FORM-2 is about the BROWSER's own messages,
+which appeared first and in the browser's language. Same form, different voice.
+
+**Pinned by `frontend/src/pages/RegisterPage.test.jsx`**, five tests in v1.0.4zf
+and thirteen after v1.0.4zg, the form rendered for real against the server's
+actual 422 body. Note for anyone writing
 another test on this form: its labels carry no `htmlFor` and the inputs are their
 siblings rather than their children, so `getByLabelText` cannot reach them — query
 by `name`.
@@ -2878,6 +2885,179 @@ item and not a one-line fix.
   the user's zone or the event's, and whether the box should offer a list
   instead of free text.
 - **Add any new strings to STRINGS-1.**
+
+---
+
+## DATE-2 — The date box is drawn in the browser's language, not the page's
+
+**Status:** Open, **after v1.0.5.** Found by Johannes in session 86, on the same
+German registration form as FORM-2, and filed rather than fixed in v1.0.4zg.
+
+A native `<input type="date">` is drawn by the browser: the `mm/dd/yyyy`
+placeholder, the picker, the month names and the order of the parts all come
+from the browser's own locale, not from the page. A German form therefore shows
+`mm/dd/yyyy`, and there is no attribute, no CSS and no script that changes it —
+the same root cause as FORM-2's English bubbles, in a control rather than a
+message.
+
+**The only fix is our own date field:** three parts, or a text box with a mask,
+plus a picker we draw. That is a component, not a correction, and it has to
+handle every place a date is entered — the registration form's date of birth,
+the event's start and end, any custom field of type `date`. It also needs the
+user's chosen format (DATE-1's setting) to decide the order of the parts, which
+is the one piece of it we already have.
+
+**Not a defect that can be papered over.** A `placeholder` does not show on a
+date input, and switching the input to `type="text"` to control the placeholder
+loses the picker and the browser's own parsing. Either we draw the control or
+we live with the browser's.
+
+---
+
+## DATE-3 — A time never shows its zone, because no screen asks for it
+
+**Status:** Open, **after v1.0.5.** Established in v1.0.4zf's report, filed in
+v1.0.4zg. **This is a missing feature, not a defect:** times are already shown
+in the event's zone where one is known (DATE-1, D8). What is missing is the
+label saying so.
+
+**What is built.** `zoneLabel(eventZone)` in `useDateFormat.jsx` answers with
+the browser's short name for the zone, in the interface language — `MESZ` for a
+German reader, an offset such as `GMT+9` where a language has no short form,
+and never the IANA identifier (v1.0.4zf, 2.6). `time.in_zone` — `{time}
+({zone})` — exists in all six locale files. Both are correct and both are used
+by nothing: the only references to either are inside `useDateFormat.jsx` itself.
+
+**What it would take.**
+
+1. **Thread the event through the two tables that show times.** `formatTime`
+   and `formatDateTime` already accept an `eventZone`; the screens call them
+   without one, so today they fall back to the user's zone. Those call sites
+   have to know which event's row they are drawing.
+2. **Decide when a zone is worth naming at all.** Labelling every timestamp
+   with `(MESZ)` is noise on a screen where every row is the same zone.
+
+**Recommendation, not a decision: name the zone only when the event's zone
+differs from the reader's.** That is when the label carries information — a
+check-in time an hour out is worse than one that is labelled — and it is silent
+the rest of the time. Johannes has not ruled on this.
+
+**The CHANGELOG is already honest about it.** v1.0.4zg's entry says "where a
+time is shown with its zone, the zone is named the way you would say it", which
+is true and claims nothing about how often that is. Leave it conditional until
+this ships.
+
+---
+
+## FORM-2 — The browser's own validation messages, in the browser's language
+
+**Status:** ✅ CLOSED in v1.0.4zg (2026-09-18) for the public registration form
+and the event-team form; **filed and deliberately left alone** for twelve other
+forms, see the table. Found by Johannes in session 86, after v1.0.4zf's checks
+passed. Distinct from [FORM-1](#form-1--a-rejected-form-field-shows-the-servers-raw-validation-error),
+which was about the SERVER's answer; this is the browser talking over the page
+before anything is sent.
+
+**What he saw,** on the public registration form with the interface in German,
+in Chrome:
+
+- a malformed address raised **"'.' is used at a wrong position in '.dsasdf'."**
+- an empty first name raised **"Please fill out this field."**
+
+Both in English. These are Chrome's own constraint-validation messages, written
+in the **browser's** UI language. A page cannot translate them, cannot read
+them, and cannot restyle them. Setting `lang` on the document does not move them
+either (see below).
+
+**The fix is not the attribute.** `noValidate` takes one line; what it costs is
+every check the browser was silently making. The work is that Moimio now makes
+them itself.
+
+### What the registration form checks, in order (v1.0.4zg)
+
+`validatePrimary()` in `RegisterPage.jsx`, returning a map of field to message
+key in the shape `fieldErrors` already held:
+
+| Check | Message |
+|---|---|
+| First name, last name not blank | `errors.field.required` |
+| Email not blank | `errors.field.required` |
+| Email's shape — the loose v1.0.4ze test, unchanged | `errors.field.email` |
+| Each built-in optional field the organiser marked required | `errors.field.required` |
+| Each required custom field (a boolean is answered, not ticked) | `errors.field.required` |
+| The consent box | `errors.participant.gdpr_required` |
+
+Then `validateExtras()` — the extra-person pre-flight that has existed since
+v0.70d, moved out of the submit body so **both halves are checked in one pass**.
+The cards sit outside the `<form>` element, so the browser never validated them
+in the first place.
+
+**No new key.** `errors.participant.gdpr_required` is what the server already
+answers with for a missing consent, in all six languages.
+
+**What the person sees.** The box outlined in burgundy, the reason under it,
+`aria-invalid` set, the summary banner above — the v1.0.4zf pattern, now also on
+the custom fields and the consent box, which had neither. Everything clears as
+it is corrected, and the banner goes with the last of them, or becomes the
+extra-people message if a card is still incomplete. **Nothing is sent while any
+check fails,** and the page scrolls to and focuses the first failing box rather
+than the banner.
+
+**Two things fixed on the way.** The scroll had always aimed at
+`extra-person-<n>`, an id that was on no element, so it fell through to the
+banner at the top; the card now carries it. And the scroll ran unguarded inside
+a timer, where a throw takes the focus call with it.
+
+### Every other form, and what it got (§2.2)
+
+A form can raise a native bubble if it has `required` or a typed input inside a
+`<form>`. Seventeen files contain a `<form>`; `ReportsPanel.jsx` matched on the
+word "format" and has none, and `NotesModal.jsx` has no constrained control at
+all, so neither can raise one.
+
+| Form | Own validation | Answer |
+|---|---|---|
+| `RegisterPage` (public) | now complete | **browser's turned off** |
+| `EventAssignmentsPanel` — assign a team member | refuses an empty user picker with `staff.assign.pick_user_error`, its only required control | **browser's turned off** |
+| `LoginPage` | none — relies on `required` | left as it is |
+| `SetupPage` — first admin | password match and length only; nothing on the other three | left as it is |
+| `ForgotPasswordPage` | none | left as it is |
+| `ResetPasswordPage` | password match and length only | left as it is |
+| `UserManagementPage` — create user | none | left as it is |
+| `WebhooksPage` — create webhook | none; `type="url"` is doing real work | left as it is |
+| `EventsPage` — create event | none | left as it is |
+| `EventDetailPage` — event details | none | left as it is |
+| `GroupTypesEditor` — create and rename | `if (!name.trim()) return` — refuses silently, says nothing | left as it is |
+| `MarksPanel` — create and edit a mark | same silent refusal | left as it is |
+| `CheckInPanel` — add a tick column | same silent refusal | left as it is |
+| `FormConfigPanel` — add and edit a custom field | same silent refusal | left as it is |
+| `AllocationBoard` — the unit modal | same silent refusal; `type="number" min="1"` on capacity | left as it is |
+
+**Why "left as it is" and not "fixed".** A native English bubble is worse than
+no bubble, but **no feedback at all is worse than both** — and that is what
+turning the browser's check off would leave on a form whose only answer to an
+empty box is `return`. Building real validation for twelve admin forms is its
+own release, after v1.0.5. They are all staff-facing; the public form, which is
+the one a stranger fills in, is done.
+
+**A silent `return` does not count as covering the same ground.** It stops the
+submit, which is half of it, but it says nothing — the person clicks and the
+form sits there.
+
+### The document's language (§2.3)
+
+`I18nProvider` now sets `document.documentElement.lang` from the interface
+language and keeps it in step when the language changes. `index.html` ships
+`lang="en"`, so a German page had been claiming to be English since the
+beginning.
+
+**This is right regardless of this release:** it is what a screen reader reads
+the page in, and what a browser uses to decide whether to offer a translation.
+**It did not change any of Chrome's messages,** which is what §2.3 asked to be
+told: Chrome writes constraint messages in its own UI language whatever the
+document says. That is precisely why the form turns them off rather than
+relying on this. Whether another browser honours it here is untested — there is
+no browser on this machine.
 
 ---
 

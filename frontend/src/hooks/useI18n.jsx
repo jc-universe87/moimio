@@ -104,6 +104,20 @@ export function I18nProvider({ children, forRegistration = false }) {
       });
   }, [lang]);
 
+  // v1.0.4zg (2.3): the document says which language it is in, and keeps
+  // saying it when the language changes. `index.html` ships `lang="en"`, so
+  // until now a German page claimed to be English.
+  //
+  // This is right regardless of anything else: it is what a screen reader
+  // reads a page in, and what a browser uses to decide whether to offer a
+  // translation. It is NOT a fix for the browser's own constraint messages:
+  // Chrome writes those in its own UI language whatever the document says,
+  // which is why the registration form turns them off instead of relying on
+  // this. Whether any other browser honours it here is untested.
+  useEffect(() => {
+    if (typeof document !== 'undefined') document.documentElement.lang = lang;
+  }, [lang]);
+
   // Admin language change — persists to localStorage
   const setLang = useCallback((code) => {
     if (!VALID_CODES.has(code)) return;

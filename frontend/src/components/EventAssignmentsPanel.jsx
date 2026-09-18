@@ -217,8 +217,15 @@ export default function EventAssignmentsPanel({ eventId, isAdmin, onChange }) {
     const isStaffRole = assignForm.role === 'staff';
 
     return (
+      // v1.0.4zg (FORM-2): `noValidate`. This form's one required control is
+      // the user picker, and handleSubmit already refuses an empty one with
+      // `staff.assign.pick_user_error` — its own message, in the reader's
+      // language. The browser's bubble said the same thing first, in the
+      // browser's language, so it is the only thing lost here. `required`
+      // stays for the screen reader.
       <form
         onSubmit={handleSubmit}
+        noValidate
         className="card-surface-solid rounded-2xl p-4 space-y-4 mb-4"
         style={{ border: '1px solid var(--card-border)' }}
       >
