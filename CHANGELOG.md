@@ -8,7 +8,7 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
-## [1.0.4z] — 2026-09-18
+## [1.0.4za] — 2026-09-18
 You can see and grab every scrollbar again.
 
 ### Fixed

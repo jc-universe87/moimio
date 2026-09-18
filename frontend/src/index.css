@@ -349,7 +349,7 @@ html, body {
 }
 
 /*
-  ─── Scrollbars (v1.0.4z, SCROLL-1) ──────────────────────────────────────
+  ─── Scrollbars (v1.0.4za, SCROLL-1) ─────────────────────────────────────
 
   Every scrollable area shows a slim, subtle, DRAGGABLE bar on a pointer
   device.
@@ -362,60 +362,90 @@ html, body {
   the People table, which scrolls sideways, dragging the bar is the obvious
   way to move it, and there was nothing to take hold of.
 
-  WHY DEFINING RULES IS THE FIX rather than un-hiding anything: giving a
-  container ::-webkit-scrollbar rules opts it out of overlay behaviour in
-  Blink, and it gets a real, classic, permanently-drawn bar that takes its
-  own space and can be grabbed.
+  THE TWO SETS MUST NEVER MEET. This is the whole point of the structure
+  below, and getting it wrong is what made v1.0.4z a no-op.
 
-  BOTH ENGINES, because neither is enough alone. `scrollbar-width` and
-  `scrollbar-color` are the standard properties, honoured by Firefox and by
-  current Chrome; they are INHERITED, so setting them on `html` reaches
-  every element without a universal selector. The ::-webkit-scrollbar
-  pseudo-elements cover the rest of Blink and WebKit, and are what actually
-  opts a container out of overlay drawing.
+    - `::-webkit-scrollbar` and friends are the legacy pseudo-elements.
+      Blink and WebKit understand them; Firefox does not, at all. Styling
+      them is ALSO what opts a container out of overlay drawing in Blink,
+      so they are the half that actually produces a classic, permanently
+      drawn, space-taking, grabbable bar.
 
-  POINTER DEVICES ONLY. The whole block is inside the same media test the
+    - `scrollbar-width` and `scrollbar-color` are the standard properties.
+      Firefox understands them and nothing else; Blink and WebKit
+      understand them too — and PREFER them. When either is in effect on
+      an element, Blink ignores that element's ::-webkit-scrollbar rules
+      entirely, so that two styling systems cannot disagree about one bar.
+
+  v1.0.4z put both in one block and set the standard properties on `html`.
+  They are INHERITED, so they reached every element — and every element
+  therefore ignored the pseudo-element rules. Chrome went on drawing its
+  fading overlay bar. The rules shipped; they simply never applied.
+
+  So: `@supports selector(::-webkit-scrollbar)` and its negation. The
+  condition tests the one thing that genuinely differs between the engines,
+  rather than sniffing a browser, and it guarantees no standard scrollbar
+  property is ever in scope for an engine that would let it win. A browser
+  too old to support `@supports selector()` fails both conditions and gets
+  its own default bar — a safe degradation.
+
+  POINTER DEVICES ONLY. The whole thing sits inside the same media test the
   board uses to gate its drag affordances. On a phone the system's own
   overlay bar is the right answer and a permanent one would only eat width.
 
   ONE RULE, NO OPT-OUTS. Every scrollable container in the app is listed in
   BACKLOG.md under SCROLL-1; none of them wanted different treatment. If
   one ever does, it opts out here with its reason, not in a component.
+
+  NOT VERIFIED IN A BROWSER. There is none on this machine. What would
+  settle it: `offsetWidth - clientWidth > 0` on a scrolling container in
+  Chrome, which means the bar takes space and is therefore classic rather
+  than overlay.
 */
 @media (hover: hover) and (pointer: fine) {
-  /* Inherited, so this reaches every scrollable descendant. */
-  html {
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-thumb) transparent;
+
+  /* ── Blink and WebKit. No standard scrollbar property in scope here, on
+     purpose: one would suppress everything below it. ── */
+  @supports selector(::-webkit-scrollbar) {
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    /* 10px of track, 6px of visible thumb: the 2px transparent border plus
+       background-clip leaves breathing room on each side so the bar reads
+       as slim without becoming hard to hit. */
+    ::-webkit-scrollbar-thumb {
+      background-color: var(--scrollbar-thumb);
+      background-clip: content-box;
+      border: 2px solid transparent;
+      border-radius: 6px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: var(--scrollbar-thumb-hover);
+    }
+
+    /* Where a vertical and a horizontal bar meet — the People and Check-in
+       tables, which scroll both ways. Left transparent so the corner does
+       not read as a third control. */
+    ::-webkit-scrollbar-corner {
+      background: transparent;
+    }
   }
 
-  ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  /* 10px of track, 6px of visible thumb: the 2px transparent border plus
-     background-clip leaves breathing room on each side so the bar reads as
-     slim without becoming hard to hit. */
-  ::-webkit-scrollbar-thumb {
-    background-color: var(--scrollbar-thumb);
-    background-clip: content-box;
-    border: 2px solid transparent;
-    border-radius: 6px;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background-color: var(--scrollbar-thumb-hover);
-  }
-
-  /* Where a vertical and a horizontal bar meet — the People and Check-in
-     tables, which scroll both ways. Left transparent so the corner does
-     not read as a third control. */
-  ::-webkit-scrollbar-corner {
-    background: transparent;
+  /* ── Firefox. These properties are all it understands, and they are
+     inherited, so `html` reaches every scrollable descendant. Firefox
+     draws a classic bar for `thin` rather than a fading overlay, so it
+     needs nothing else. ── */
+  @supports not selector(::-webkit-scrollbar) {
+    html {
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) transparent;
+    }
   }
 }
