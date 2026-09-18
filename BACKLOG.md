@@ -359,7 +359,18 @@ events; not a launch blocker.
 
 ## CE-2 — Backend image runs `uvicorn --reload` in production
 
-**Status:** Open. Surfaced during v1.0.0l ship.
+**Status:** ✅ CLOSED in v1.0.4w (2026-09-18). Surfaced during v1.0.0l ship.
+
+**Resolution.** `backend/Dockerfile` no longer passes `--reload`.
+
+The flag was doing real work in the development compose, which bind-mounts
+`./backend/app`, and no work at all in the sealed image, which has no source to
+watch. Removing it costs the development stack nothing: `docker-compose.yml`
+overrides the command for local work, and a rebuild is what picks up a change to
+the image anyway.
+
+Closed alongside the log default (**OPS-1**) in v1.0.4w, both being production
+hygiene on the image self-hosters actually run.
 **Severity:** Medium. Production hygiene, not a correctness defect.
 
 `backend/Dockerfile` line 36 starts uvicorn with `--reload`, which
@@ -465,7 +476,16 @@ happens, the README Quick start gains the unpack step for archive recipients.
 
 ## PDF-1 — Detailed roster gender column is narrower than its header
 
-**Status:** Open. Pre-existing; measured during v1.0.4g ship.
+**Status:** ✅ CLOSED in v1.0.4w (2026-09-18). Pre-existing; measured during v1.0.4g ship.
+
+**Resolution.** The gender column is now 14mm instead of 10mm
+(`pdf_service.py:1164`). The columns summed to 248mm against roughly 267mm
+usable on landscape A4, so the 4mm came out of spare and nothing else moved.
+
+Widening was chosen over shortening the headers, as this entry preferred: it
+keeps the German abbreviation dot and needs no string change, which matters
+because the PDF's translation table is reviewed separately from the locale
+files.
 
 `render_detailed` allots 10mm (28.35pt) to the gender column. At
 7.5pt bold, two headers overrun it:
@@ -539,7 +559,24 @@ read the stats payload. File only; no change in v1.0.4i.
 
 ## DASH-2 — Create and update category return the raw ORM row, so a tile fed from it shows blanks
 
-**Status:** Open. Pre-existing; found in session 84 while reading the endpoints for the exclusion work (v1.0.4i). Not fixed there.
+**Status:** Open, **re-scoped in v1.0.4w** — real at the API, not reachable from any screen. Scheduled for the v1.0.4y counts release. Pre-existing; found in session 84 while reading the endpoints for the exclusion work (v1.0.4i). Not fixed there.
+
+**Re-scope (session 86 survey).** The defect in the endpoints is exactly as
+described below and is unchanged. What the entry gets wrong is the consequence:
+**no tile is ever fed from those responses.**
+
+`allocationCategories.create` and `.update` have only two callers in the whole
+frontend, `GroupTypesEditor.jsx:107` and `:123`, and **both discard the return
+value** and immediately `await loadCategories()` instead. So the blanks this
+entry describes cannot appear today. `OrganiseDashboard.jsx:474-477` already
+carries a comment saying the tile is fed from the list response and never from a
+create/update response.
+
+So this is a trap for the next caller, not a live fault: an endpoint that answers
+in a different shape from the one that lists the same thing will eventually be
+believed by somebody who does not re-list. Still worth the two lines, and it
+lives in the same file as DASH-1 and DASH-3, which is why it stays scheduled
+rather than closed.
 
 `api_create_category` and `api_update_category` return the
 `AllocationCategory` ORM object as the response. That shape omits the
@@ -706,7 +743,34 @@ unlock it.
 
 ## STREAM-1 — Exclusion writes broadcast on the organise stream and nothing listens
 
-**Status:** Open. Found in session 85 while building the exclusion UI (v1.0.4k). Deliberately not picked up there.
+**Status:** ✅ CLOSED in v1.0.4w (2026-09-18) — **does not reproduce.** Found in session 85 while building the exclusion UI (v1.0.4k). Deliberately not picked up there.
+
+**Resolution.** The premise was already false when this was filed, and the
+session 86 survey settled it by reading the consumer rather than the publisher.
+
+Both endpoints do broadcast: `api/allocations.py:433` (`participant_excluded`)
+and `:458` (`participant_included`). But the board's stream consumer never
+switches on `kind`. `AllocationBoard.jsx:406-418` ignores only the opening
+`connected` frame and treats **every other message** as "refetch everything",
+debounced by 200ms, calling `loadAll()`. And `loadAll` fetches the exclusion list
+along with units and allocations (`AllocationBoard.jsx:486-493`,
+`catApi.listExclusions`).
+
+So a second organiser's exclusion does land on this board, inside about a fifth
+of a second. This entry says it "only lands when some other event triggers a
+refetch"; in fact the exclusion write **is** such an event. The stale claim
+survived in a source comment at `AllocationBoard.jsx:59-63`, which is what this
+entry was written from.
+
+What remains is only an optimisation — patching `excludedIds` in place instead
+of refetching the board — and it is not worth the blast radius into
+`useEventStream.jsx` that this entry itself warned about.
+
+**What the next person should watch for instead.** The gap is real, but it is
+not exclusions. `patch_participant` (`api/participants.py:276`, the endpoint that
+**cancels** somebody, renames them, or changes their group code) and
+`delete_participant` (`:421`) publish nothing on any topic. So the board keeps
+showing people another organiser has already cancelled. Filed as **STREAM-2**.
 
 The two exclusion endpoints in `api/allocations.py` already publish
 `participant_excluded` and `participant_included` on the organise
@@ -753,7 +817,38 @@ deserves its own before/after check.
 
 ## PANEL-1 — Popped-out participant panel resizes width but not height, and docks back too short
 
-**Status:** Open. Found in manual testing of v1.0.4k (2026-09-17).
+**Status:** ✅ CLOSED in v1.0.4w (2026-09-18). Found in manual testing of v1.0.4k (2026-09-17).
+
+**Resolution.** One cause, and it was not where this entry looked.
+
+The resize handler is innocent: `startPanelResize`
+(`AllocationBoard.jsx:108`) and the pointer-move handler (`:117`) both write `w`
+and `h`, and the style applies both (`:2148`). The height **was** being set.
+
+The clamp came from somewhere else. `AllocationBoard.jsx:447-458` matched the
+docked panel's height to the units grid beside it by writing an inline
+`maxHeight`. It checked `isMobileView` and **nothing else** — not
+`panelFloating` — so it kept clamping the panel while it floated, from the
+*units grid's* height. An inline `max-height` beats an inline `height` whenever
+it is smaller, and width has no such clamp. Hence: width moved, height did not.
+"Docks back too short" was the same line, because the value was written with
+`.style` imperatively and React never cleared it.
+
+v1.0.4w scopes that effect to the docked, desktop case and clears the value on
+cleanup.
+
+**Two things the session 86 survey settled that this entry could not.**
+**Nothing is stored anywhere** — `panelSize` is plain component state with a
+fixed default (`AllocationBoard.jsx:105`), and there is no `localStorage`, no
+`sessionStorage`, no user preference and no event setting holding a panel size.
+So there was nothing saved earlier for the fix to repair. And Johannes's
+impression that this differed between older and newer events is really **few
+units against many**: the clamp was the units grid's height, so an event with
+twenty units had a loose clamp and one with two had a tight one.
+
+The Excluded block's own half of this — a long list escaping the card — shares
+this cause but also needs the block to scroll inside itself. That half is
+**EXCL-3**, in the v1.0.4x pass.
 
 The resize grip on the floating participant panel (`AllocationBoard.jsx`,
 `startPanelResize`) writes both `panelSize.w` and `panelSize.h`, but only
@@ -775,7 +870,41 @@ v1.0.4l, which is the third thing now writing to that height.
 
 ## NAV-1 — Sidebar active state is inconsistent: Einteilung, Backup and Webhooks never highlight
 
-**Status:** Open. Found in manual testing of v1.0.4k (2026-09-17).
+**Status:** ✅ CLOSED in v1.0.4w (2026-09-18). Found in manual testing of v1.0.4k (2026-09-17).
+
+**Resolution.** The audit this entry asked for turned up **two separate causes**
+and **a fourth affected entry nobody had reported**.
+
+**The rule the working entries follow.** `activeSection` comes from the
+`?section=` query parameter (`AdminLayout.jsx:123-124`, `:204-205`), and an entry
+highlights when `activeSection === item.id` (`:389`, `:424`, `:467`).
+`navigateSection(id)` puts that id in the URL (`:158-167`). So an entry
+highlights only if clicking it puts its own id there.
+
+**Cause 1 — Einteilung.** `AdminLayout.jsx:124` aliases the old v45 value
+`organise` to `board`. Three nav items still carry `id: 'organise'` (`:219`,
+`:246`, `:255`). Clicking one navigates to `?section=organise`, the alias
+rewrites the value to `board`, and the test then asks whether
+`'board' === 'organise'`, which is false forever. The item at `:234` carries
+`id: 'board'` and highlights correctly, which is why this looked arbitrary from
+outside.
+
+**Cause 2 — Backup, Webhooks and Workspace.** These navigate to paths, not
+sections, and their `className` strings were **hardcoded to the inactive style
+with no conditional at all**: `AdminLayout.jsx:512`, `:530`, `:544`. There was no
+logic to be wrong.
+
+**Workspace is the fourth one,** and it was never reported because it is visible
+only on managed instances (`capabilities.account_portal`).
+
+**Users was the odd one out** and showed the intended shape: a bespoke
+`location.pathname === '/admin/users'` test at `:499`, the only one anybody had
+written.
+
+v1.0.4w fixes both causes: the section comparison is normalised the same way the
+value is, and the four path entries share one `pathActive` helper. `/admin`
+(NavLink's own `isActive`) and Manage account (an external link, correctly never
+highlighted) were already right and are untouched.
 
 Selecting **Benutzer** in the sidebar highlights it as the active entry.
 Selecting **Einteilung**, **Backup** or **Webhooks** does not — the entry
@@ -1304,13 +1433,23 @@ so it needs no new string. The per-person GDPR export gains its
 `exclusions` key too.
 
 ---
-match how `allocations` becomes `{unit_name, category_name, created_at}`.
-
----
 
 ## VERSION-1 — `check-version-markers.py` does not read the `version.py` docstring
 
-**Status:** Open. Found in session 86 phase 1 while reading the version markers for v1.0.4m. Corrected by hand there, not fixed.
+**Status:** ✅ CLOSED in v1.0.4w (2026-09-18). Found in session 86 phase 1 while reading the version markers for v1.0.4m. Corrected by hand there, not fixed.
+
+**Resolution.** Both halves, as this entry said were needed.
+
+`scripts/bump-version.py` now rewrites the line-1 docstring alongside
+`__version__` and `moimioVersion`, asserting exactly one substitution the way the
+other two already did. `scripts/check-version-markers.py` now reads the docstring
+as a fourth marker and fails when it disagrees with the rest.
+
+CI picks it up with no workflow change, because `.github/workflows/build.yml:47`
+already runs the checker on every push and on every `v*` tag.
+
+This is the last release whose brief has to say "then set the docstring by
+hand".
 
 `backend/app/version.py` names the version twice: in `__version__`, and in
 its own line-1 docstring. `scripts/bump-version.py` sets only the first,
@@ -1662,9 +1801,6 @@ change in `moimio-saas`. Both are settled by v1.0.4u: the page is
 `docs/moving-a-workspace.md`, and the email is SAAS-4.
 
 ---
-difference between "you can leave" and "you can leave in an afternoon".
-
----
 
 ## USER-1 — Deleting a user does not handle their notes
 
@@ -1834,11 +1970,6 @@ Both lines above are now decided, and both are needed.
   no webhook secrets are in either. The customer should know before they
   click that they will have to invite their team again and re-enter their
   webhook secrets on the receiving server.
-
----
-- **The leaving (Danger Zone) screen says what the leaving export
-  contains**, so a customer knows before they click what they will get back
-  and what they will have to set up again.
 
 ---
 
@@ -2170,3 +2301,361 @@ What the email should say, once someone writes it in `moimio-saas`:
 
 No CE code changes. The strings live in the hosted product, so they are not
 part of STRINGS-1 either.
+
+---
+
+## LANG-1 — A default group type shows its stored English name inside the group type
+
+**Status:** Open. Found by Johannes by hand on v1.0.4u in the German interface; established by the session 86 non-backup survey.
+
+In German the Einteilung list showed a group type as **"Zimmerbelegung"**.
+Opening that same group type showed the header **"Room Allocation"**. Both showed
+the same 11 units, 58 assigned, 39 unassigned and 5 excluded, so it is one group
+type wearing two names. "Room Allocation" is the stored name: a participant's own
+data export shows `"category_name": "Room Allocation"` throughout.
+
+**Cause.** `OrganiseDashboard.jsx:303` renders `{selectedCat.name}`, the stored
+text. The list tile eight hundred lines below it, at `:600`, renders
+`typeName(cat, t)`. The two are otherwise the same markup — both are
+click-to-rename headings, both call `startInlineRename`, both carry the same
+title attribute. Line 303 is simply the one that was missed when `typeName` came
+in with v1.0.4. It is the only direct `.name` render in that file.
+
+`typeName` (`frontend/src/utils/groupTypeLabel.js:20-24`) translates
+`organise.default_type.<key>` while the row still carries a `name_key`, and
+returns the stored text otherwise. The stored value for a default is the English
+one, because that is what the seeder writes: `organise.default_type.rooms` is
+"Room Allocation" in `en.json` and "Zimmerbelegung" in `de.json`. That is why the
+two agree in English and disagree in German, and why this went unnoticed.
+
+**A second site nobody had spotted.** `EventDetailPage.jsx:878` passes
+`categoryName={topCat.name}` into `UnassignedBanner`, which renders it through
+`banner.unassigned.title`. Same fault, different screen.
+
+### Every other place a group type's name appears
+
+| Surface | Renders | Right? |
+|---|---|---|
+| Einteilung list tile | `typeName` (`OrganiseDashboard.jsx:600`) | Yes |
+| **Detail header** | `selectedCat.name` (`OrganiseDashboard.jsx:303`) | **No** |
+| Manage-group-types list | `typeName` (`GroupTypesEditor.jsx:290`) | Yes |
+| Participant insight panel | `typeName` (`InsightPanel.jsx:176`) | Yes |
+| Reports panel and its PDF buttons | `typeName` (`ReportsPanel.jsx:359, 373, 383`) | Yes |
+| Board dialogs, notes, clear-all confirm | `typeName` (`AllocationBoard.jsx:1288, 1885, 1988`) | Yes |
+| PDF filename slug | `typeName` (`AllocationBoard.jsx:295`) | Yes |
+| **"Closest to done" banner** | `topCat.name` (`EventDetailPage.jsx:878`) | **No** |
+| The PDFs | `resolve_default_name(name_key, name, lang)` (`pdf_service.py:713`) | Yes |
+| `participants.csv` "Excluded From" | stored name | Yes, by decision (v1.0.4v) |
+| A person's data export | stored name | Yes — a data file, not a screen |
+| The backup | stored name plus `name_key` | Yes |
+
+**The PDFs need no separate handling.** `pdf_service.py:713` already resolves the
+name inside `_build_pdf`, which all three renderers go through, and its own table
+at `app/core/default_type_names.py` carries all six languages with
+`tests/test_default_type_names.py` guarding it against drift.
+
+### A stray write, found beside it
+
+`OrganiseDashboard.jsx:180` compares the typed text against the **stored** name
+(`trimmed === existing.name`) while the draft is seeded with the **translated**
+one (`:175`, correctly). For a default group type those never match, so merely
+clicking the header and clicking away fires a PATCH nobody asked for.
+
+**It is not a data risk.** `update_category` (`allocation_service.py:168-184`)
+asks `matches_default(current_key, incoming)`: if the incoming text is still one
+of our own translations of that key, `name_key` survives untouched.
+"Zimmerbelegung" is our German for `rooms`, so it matches and nothing is lost.
+What remains is a needless database write on a stray click.
+
+### An organiser can repair a lost key by hand today
+
+Johannes's two English group types, "Rooms" and "Small Groups", are rows whose
+`name_key` a pre-v1.0.4q restore dropped, which BACKUP-2 closed for future
+restores. **Old rows can still be repaired from the interface.**
+`allocation_service.py:181-184` restores a lost key on a **built-in**
+(`is_default`) group type when the organiser types one of our current default
+names in any language. So renaming it to exactly "Zimmerbelegung", or
+"Room Allocation", or "방 배정", brings the key back and it starts translating
+again. It must be exact, and it works only for the two group types an event is
+born with — a group type the organiser created and happened to call "Rooms"
+stays theirs, by design.
+
+---
+
+## LAYOUT-1 — Action rows that refuse to shrink push everything else off narrow screens
+
+**Status:** Open. Found by Johannes by hand on v1.0.4u at about 780px on `/admin/webhooks`; the sweep is from the session 86 non-backup survey.
+
+**What Johannes saw.** Wide, each endpoint shows its name, status badge,
+address, subscribed event types and consecutive-failure count, with the action
+buttons to the right. At about 780px the action buttons take the full width and
+everything else is pushed out of view: four endpoints render as four identical
+strips of buttons, with no name and no address.
+
+**Cause.** `WebhooksPage.jsx:370` lays the row out as
+`flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3`. The
+information side is `min-w-0 sm:flex-1 overflow-hidden` (`:371`), which is
+correct and will shrink. The button side is the fault:
+
+```
+<div className="flex flex-wrap gap-1 sm:justify-end sm:flex-shrink-0">   (:411)
+```
+
+`flex-shrink-0` on a `flex-wrap` container. As a flex item that refuses to
+shrink, the group claims its full natural width — every button on one line — and
+never gives any back. Because it never shrinks it never reaches the width at
+which it would wrap, so the `flex-wrap` is inert. The information column, which
+*is* allowed to shrink, is squeezed to nothing.
+
+**Why about 780px.** Four buttons (`:412-425`) with long German labels —
+"Test senden", "Zustellungen anzeigen", "Pausieren", "Secret erneuern" — need
+roughly 470px of natural width at `text-xs`. At a 780px window the admin sidebar
+is still shown, leaving a content column near 560px. The English build fails too,
+just later. Note also that the `sm:` breakpoint is 640px for a layout that needs
+about 900px.
+
+### Every page that shares the fault, worst first
+
+1. **`pages/WebhooksPage.jsx:411`** — the only occurrence of the exact
+   anti-pattern, and the one confirmed by hand.
+2. **`pages/BackupPage.jsx:97` and `:111`** — `flex items-center justify-between`
+   rows whose text side is a bare `<div>` with **no `min-w-0`** and no
+   truncation. One short button each, carrying `whitespace-nowrap` (`:102`), so
+   the heading and hint text are what overflow. Degrades, does not disappear.
+3. **`pages/UserManagementPage.jsx:160`** — `justify-between ... gap-3`, text
+   plus one button, same missing `min-w-0`. Mild.
+
+`EventDetailPage.jsx`, `EventsPage.jsx`, `RegistrationPhasePage.jsx` and
+`SetupHub.jsx` all use `flex-wrap` on their `justify-between` rows and are fine.
+
+**Unsettled by reading:** `components/BatchRegisterModal.jsx:453`, a four-column
+`<table className="w-full text-xs">` inside a wrapper whose only overflow rule is
+`overflow-hidden` (`:452`). The comment at `:449-450` says the layout collapses
+to a sub-line on small screens, so it is probably fine. The experiment: open the
+batch register preview at 400px with a long name in the data and see whether the
+fourth column is clipped. Not run.
+
+### The house already has a pattern, and these pages do not follow it
+
+Two patterns, both already in use and both correct:
+
+- **For tables.** A desktop-only table inside a scroll container plus a separate
+  card list for phones: `<div className="hidden md:block overflow-auto
+  max-h-[calc(100vh-20rem)]">` with `<table className="w-full min-w-max ...">`.
+  Used verbatim at `PeopleTable.jsx:1259-1260` and `CheckInPanel.jsx:660-661`,
+  and `CheckInPanel.jsx:657-659` names PeopleTable as the pattern it copies.
+  `UserManagementPage.jsx:304` and `WebhooksPage.jsx` both wrap their delivery
+  tables correctly — it is only the endpoint row that is wrong.
+- **For rows.** `flex flex-col sm:flex-row` with `min-w-0` and `truncate` on the
+  text side. `WebhooksPage.jsx:370-371` follows this and then breaks it with
+  `sm:flex-shrink-0` on the other side.
+
+Neither is written down anywhere. They live only as comments at
+`PeopleTable.jsx:1256-1258` and `WebhooksPage.jsx:365-369`, which is why the next
+action row will get it wrong again.
+
+---
+
+## EXCL-3 — The Excluded block wants one considered pass, not four patches
+
+**Status:** Open, scheduled for v1.0.4x. Opened from the session 86 non-backup survey, at Johannes's request.
+
+Four filed or found items are all about one block, and they pull against each
+other: adding an (i) takes width from a row where names already truncate.
+Johannes would rather have one considered pass than four separate patches.
+
+- **EXCL-1** — no drag out of the block, click only.
+- **EXCL-2** — names truncate beside the long undo label.
+- **The card does not grow with its list** — on an event with 26 excluded people,
+  expanding "Ausgenommen (26)" spilled the rows out past the card's white
+  background. The panel-level half of this is closed with **PANEL-1** in
+  v1.0.4w; the block-level half is here. `ExcludedBlock.jsx:60` is `shrink-0`
+  and its expanded list at `:106` has no height cap and no scroll of its own, and
+  the docked panel at `AllocationBoard.jsx:2146` has no `overflow-hidden` where
+  the floating variant at `:2145` does.
+- **No (i) on the row** — every other row on the board carries an (i) that opens
+  the participant's panel; a row in the Excluded block has only the name and
+  "Wieder berücksichtigen". Johannes's ruling: the (i) belongs there. Somebody
+  excluded from one group type is still a participant of the event, and their
+  history should not become unreachable because of it.
+
+### The proposed pass
+
+Change the row from *one line of three things* to *one line of two, with the
+controls revealed on hover* — the idiom this screen already uses and names at
+`AllocationBoard.jsx:2318-2321`, "the house idiom for a destructive write on a
+chip is the hover-revealed, admin-gated icon button".
+
+- **The name gets the whole row.** `truncate` stays, but with ~90% of 256px
+  instead of ~55%.
+- **Two icon buttons** grouped right, revealed on hover and focus (the row is
+  already `group`, `ExcludedBlock.jsx:114`): the `ⓘ` copied verbatim from
+  `AllocationBoard.jsx:2310-2317`, and an undo glyph carrying the **existing**
+  `organise.exclude.undo_title` as its `aria-label` and `title`. On touch, where
+  hover does not exist, both stay visible — the same `HAS_FINE_POINTER` test the
+  board already uses.
+- **The list scrolls inside the card.** A `max-height` of about 40vh plus
+  `overflow-y: auto` on `ExcludedBlock.jsx:106`.
+
+**This needs no new string.** The undo button already carries `aria-label` and
+`title` set to `organise.exclude.undo_title` (`ExcludedBlock.jsx:126-127`), so
+replacing the visible word with an icon costs no accessibility and invents no
+key. `organise.exclude.undo` then falls out of use and can be deleted with
+`prefs.scope` in the z release. The (i) reuses `insight.open`.
+
+**Does the panel work for an excluded person as it stands? Yes.** Everything
+`InsightPanel` shows is participant-scoped — contact details, registration,
+assignments across all group types, notes and history — and none of it depends on
+the person being eligible here. Their assignments in *this* group type will be
+empty because excluding removed them, which is correct. Nothing about the
+exclusion itself is shown; the history already records it.
+
+### One decision this needs first
+
+**Is EXCL-1 worth building, or should it be closed as won't-do?** The survey
+recommends closing it. Unpicking the `stopPropagation` calls that make the block
+a reliable drop target (`ExcludedBlock.jsx:66-79`) is what would be needed to let
+a drag escape it, and the comment at `:20-25` records that a drop leaking through
+to the panel behind "silently unassigns and looks like it worked" — a nasty
+failure to reintroduce for a convenience. There are already two ways back, and
+EXCL-1 is itself filed as "not because it blocks anything". **Not decided;
+Johannes's call before v1.0.4x.**
+
+---
+
+## STREAM-2 — Cancelling or removing a participant does not reach the allocation board
+
+**Status:** Open, scheduled for v1.0.4y. Found by the session 86 non-backup survey while settling STREAM-1, which does not reproduce.
+
+There are three broadcast topics: `organise:<id>`
+(`api/allocations.py:29-45`), `registration:<id>` (`api/participants.py:124`,
+`:189`) and `checkin:<id>` (`api/participants.py:404`). The allocation board
+subscribes to `organise` only (`AllocationBoard.jsx:405`).
+
+`patch_participant` (`api/participants.py:276`) — which is how a participant is
+**cancelled**, renamed, or has their gender or group code changed — publishes
+**nothing**, on any topic. `delete_participant` (`:421`) publishes nothing
+either. Counted by hand: zero `broker.publish` calls in each body.
+
+So if one organiser cancels somebody on the People page, another organiser's
+allocation board keeps them in the unassigned pool, keeps counting them in the
+denominator, and keeps offering them for placement, until something unrelated
+forces a refetch. That is a wider staleness window than the one STREAM-1
+describes, and it is on the screen two people are most likely to be using at
+once.
+
+**The fix is two lines of backend.** Add
+`await _publish_organise_change(event_id, "participant_changed")` to
+`patch_participant` and to `delete_participant`. **No frontend change at all**,
+because the board already refetches on any message
+(`AllocationBoard.jsx:406-418`) and `loadAll` reloads the roster with it.
+
+Worth doing in the same release as DASH-1 and DASH-3, because a stale roster and
+a wrong denominator produce the same complaint from an organiser.
+
+---
+
+## OPS-1 — Detailed logging is the default, so ordinary running writes personal data to the log
+
+**Status:** ✅ CLOSED in v1.0.4w (2026-09-18). Found by the session 86 non-backup survey, after Johannes noticed `import_all`'s own output buried in SQL logging.
+
+`backend/app/core/database.py:14` sets `echo=(settings.log_level == "DEBUG")`,
+so at `DEBUG` SQLAlchemy echoes every statement **with its bound parameters**.
+The Python default in `core/config.py:26` is `INFO` — but nothing shipped that.
+`docker-compose.yml:37` set `LOG_LEVEL: ${LOG_LEVEL:-DEBUG}` and
+`.env.example:10` set `LOG_LEVEL=DEBUG`, so every self-hoster following the
+install guide ran with statement logging on.
+
+The consequence is not noise. Participant names, email addresses and dates of
+birth were written to the container log on every request that touched them —
+personal data in a place nobody thinks of as a data store, outside the retention
+and erasure paths the rest of the product is careful about, and readable by
+anyone who can run `docker compose logs`.
+
+**Resolution.** Both defaults are now `INFO`. Detailed logging stays one
+environment variable away for anyone who needs it, and `database.py` is
+unchanged — the `DEBUG` behaviour is correct when somebody asks for it
+deliberately.
+
+Closed alongside **CE-2** (`uvicorn --reload` in the image), both being
+production hygiene on the image self-hosters actually run.
+
+See **SAAS-5** for the hosted side, which was checked and is not affected today.
+
+---
+
+## SAAS-5 — A tenant's log level is the control plane's log level
+
+**Status:** Open. **Not this repo.** Found by the read-only hosted check in the v1.0.4w brief, session 86.
+
+Checked and **not affected today**: the hosted control plane runs at `INFO`
+(`~/dev/moimio-saas/.env:3`), its own default is `INFO`
+(`app/config.py:18`), and `.env.example:5` is `INFO` too. So no tenant is
+running with statement logging on.
+
+The finding is the wiring, not the current value.
+`app/provisioning/env_render.py:130` renders every tenant's `LOG_LEVEL` as
+`settings.log_level` — **the control plane's own setting**, passed straight
+through. So if an operator ever sets `LOG_LEVEL=DEBUG` on the control plane, for
+their own debugging, every tenant provisioned from then on inherits it, and with
+CE's `echo` behaviour (see **OPS-1**) that puts participant names, emails and
+dates of birth into every one of those tenants' logs. One knob, two very
+different consequences, and the second is invisible from where the knob is.
+
+**What it wants:** a tenant log level that is its own setting, defaulted to
+`INFO` and not derived from the control plane's. A constant would do; it does not
+need to be configurable per tenant.
+
+No CE code changes. Filed here so it is not lost, as SAAS-4 is.
+
+---
+
+## SHIP-1 — Publishing is automatic on a pushed version tag, and nothing said so
+
+**Status:** Open until v1.0.5 ships. Established by the session 86 non-backup survey. **This is the ship procedure; read it before pushing anything.**
+
+Nothing in this repository described what pushing does, and the assumption
+carried in the session 86 briefs was that publishing images is a manual step.
+**It is not.**
+
+`.github/workflows/build.yml` is titled "Build and publish container images".
+Its triggers (`:17-21`) are:
+
+```
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+```
+
+It logs in to GHCR (`:65-70`), builds `./backend` and `./frontend` (`:55-59`,
+`:90-93`) and pushes to `ghcr.io/jc-universe87/moimio-backend` and
+`-frontend` (`:14-15`). Tagging rules (`:81-83`): `sha-<short>` on every push,
+`main` on a push to main, and **the tag's own name on a `v*` tag push.** A
+`checks` job gates it (`:38-49`), running the i18n validator and the
+version-marker check.
+
+### What this means for the v1.0.5 ship
+
+As of v1.0.4w there are **21 unpushed commits** and **17 unpushed tags**,
+`v1.0.4h` through `v1.0.4w`. Every one of those tags is an intermediate
+development release in one session's series. **None of them may ever be pushed
+as a tag**, because each would publish two container images advertising a version
+that was never a release — 34 images for work nobody outside this machine should
+see.
+
+**The rule, therefore: only `v1.0.5` may be pushed as a tag.**
+
+The mechanic that protects this, and the one that does not:
+
+- `git push origin main` does **not** push tags. It is safe, and it fires one
+  verification build tagged `sha-<short>` and `main`, which is harmless.
+- `git push --tags` and `git push --follow-tags` would send all seventeen and
+  fire seventeen release builds. **Neither may be used on this repository.**
+
+If the intermediate tags are ever wanted on the remote for the record, the
+workflow would have to be taught to ignore them first. That is not worth doing.
+
+Close this entry when v1.0.5 has shipped and the rule has been written into
+whatever release checklist replaces it.
