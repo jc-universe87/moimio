@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useI18n } from '../hooks/useI18n';
+// v1.0.4y: drawn icons, not characters. ↩ was arriving as a colour emoji.
+import { IconInfo, IconUndo } from './icons/RowIcons';
 
 // v1.0.4x: same test the board uses to gate its drag affordances (see
 // AllocationBoard.jsx:31). Hover-revealed controls are unreachable without a
@@ -23,6 +25,9 @@ const HAS_FINE_POINTER = typeof window !== 'undefined'
  * Every chip carries its own undo control. An exclusion that cannot be
  * found cannot be reversed, and reversibility is the whole reason this
  * block exists rather than the excluded simply vanishing from the pool.
+ *
+ * v1.0.4y — both controls are drawn icons now, not characters. See
+ * icons/RowIcons.jsx for why a character could not be trusted to stay one.
  *
  * v1.0.4x — one pass over the row (EXCL-2, EXCL-3). The undo control used
  * to be a WORD beside a truncating name, and in a 256px panel the longer
@@ -94,7 +99,13 @@ export default function ExcludedBlock({ people, canEdit, selectedIds, onToggleSe
 
   return (
     <div
-      className="shrink-0 rounded-card mx-1.5 mb-1.5 transition-colors"
+      // v1.0.4y: the block is now a bounded flex column rather than a shrink-0
+      // sibling with an unbounded body. `min-h-0` is the part that was missing:
+      // without it a flex child refuses to shrink below its content, which is
+      // exactly how twenty-six rows escaped the card and painted on the page.
+      // The cap is on the block, not on its list, so the header counts towards
+      // the budget and stays visible however little room is left.
+      className="shrink min-h-0 max-h-[35vh] flex flex-col overflow-hidden rounded-card mx-1.5 mb-1.5 transition-colors"
       style={{
         background: dragOver ? 'rgba(128,0,32,0.10)' : 'rgba(128,128,128,0.06)',
         border: dragOver
@@ -118,7 +129,7 @@ export default function ExcludedBlock({ people, canEdit, selectedIds, onToggleSe
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-2 py-1.5 text-left"
+        className="shrink-0 w-full flex items-center justify-between px-2 py-1.5 text-left"
         aria-expanded={open}>
         <span className="text-[11px] font-semibold flex items-center gap-1.5"
           style={{ color: 'var(--text-muted)' }}>
@@ -135,7 +146,7 @@ export default function ExcludedBlock({ people, canEdit, selectedIds, onToggleSe
           narrow panel; that is acceptable for a hint that exists only
           while a drag is in flight. */}
       {dragOver && (
-        <p className="text-[10px] px-2 pb-1.5 m-0 leading-tight"
+        <p className="shrink-0 text-[10px] px-2 pb-1.5 m-0 leading-tight"
           style={{ color: 'var(--alert-burgundy)' }}>
           {t('organise.exclude.drop_hint')}
         </p>
@@ -143,7 +154,7 @@ export default function ExcludedBlock({ people, canEdit, selectedIds, onToggleSe
 
       {open && (
         <div className="flex flex-col gap-0.5 px-1.5 pb-1.5 overflow-y-auto"
-          style={{ maxHeight: '40vh', overscrollBehavior: 'contain' }}>
+          style={{ flex: '1 1 auto', minHeight: 0, overscrollBehavior: 'contain' }}>
           {list.map(p => {
           const pid = String(p.id);
           const isSel = !!(selectedIds && selectedIds.has(pid));
@@ -163,9 +174,9 @@ export default function ExcludedBlock({ people, canEdit, selectedIds, onToggleSe
                   onClick={(e) => { e.stopPropagation(); if (onOpenInsight) onOpenInsight(p); }}
                   aria-label={t('insight.open')}
                   title={t('insight.open')}
-                  className={`shrink-0 text-[12px] leading-none px-1 transition-opacity focus:opacity-100 ${REVEAL}`}
+                  className={`shrink-0 leading-none px-1 transition-opacity focus:opacity-100 ${REVEAL}`}
                   style={{ color: 'var(--text-subtle)' }}>
-                  ⓘ
+                  <IconInfo />
                 </button>
                 {canEdit && (
                   <button
@@ -173,9 +184,9 @@ export default function ExcludedBlock({ people, canEdit, selectedIds, onToggleSe
                     onClick={(e) => { e.stopPropagation(); if (onInclude) onInclude(pid); }}
                     aria-label={t('organise.exclude.undo_title')}
                     title={t('organise.exclude.undo_title')}
-                    className={`shrink-0 text-[12px] leading-none px-1 transition-opacity focus:opacity-100 ${REVEAL}`}
+                    className={`shrink-0 leading-none px-1 transition-opacity focus:opacity-100 ${REVEAL}`}
                     style={{ color: 'var(--io-accent)' }}>
-                    ↩
+                    <IconUndo />
                   </button>
                 )}
               </span>

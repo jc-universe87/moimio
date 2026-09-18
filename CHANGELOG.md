@@ -8,6 +8,23 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4y] — 2026-09-18
+The people list keeps its own size, and the row buttons are drawn properly.
+
+### Fixed
+
+- **The people list keeps its own size.** It used to be squeezed to match the
+  height of the groups beside it, so a group type with one or two groups left
+  the unassigned list cut off mid-row and a long excluded list spilling off the
+  bottom of its card and onto the page. The list now fits the window instead,
+  and scrolls inside itself. Both parts of it stay reachable however short the
+  window is.
+
+- **The buttons beside an excluded person are drawn properly.** One of them was
+  appearing as a coloured emoji on a blue square, which did not match the plain
+  grey button next to it. All the small buttons on this screen are now drawn the
+  same way, so they match each other.
+
 ## [1.0.4x] — 2026-09-18
 The list of excluded people, rebuilt in one pass.
 

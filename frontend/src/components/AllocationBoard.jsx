@@ -19,6 +19,8 @@ import { useEventStream } from '../hooks/useEventStream';
 
 import TranslatedError from './TranslatedError';
 import { typeName, typeItemLabel } from '../utils/groupTypeLabel';
+// v1.0.4y: the row controls are drawn icons now. See icons/RowIcons.jsx.
+import { IconInfo, IconExclude, IconRemove } from './icons/RowIcons';
 const TRUNCATE_LEN = 90;
 const truncate = (s) => s && s.length > TRUNCATE_LEN ? s.slice(0, TRUNCATE_LEN) + '…' : s;
 
@@ -94,7 +96,6 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
 
   // Layout
   const [isMobileView, setIsMobileView] = useState(() => window.innerWidth < 768);
-  const rightPanelRef = useRef(null);
   const leftPanelRef = useRef(null);
   // v1.0.1e-11: unassigned panel — sticky in-column by default, or pop out
   // into a floating window. Position + size are controlled via state; a single
@@ -443,37 +444,19 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Match left panel height to right panel on desktop
+  // v1.0.4y: the clamp that used to live here is GONE, not scoped again.
   //
-  // v1.0.4w (PANEL-1): this used to check isMobileView and nothing else, so it
-  // kept writing maxHeight while the panel was FLOATING — clamping it to the
-  // units grid's height. An inline max-height beats an inline height whenever
-  // it is smaller, and width has no such clamp, which is exactly why the grip
-  // moved the panel wider but never taller, and why docking it back left it
-  // short. It also explains why the same drag worked on one event and not
-  // another: the clamp is the units grid, so twenty units gave a loose one and
-  // two gave a tight one. Nothing was ever stored per event.
-  // The value is written imperatively, so React cannot clear it — cleanup does.
-  useEffect(() => {
-    // v1.0.4x (PANEL-2): with no units the right panel is not a grid at all,
-    // it is the empty-state card — about 170px. Clamping a list of ninety-seven
-    // people to that is worse than not clamping. React runs the previous
-    // cleanup before re-running this effect, so losing the last unit releases
-    // the clamp rather than keeping a stale one.
-    if (isMobileView || panelFloating || units.length === 0) return;
-    const rightEl = rightPanelRef.current;
-    const leftEl = leftPanelRef.current;
-    if (!rightEl || !leftEl) return;
-    const observer = new ResizeObserver(() => {
-      const h = rightEl.offsetHeight;
-      if (h > 0) leftEl.style.maxHeight = `${h}px`;
-    });
-    observer.observe(rightEl);
-    return () => {
-      observer.disconnect();
-      leftEl.style.maxHeight = '';
-    };
-  }, [isMobileView, panelFloating, units]);
+  // It matched the docked people panel's height to the units grid beside it, by
+  // writing an inline maxHeight from a ResizeObserver. v1.0.4w stopped it
+  // clamping the floating panel (PANEL-1); v1.0.4x stopped it clamping against
+  // an empty grid (PANEL-2); and a group type with TWO units is neither of
+  // those, so it still squeezed the whole panel into the height of two small
+  // cards and everything inside spilled onto the page.
+  //
+  // Three releases patching one line is the signal that the line was wrong. The
+  // panel now takes its height from the WINDOW and scrolls inside itself — see
+  // the docked className and the pool's flex rules below. The two columns no
+  // longer match in height, which is the only thing the clamp ever bought.
 
   // v0.70d-1 R2: local showToast removed — the useToast hook
   // declared above provides the same API with the correct semantic
@@ -2161,7 +2144,12 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
         <div ref={leftPanelRef}
           className={panelFloating
             ? "card-surface-solid rounded-2xl flex flex-col fixed z-[60] shadow-2xl overflow-hidden"
-            : "card-surface-solid w-full md:w-64 md:shrink-0 rounded-2xl flex flex-col md:self-start"}
+            // v1.0.4y: md:max-h bounds the docked panel by the WINDOW instead of
+            // by the units grid beside it, and overflow-hidden means nothing can
+            // paint outside the card however long its lists get. Below md the
+            // panel is full-width and stacked, so neither applies and the phone
+            // layout is exactly as it was.
+            : "card-surface-solid w-full md:w-64 md:shrink-0 rounded-2xl flex flex-col md:self-start md:max-h-[calc(100vh-5rem)] md:overflow-hidden"}
           style={panelFloating
             ? { border: '1px solid var(--card-border)', left: panelPos.x, top: panelPos.y, width: panelSize.w, height: panelSize.h }
             : { border: '1px solid var(--card-border)' }}
@@ -2250,11 +2238,26 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                 : {
                   // v1.0.4l: while the selection bar is up the pool
                   // gives up the room the bar needs, so the Excluded
-                  // block below it stays reachable. The 24rem floor is
-                  // for visual steadiness when the pool is nearly empty
-                  // and yields to the cap, which is about reaching a
-                  // control that is otherwise behind the bar.
-                  minHeight: poolCapPx == null ? '24rem' : 0,
+                  // block below it stays reachable.
+                  //
+                  // v1.0.4y: the pool can now SHRINK, which is what stops the
+                  // panel overflowing. The panel is capped by the window, and
+                  // when its content wants more than that the pool and the
+                  // Excluded block give room back in proportion and scroll
+                  // inside themselves. The old 24rem floor could not shrink at
+                  // all, which is half of why a long excluded list used to
+                  // spill onto the page.
+                  //
+                  // `1 1 auto`, not `1 1 0`: the panel is capped but not fixed,
+                  // so its height still comes from its content, and a basis of 0
+                  // would contribute nothing to that content and collapse the
+                  // pool to its floor.
+                  //
+                  // The floor is 6rem, about four rows — the least that is still
+                  // worth dragging out of, so a tall excluded list can never
+                  // squeeze the pool away entirely.
+                  flex: '1 1 auto',
+                  minHeight: '6rem',
                   maxHeight: poolCapPx == null ? '70vh' : `${poolCapPx}px`,
                   overflowY: 'auto',
                 }),
@@ -2329,26 +2332,28 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                     onClick={(e) => { e.stopPropagation(); setInsightParticipant(p); }}
                     aria-label={t('insight.open')}
                     title={t('insight.open')}
-                    className="shrink-0 text-[12px] leading-none px-1 opacity-40 dark:opacity-70 hover:opacity-100 transition-opacity"
+                    className="shrink-0 leading-none px-1 opacity-40 dark:opacity-70 hover:opacity-100 transition-opacity"
                     style={{ color: 'var(--text-subtle)' }}>
-                    ⓘ
+                    <IconInfo />
                   </button>
                   {/* v1.0.4k: exclude from the pool chip. The house
                       idiom for a destructive write on a chip is the
                       hover-revealed, admin-gated icon button (the ✕ on
                       the unit chip); this is the first member of that
-                      class in the pool. ⊘ rather than ✕ so the two
-                      actions stay distinguishable where they sit side
-                      by side on the unit chip. Hover is not a path on
-                      touch — the bulk bar carries the same action. */}
+                      class in the pool. A barred circle rather than a
+                      plain cross so the two actions stay distinguishable
+                      where they sit side by side on the unit chip. Hover
+                      is not a path on touch — the bulk bar carries the
+                      same action.
+                      v1.0.4y: both are drawn icons now, not characters. */}
                   {isAdmin && !isOverview && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleExclude(pid); }}
                       aria-label={t('organise.exclude.action_title')}
                       title={t('organise.exclude.action_title')}
-                      className="shrink-0 text-[12px] leading-none px-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="shrink-0 leading-none px-1 opacity-0 group-hover:opacity-100 transition-opacity"
                       style={{ color: 'var(--text-subtle)' }}>
-                      ⊘
+                      <IconExclude />
                     </button>
                   )}
                 </div>
@@ -2383,7 +2388,7 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
         )}
 
         {/* ─── RIGHT: Allocation Board ─── */}
-        <div ref={rightPanelRef} className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0">
           {units.length === 0 ? (
             <div
               className="rounded-2xl p-12 text-center"
@@ -2633,29 +2638,30 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
                                   onClick={(e) => { e.stopPropagation(); setInsightParticipant(mParticipant); }}
                                   aria-label={t('insight.open')}
                                   title={t('insight.open')}
-                                  className="text-[11px] leading-none px-0.5 opacity-40 dark:opacity-70 hover:opacity-100 transition-opacity"
+                                  className="leading-none px-0.5 opacity-40 dark:opacity-70 hover:opacity-100 transition-opacity"
                                   style={{ color: 'var(--text-subtle)' }}>
-                                  ⓘ
+                                  <IconInfo width={12} height={12} />
                                 </button>
                               )}
                               {/* v1.0.4k: exclude sits beside remove.
-                                  ✕ takes them out of this unit; ⊘ takes
-                                  them out of the group type entirely,
-                                  which also vacates every unit they
-                                  hold in it. */}
+                                  The cross takes them out of this unit;
+                                  the barred circle takes them out of the
+                                  group type entirely, which also vacates
+                                  every unit they hold in it.
+                                  v1.0.4y: both are drawn icons now. */}
                               {isAdmin && !isOverview && !mSel && (
                                 <button onClick={(e) => { e.stopPropagation(); handleExclude(m.participant_id); }}
                                   aria-label={t('organise.exclude.action_title')}
                                   title={t('organise.exclude.action_title')}
-                                  className="text-[11px] leading-none opacity-0 group-hover:opacity-100 transition-opacity"
-                                  style={{ color: 'var(--text-subtle)' }}>⊘</button>
+                                  className="leading-none opacity-0 group-hover:opacity-100 transition-opacity"
+                                  style={{ color: 'var(--text-subtle)' }}><IconExclude width={12} height={12} /></button>
                               )}
                               {isAdmin && !mSel && (
                                 <button onClick={(e) => { e.stopPropagation(); handleUnassign(unit.id, m.participant_id); }}
                                   aria-label={t('organise.unassign')}
                                   title={t('organise.unassign')}
-                                  className="text-[10px] opacity-0 group-hover:opacity-100 hover:underline"
-                                  style={{ color: 'var(--alert-burgundy)' }}>✕</button>
+                                  className="leading-none opacity-0 group-hover:opacity-100 hover:opacity-70"
+                                  style={{ color: 'var(--alert-burgundy)' }}><IconRemove width={12} height={12} /></button>
                               )}
                             </div>
                           </div>
