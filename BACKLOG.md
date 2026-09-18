@@ -3115,3 +3115,114 @@ confirmed pill, the `×` on modal close buttons, and the `✕` on a mark-priorit
 chip. None of them has emoji presentation. `🔍` does, and is left alone on
 purpose: it is decorative, has no button around it, and changing it is not this
 release's business.
+
+---
+
+## SCROLL-1 — Scrollbars cannot be seen or grabbed
+
+**Status:** ✅ CLOSED in v1.0.4z (2026-09-18). Found by Johannes on v1.0.4y, in Chrome on Linux.
+
+**What he saw,** on the People page (`/admin/events/…`, the participants table):
+
+- The table scrolls sideways — the first column is visibly cut — and **the
+  scrollbars on the right and the bottom disappear.**
+- **He cannot click and drag them.** They do not come back when the pointer goes
+  to the right edge or the bottom edge either.
+- It is not only that page.
+
+His view, and it is the right framing: a scrollbar vanishing is not itself ugly.
+**Being unable to grab one is the problem**, and on a table that scrolls sideways,
+dragging the bar is the obvious way to move it.
+
+### What the codebase was doing: nothing
+
+Searched the stylesheet, every component and every inline style for
+`scrollbar-width`, `scrollbar-color`, `::-webkit-scrollbar`,
+`-ms-overflow-style`, `scrollbar-gutter`, and any class named for hiding a bar.
+
+**Exactly one hiding rule existed**, `.scrollbar-hide` at `frontend/src/index.css:247-253`
+(`-ms-overflow-style: none`, `scrollbar-width: none`, and a
+`::-webkit-scrollbar { display: none }`). **Nothing in the app used it** — no
+`.jsx` file referenced the class at all. It was a dead utility, and it was not
+the cause.
+
+**So the codebase did not hide them. The browser did.** Chrome on Linux draws
+overlay scrollbars: a bar that fades in while the container is scrolling and
+fades out afterwards, drawn on top of the content rather than taking space. An
+overlay bar is a poor drag target by design, and once faded it is not a target at
+all. Nothing in Moimio asked for that and nothing in Moimio could see it.
+
+**The fix is the same either way,** which is worth recording: defining
+`::-webkit-scrollbar` rules for a container opts that container out of overlay
+behaviour in Blink and gives it a real, classic, permanently-drawn, draggable
+bar. So the fix is to *define* scrollbars rather than to *stop hiding* them.
+
+### Every scrollable area in the app
+
+Twenty-six containers, by screen. Listed so the next person does not have to hunt.
+
+| Screen | Where | Scrolls |
+|---|---|---|
+| **People** | `PeopleTable.jsx:1259` | **both** — the wide table, Johannes's case |
+| People | `PeopleTable.jsx:1205` | vertical — a confirm dialog |
+| People | `PeopleTable.jsx:1220` | vertical — the row actions menu |
+| **Check-in** | `CheckInPanel.jsx:660` | **both** — the wide table, same house pattern |
+| Check-in | `CheckInPanel.jsx:588` | vertical — the mobile card list |
+| **Einteilung, board** | `AllocationBoard.jsx:2262` | vertical — the docked pool (v1.0.4y) |
+| Einteilung, board | `AllocationBoard.jsx:2237` | vertical — the floating pool |
+| Einteilung, board | `AllocationBoard.jsx:1623` | vertical — the engine settings popover |
+| Einteilung, board | `AllocationBoard.jsx:2723` | vertical — a dropdown menu |
+| Einteilung, board | `AllocationBoard.jsx:2787` | vertical — the unit editor modal |
+| Einteilung, board | `ExcludedBlock.jsx:156` | vertical — the excluded list (v1.0.4y) |
+| Einteilung, overview | `OrganiseDashboard.jsx:434` | vertical |
+| Participant panel | `InsightPanel.jsx:274` | vertical |
+| **Users** | `UserManagementPage.jsx:304` | horizontal — the users table |
+| **Webhooks** | `WebhooksPage.jsx:579` | horizontal — the deliveries table |
+| Event detail | `EventDetailPage.jsx:975`, `:1137` | horizontal — two `max-w-2xl` wrappers |
+| App chrome | `AdminLayout.jsx:354` | vertical — the sidebar column |
+| App chrome | `AdminLayout.jsx:699` | vertical — a full-screen modal backdrop |
+| App chrome | `AdminLayout.jsx:719` | both — `<main>`; in practice the window scrolls, not this |
+| Modals | `BatchRegisterModal.jsx:228` | vertical |
+| Modals | `NotesModal.jsx:60` | vertical |
+| Modals | `MessageViewerModal.jsx:44` | vertical |
+| Setup | `StyleCustomiser.jsx:87` | vertical |
+| Setup | `StyleCustomiser.jsx:185` | horizontal — a `<pre>`, but `whitespace-pre-wrap` |
+| Share | `SharePanel.jsx:79` | horizontal — a `<pre>`, but `whitespace-pre-wrap` |
+
+**None of them is deliberately unscrollbarred, and none needs to be.** The search
+for a case that would justify an opt-out — a horizontal chip strip, a drag
+surface — found none. The board's drag surfaces are the chips themselves, not
+their containers, so a bar on the container takes nothing away from a drag. The
+two `<pre>` blocks wrap rather than scroll, so no bar will appear on them in
+practice.
+
+### What shipped
+
+**One rule set, in `frontend/src/index.css`, applied once.** No component carries
+a scrollbar rule, and **there are no opt-outs.**
+
+- **Two new tokens,** `--scrollbar-thumb` and `--scrollbar-thumb-hover`, defined
+  in `:root` and again in `.dark`, following the navy-tint / white-tint
+  convention the rest of the palette uses. So the bar is dark on light surfaces
+  and light on dark ones, and it changes with the theme like everything else.
+- **Both engines,** because neither is enough on its own: `scrollbar-width: thin`
+  and `scrollbar-color` set on `html`, where they are inherited by every element,
+  for Firefox and current Chrome; and `::-webkit-scrollbar`,
+  `-thumb`, `-track` and `-corner` rules for the rest of Blink and WebKit.
+- **Slim and subtle:** a 10px track with a 6px thumb, made by giving the thumb a
+  2px transparent border and `background-clip: content-box`, rounded, on a
+  transparent track. It darkens on hover so it reads as a handle.
+- **Pointer devices only.** The whole block sits inside
+  `@media (hover: hover) and (pointer: fine)`, the same test the board already
+  uses to gate its drag affordances. A phone keeps the system's own behaviour,
+  where an overlay bar is correct and a permanent one would just eat width.
+
+**The dead `.scrollbar-hide` utility was deleted** in the same change. It hid
+scrollbars, nothing used it, and leaving a hiding rule in the file after this
+work would be an invitation.
+
+**Layout shift:** none to fix, and `scrollbar-gutter` was deliberately not used.
+See the release report; the short version is that reserving a gutter everywhere
+would cost width in containers that rarely overflow, including the 256px people
+panel, to prevent a reflow that only happens the first time a list grows past its
+box.
