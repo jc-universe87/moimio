@@ -3120,7 +3120,91 @@ release's business.
 
 ## SCROLL-1 — Scrollbars cannot be seen or grabbed
 
-**Status:** ✅ CLOSED in v1.0.4z (2026-09-18). Found by Johannes on v1.0.4y, in Chrome on Linux.
+**Status:** ♻️ **REOPENED — closed prematurely in v1.0.4z**, fixed again in v1.0.4za (2026-09-18). Found by Johannes on v1.0.4y, in Chrome on Linux.
+
+**v1.0.4z did not fix it.** Johannes tested the v1.0.4z bundle — the footer reads
+v1.0.4z in his screenshot — in the same Chrome on Linux, on the same People table,
+visibly scrolled both ways, with no bar on either edge. The release was marked
+CLOSED on the strength of the rules reaching the built CSS, which they did. That
+proved the rules shipped; it did not prove they took effect, and nobody had a
+browser to find out. **That is the lesson worth keeping from this entry: "the CSS
+is in the bundle" is not "the fix works".**
+
+### Why it did not work (established in v1.0.4za)
+
+v1.0.4z shipped both sets of rules, as its brief asked, inside one media block:
+
+```
+@media(hover:hover)and (pointer:fine){
+  html{scrollbar-width:thin;scrollbar-color:var(--scrollbar-thumb) transparent}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  …
+}
+```
+
+**The two sets fight, and the wrong one won.** In Blink, when `scrollbar-width` or
+`scrollbar-color` is in effect on an element, Chrome ignores that element's
+`::-webkit-scrollbar` rules entirely — the standard properties take precedence
+over the legacy pseudo-elements, deliberately, so that two styling systems cannot
+disagree about one bar.
+
+Both standard properties are **inherited**. v1.0.4z set them on `html` precisely
+so they would reach every element without a universal selector, and that reasoning
+was correct — and is exactly what caused the fault. Every scrollable container in
+the app inherited them, so every container was told to ignore the pseudo-element
+rules. **Those rules were the half that does the actual work**: giving a container
+`::-webkit-scrollbar` styling is what opts it out of overlay drawing in Blink and
+gives it a classic, permanently drawn, space-taking, draggable bar.
+`scrollbar-width: thin` does not do that; it asks for a thinner bar of whatever
+kind the platform is already drawing. So Chrome kept drawing its fading overlay
+bar and nothing changed.
+
+**Confidence, stated honestly.** The inheritance is certain and visible in the
+shipped CSS above. The precedence rule is documented Blink behaviour and I am
+confident of it, but **there is no browser on this machine and it was not
+verified here** — the only browser installed is Firefox, which has no
+`::-webkit-scrollbar` support at all and so can say nothing about Blink. The fix
+is correct either way, because separating the two sets is right regardless of
+which one a given engine prefers; but this diagnosis is reasoned, not measured.
+
+**Cheaper explanations, ruled out:**
+
+- **A stale bundle.** The content-hashed CSS filename changes with every build, so
+  a cache cannot serve old CSS under a new name, and the service worker precaches
+  a matched set. His footer read v1.0.4z, which is baked into the JS bundle, and a
+  given `index.html` links a matching JS/CSS pair — so the v1.0.4z CSS was loaded.
+- **The rules missing the container.** The People table's scrollport is a plain
+  `<div className="hidden md:block overflow-auto max-h-[calc(100vh-20rem)]">` at
+  `PeopleTable.jsx:1259`, an ordinary descendant of `html` in no shadow root.
+  Nothing between it and `html` re-sets a scrollbar property — `index.css` is the
+  only file in the frontend that mentions one. The rules reach it.
+- **Something painting over a bar that is really there.** The only overlapping
+  things are `sticky top-0 z-20` on the head and `sticky left-0` on the name
+  column, both *inside* the scrollport. A native bar is painted on the container's
+  own box, outside the scrollport, and above content; a sticky child cannot cover
+  it.
+- **The pointer gate not matching — NOT fully ruled out.** `@media (hover: hover)
+  and (pointer: fine)` should match a desktop Chrome with a mouse, and does on
+  ordinary hardware. It would fail on a machine whose *primary* pointer is
+  reported as coarse or hoverless — a touchscreen laptop, or a mis-reporting
+  Wayland session. If the fix below does not work either, **this is the next thing
+  to test**, by checking `matchMedia('(hover: hover) and (pointer: fine)').matches`
+  in his console.
+
+### Which browsers, and what each does
+
+Nothing declares browser support: there is no `browserslist` in
+`frontend/package.json` and no statement in the docs. The app is a PWA, so the
+practical set is current evergreen browsers.
+
+| Engine | `::-webkit-scrollbar` | `scrollbar-width` / `-color` | Effect |
+|---|---|---|---|
+| Blink, Chrome 121+ | supported | supported, **and wins** | Standard properties suppress the pseudo-elements. Only the pseudo-elements force a classic bar. |
+| Blink, Chrome < 121 | supported | not supported | Pseudo-elements are the only thing that works. |
+| WebKit, Safari | supported | since 18.2 | Same shape as Blink. |
+| Gecko, Firefox | **not supported at all** | supported | Standard properties are the only thing that works. |
+
+So no single set serves everyone, and the two must never be in scope together.
 
 **What he saw,** on the People page (`/admin/events/…`, the participants table):
 
@@ -3196,7 +3280,7 @@ their containers, so a bar on the container takes nothing away from a drag. The
 two `<pre>` blocks wrap rather than scroll, so no bar will appear on them in
 practice.
 
-### What shipped
+### What v1.0.4z shipped, and what v1.0.4za changed
 
 **One rule set, in `frontend/src/index.css`, applied once.** No component carries
 a scrollbar rule, and **there are no opt-outs.**
@@ -3226,3 +3310,29 @@ See the release report; the short version is that reserving a gutter everywhere
 would cost width in containers that rarely overflow, including the 256px people
 panel, to prevent a reflow that only happens the first time a list grows past its
 box.
+
+**v1.0.4za separates the two sets** so neither can switch the other off, using
+`@supports selector(::-webkit-scrollbar)` and its negation, nested inside the
+same pointer gate:
+
+- **Blink and WebKit** get the `::-webkit-scrollbar` rules and **no standard
+  scrollbar property in scope at all** — which is what lets those rules take
+  effect and force a classic bar.
+- **Firefox** gets `scrollbar-width` and `scrollbar-color` and nothing else,
+  which is all it understands.
+
+`@supports selector()` is the clean split because the condition tests the one
+thing that actually differs between the engines — whether the selector is
+understood — rather than sniffing a browser. A browser too old to support
+`@supports selector()` evaluates both conditions as false and gets neither block,
+falling back to its own default bar, which is a safe degradation rather than a
+broken one.
+
+Everything else from v1.0.4z stands: the two tokens, both themes, the pointer
+gate, one rule set in the stylesheet, no component opt-outs, and the dead
+`.scrollbar-hide` utility stays deleted.
+
+**Not verified in a browser.** See the confidence note above. What would settle
+it: a scrolling container in Johannes's Chrome where `offsetWidth - clientWidth`
+is greater than zero, which means the bar takes space and is therefore classic
+rather than overlay.
