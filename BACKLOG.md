@@ -1956,6 +1956,12 @@ record say somebody wrote what they did not.
 author, so there is no label to change. The existing `history.actor.removed`
 wording was available if one had been needed.
 
+**That last paragraph stopped being true in v1.0.4zc.** Notes now show their
+author (**NOTE-1**), and a note whose author is gone shows exactly that
+`history.actor.removed` wording — so this ruling is visible on screen rather than
+only in the database. The conclusion is unchanged: still no new key, because the
+one history already had was the right one.
+
 **Why deleting the drafts is what makes the null safe.** The visibility rule is
 "published, or mine" (`api/notes.py:59` and `:137`). A null author matches nobody,
 so a null-author *unpublished* note would be visible to no one and unreachable
@@ -3494,7 +3500,13 @@ of authorless notes is the lesser loss and is at least truthful.
 
 ## LOG-2 — A note's author is returned but never shown
 
-**Status:** Open. Noted in v1.0.4zb while implementing USER-1. Not a defect; a loose end worth recording.
+**Status:** ✅ CLOSED in v1.0.4zc (2026-09-18) — **answered: it is a missing feature.** Noted in v1.0.4zb while implementing USER-1.
+
+**Johannes's answer.** He tested v1.0.4zb by hand, and step 5 half passed: the
+published note survives its author's deletion, but the card never says it was
+written by a removed user — because it does not mention the author at all. That
+settles the question this entry asked. A team wants to know who wrote a note, so
+the field stays and the screens start using it. Filed and fixed as **NOTE-1**.
 
 `api/notes.py:62-69` returns `author_id` on every note as a raw UUID. **Nothing in
 the frontend reads it** — no `.jsx` file mentions `author_id`, `author_name` or
@@ -3511,3 +3523,109 @@ Two consequences, neither urgent:
 Whoever picks it up should decide which, rather than leaving a UUID travelling to
 a client that ignores it. If it becomes a label, it needs a string and the
 null-author case already has wording in `history.actor.removed`.
+
+---
+
+## NOTE-1 — A note never said who wrote it
+
+**Status:** ✅ CLOSED in v1.0.4zc (2026-09-18). Found by Johannes testing v1.0.4zb; answers **LOG-2** and makes **USER-1**'s ruling visible.
+
+`api/notes.py` returned `author_id` as a raw UUID and no screen read it, so a note
+card showed its shared-or-private badge and a timestamp and nothing else. The
+consequence Johannes hit: a note written by somebody whose account has since been
+deleted looks exactly like every other note, so v1.0.4zb's careful answer — the
+note stays, with no author — was invisible.
+
+### Every surface that shows a note
+
+| Surface | Shows | Author added? |
+|---|---|---|
+| `NotesModal.jsx:68-82` | the full card: content, badge, timestamp | **Yes.** Johannes's screenshot |
+| `InsightPanel.jsx:437-445` | the participant panel's note list: content and date | **Yes** |
+| `AllocationBoard.jsx:2121-2134` | category-notes strip: one truncated italic line plus a badge | No — see below |
+| `AllocationBoard.jsx:2673-2681` | unit-notes strip: one truncated italic line | No — see below |
+
+**Why the two board strips are left alone.** They are not note cards. Each is a
+single truncated 10–11px italic line, showing neither the full content nor a date,
+whose job is to say *a note exists here* on a dense board; opening it goes through
+the modal, which now names the author. Adding a name would crowd the line that is
+already truncating, to repeat something one click away. Said plainly so it can be
+overruled: if Johannes wants the author there too, it is a small addition in zd.
+
+### What shipped
+
+- **The API resolves the name.** `api/notes.py` joins `User` and returns
+  `author_name` beside the existing `author_id`. Returning a bare id and expecting
+  a screen to resolve it is what produced LOG-2 in the first place.
+- **A missing author is `null`, not an empty string,** so the screen can tell
+  "nobody" from "somebody with no name".
+- **The two card surfaces render it** beside the badge and the date, in the
+  pattern those blocks already use.
+- **A note whose author is gone reads `history.actor.removed`** — "[removed
+  user]", the same phrase the history panel has used since v1.0.4t. **No new key.**
+  Inventing a second phrase for the same idea was explicitly out.
+
+### What deliberately did not change
+
+**A participant's own data export does not gain the author**, and a test now pins
+that. `data_export_service.py` returns notes as content plus timestamps only, and
+its own metadata promises the reader that "the identity of admins who performed
+allocation moves is not included". Adding an author to the wire elsewhere makes
+that easy to leak by accident, which is why it is pinned rather than assumed.
+
+---
+
+## NOTE-2 — The participant panel rendered the wrong field, so its notes were blank
+
+**Status:** ✅ CLOSED in v1.0.4zc (2026-09-18). Found while implementing NOTE-1. Pre-existing, and nobody had reported it.
+
+`InsightPanel.jsx:438` rendered `{n.body}`. The notes API returns **`content`**
+(`api/notes.py:65`), and nothing anywhere maps one to the other. So every note in
+the participant panel rendered as an empty line with a date underneath it — the
+date was the only visible part, which is probably why it read as "no notes yet"
+rather than as a fault.
+
+**Resolution.** One word: `n.body` → `n.content`. Taken in v1.0.4zc rather than
+filed, because it is inside the exact lines NOTE-1 was editing and adding an
+author line to a note whose text is invisible would have been absurd.
+
+Worth noting for its own sake: this is the second thing in two releases to come
+out of the notes payload being half-used. The shape is now exercised by tests on
+both sides.
+
+---
+
+## SORT-1 — The People list forgets how you sorted it
+
+**Status:** ✅ CLOSED in v1.0.4zc (2026-09-18). Raised by Johannes while testing v1.0.4zb.
+
+Sorting the People table by name or email lasted until the page was left. Coming
+back put it on participant number again, so somebody who works by name re-sorted
+on every visit.
+
+**Both tables sort, identically.** `PeopleTable.jsx:96-97` and
+`CheckInPanel.jsx:111-112` each hold `sortCol` (default `participant_number`) and
+`sortDir` (default `asc`), with the same toggle handler. So one mechanism serves
+both, as required — not two.
+
+### Where the preference is kept, and what that costs
+
+**Browser storage, keyed by the user's id.** Established before choosing:
+`UserPreferences` carries three typed columns — `language`, `date_format`,
+`timezone` — and **no JSON column**. A per-user sort would therefore need a new
+column, which is a migration, and v1.0.4zb's was the only one this series gets.
+
+**So this is per browser, not per account.** Said plainly because it matters: the
+sort follows the user on the computer where they set it and does not travel with
+them to another. Keying on the user's id means two people sharing a computer do
+not inherit each other's sort, which is the part that would actually confuse
+somebody.
+
+If it should follow the account, that wants a JSON preferences column and a
+migration, and belongs after v1.0.5 with the other schema work.
+
+**A stale value falls back silently.** The remembered column is checked against
+the columns that table actually sorts by; anything unrecognised — a column since
+removed, a direction that is not `asc` or `desc`, unreadable storage in a private
+window — is ignored and the default applies. Never an error, never an empty table.
+**The default is unchanged** for anybody who has never sorted.
