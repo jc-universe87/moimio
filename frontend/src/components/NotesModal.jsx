@@ -73,6 +73,14 @@ export default function NotesModal({ entityType, entityId, entityName, onClose }
                         <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${note.is_published ? 'bg-accent-tint text-accent' : 'bg-neutral-tint text-muted'}`}>
                           {note.is_published ? t('notes.team') : t('notes.private')}
                         </span>
+                        {/* v1.0.4zc (NOTE-1): who wrote it, beside the badge
+                            and the date. A note whose author's account has
+                            since been deleted carries author_name: null, and
+                            reads with the same wording the history panel has
+                            used since v1.0.4t — one phrase for one idea. */}
+                        <span className="text-[10px] text-subtle">
+                          {note.author_name || t('history.actor.removed')}
+                        </span>
                         <span className="text-[10px] text-subtle">{new Date(note.created_at).toLocaleString()}</span>
                       </div>
                     </div>

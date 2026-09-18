@@ -59,11 +59,29 @@ async def list_notes(
         if n.is_published or n.author_id == current_user.id
     ]
 
+    # v1.0.4zc (NOTE-1): resolve the author's name here rather than shipping a
+    # bare id and hoping a screen resolves it — that is exactly what left the
+    # author unread for as long as it was (LOG-2). One query for the whole
+    # list, not one per note.
+    #
+    # `author_name` is None, not "", when the author is gone: v1.0.4zb made
+    # `author_id` nullable on purpose (USER-1), and the screen has to tell
+    # "written by somebody who has since been deleted" from "written by
+    # somebody with a blank name". The first reads as "[removed user]".
+    author_ids = {n.author_id for n in visible if n.author_id}
+    names: dict = {}
+    if author_ids:
+        rows = await db.execute(
+            select(User.id, User.full_name).where(User.id.in_(author_ids))
+        )
+        names = {uid: full_name for uid, full_name in rows.all()}
+
     return [
         {
             "id": n.id, "notable_type": n.notable_type, "notable_id": n.notable_id,
             "content": n.content, "is_published": n.is_published,
             "author_id": n.author_id,
+            "author_name": names.get(n.author_id),
             "created_at": n.created_at.isoformat() if n.created_at else "",
             "updated_at": n.updated_at.isoformat() if n.updated_at else "",
         }
@@ -93,6 +111,8 @@ async def create_note(
         "id": note.id, "notable_type": note.notable_type, "notable_id": note.notable_id,
         "content": note.content, "is_published": note.is_published,
         "author_id": note.author_id,
+        # v1.0.4zc (NOTE-1): the creator is the caller, by construction.
+        "author_name": current_user.full_name,
         "created_at": note.created_at.isoformat(), "updated_at": note.updated_at.isoformat(),
     }
 

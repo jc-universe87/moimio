@@ -13,6 +13,9 @@ import InsightPanel from './InsightPanel';
 import GroupCodeTooltip from './GroupCodeTooltip';
 import TranslatedError from './TranslatedError';
 import { useEventStream } from '../hooks/useEventStream';
+// v1.0.4zc (SORT-1): the sort is remembered per user, in this browser.
+import { useAuth } from '../hooks/useAuth';
+import { useRememberedSort } from '../hooks/useRememberedSort';
 
 // Built-in registration fields that can appear as read-only display columns.
 // v0.50e-1d: group_code moved here from the fixed-columns list. It's now a
@@ -108,12 +111,17 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
     return [];
   });
   const [dragColId, setDragColId] = useState(null);
-  const [sortCol, setSortCol] = useState('participant_number');
-  const [sortDir, setSortDir] = useState('asc');
-  const handleSort = (col) => {
-    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortCol(col); setSortDir('asc'); }
-  };
+  // v1.0.4zc (SORT-1): the same hook the People table uses — one mechanism, not
+  // two. Only the two stable columns are remembered: every other column here is
+  // a check-in tick or a custom field, whose id is per-event and loads
+  // asynchronously.
+  const { user } = useAuth();
+  const { sortCol, sortDir, toggleSort: handleSort } = useRememberedSort({
+    storageKey: 'checkin',
+    userId: user?.id,
+    columns: ['participant_number', 'name'],
+    defaultCol: 'participant_number',
+  });
   const sortArrow = (col) => {
     if (sortCol !== col) return <span className="text-subtle ml-0.5">↕</span>;
     return <span className="text-steel-blue ml-0.5">{sortDir === 'asc' ? '↑' : '↓'}</span>;

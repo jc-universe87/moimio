@@ -8,6 +8,27 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4zc] — 2026-09-18
+Notes say who wrote them, and the list stays sorted the way you left it.
+
+### Fixed
+
+- **Notes say who wrote them.** A note showed only whether it was shared or
+  private, and when it was written. It now shows its author beside the date.
+  Where that person's account has since been deleted it says so, rather than
+  showing nothing, which is what the previous release promised and could not
+  show you.
+
+- **Notes on a person are readable again.** In the participant panel each note
+  appeared as an empty line with a date under it. The text was never being
+  shown at all.
+
+- **The list stays sorted the way you left it.** Sorting people by name or
+  email used to last only until you left the page; coming back put it on
+  participant number again. Both the People list and the Check-in list now
+  remember your choice. It is remembered per person on the computer you use, so
+  two people sharing a machine keep their own.
+
 ## [1.0.4zb] — 2026-09-18
 The counts, and telling everyone who needs to know.
 

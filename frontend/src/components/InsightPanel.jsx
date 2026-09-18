@@ -435,10 +435,15 @@ export default function InsightPanel({ participant, eventId, marksForPerson = []
               <ul className="space-y-2">
                 {notes.map(n => (
                   <li key={n.id} className="text-xs" style={{ color: 'var(--text-primary)' }}>
-                    <span className="whitespace-pre-wrap">{n.body}</span>
+                    {/* v1.0.4zc (NOTE-2): `content`, not `body`. The API has
+                        always returned `content` and nothing mapped it, so
+                        every note here rendered as an empty line with a date
+                        under it. */}
+                    <span className="whitespace-pre-wrap">{n.content}</span>
                     {n.created_at && (
                       <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-subtle)' }}>
-                        {formatDate(n.created_at)}
+                        {/* v1.0.4zc (NOTE-1): author, then date. */}
+                        {n.author_name || t('history.actor.removed')} · {formatDate(n.created_at)}
                       </div>
                     )}
                   </li>

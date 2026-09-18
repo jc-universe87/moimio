@@ -15,6 +15,9 @@ import { useMarks } from '../hooks/useMarks';
 import BatchRegisterModal from './BatchRegisterModal';
 import ConfirmEditModal from './ConfirmEditModal';
 import GroupCodeTooltip from './GroupCodeTooltip';
+// v1.0.4zc (SORT-1): the sort is remembered per user, in this browser.
+import { useAuth } from '../hooks/useAuth';
+import { useRememberedSort } from '../hooks/useRememberedSort';
 
 // Built-in columns with optional field name for data-detection
 const BUILTIN_COLUMNS = [
@@ -36,6 +39,11 @@ const BUILTIN_COLUMNS = [
 ];
 
 const DEFAULT_COLS = BUILTIN_COLUMNS.filter(c => c.default || c.always).map(c => c.id);
+// v1.0.4zc (SORT-1): which sorts are worth remembering across visits. Built-in
+// columns only — a custom field's id is per-event and loads asynchronously, so
+// validating against it would race the restore. Sorting by a custom field still
+// works for the visit; it just is not remembered.
+const REMEMBERABLE_SORTS = BUILTIN_COLUMNS.map(c => c.id);
 const STATUS_LABELS_KEYS = { pending: 'status.pending', confirmed: 'status.confirmed', cancelled: 'status.cancelled' };
 
 // v1.0-pre #2: editable-field configuration for the People table.
@@ -93,8 +101,14 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
   const _seed = ['pending', 'confirmed', 'cancelled'].includes(initialStatusFilter)
     ? initialStatusFilter : '';
   const [statusFilter, setStatusFilter] = useState(_seed);
-  const [sortCol, setSortCol] = useState('participant_number');
-  const [sortDir, setSortDir] = useState('asc');
+  // v1.0.4zc (SORT-1): remembered per user, in this browser. See the hook.
+  const { user } = useAuth();
+  const { sortCol, sortDir, toggleSort: handleSort } = useRememberedSort({
+    storageKey: 'people',
+    userId: user?.id,
+    columns: REMEMBERABLE_SORTS,
+    defaultCol: 'participant_number',
+  });
   // v0.58g: Which mobile cards have expanded details. Per-session only,
   // Set of participant IDs. Mirrors the pattern from CheckInPanel.
   // v0.61c: persisted to localStorage per (userId, eventId) so the
@@ -358,11 +372,6 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showColPicker, colPickerMobile]);
-
-  const handleSort = (col) => {
-    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortCol(col); setSortDir('asc'); }
-  };
 
   const sortArrow = (col) => {
     if (sortCol !== col) return <span className="ml-0.5" style={{ color: 'var(--text-subtle)', opacity: 0.5 }}>↕</span>;
