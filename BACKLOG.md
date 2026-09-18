@@ -2620,6 +2620,15 @@ four times. What shipped:
   of the card. The panel-level half of that was **PANEL-1** in v1.0.4w; this is
   the block-level half.
 
+  **Correction (v1.0.4y).** That last claim was wrong at ordinary window
+  heights. Johannes's check of v1.0.4x, in a window about 1040px tall on a group
+  type with two units, still had four rows painted on the page below the card's
+  rounded corner, and the unassigned list above cut off mid-row. Capping the
+  block was necessary but not sufficient: the panel *around* it was still being
+  clamped to the height of the units grid, and neither the block nor the pool
+  could shrink inside it. **PANEL-3** removes that clamp and is what actually
+  makes this true.
+
 **It settled four complaints at once:** EXCL-2 (names truncating), the missing
 details control, the card not growing with its list, and — by decision rather
 than by code — EXCL-1.
@@ -2896,6 +2905,13 @@ With no clamp, the docked panel grows to fit and the pool inside it keeps its ow
 `70vh` cap and scroll (`AllocationBoard.jsx:2239-2241`), which is the behaviour
 that was wanted all along.
 
+**Superseded by PANEL-3 (v1.0.4y).** This entry fixed one case — an empty grid —
+of a clamp that no longer exists. The condition added here was the third scope
+put on that one line in three releases, and the release after this one removed
+the line instead. Nothing here is wrong; it simply stopped being reachable. The
+case it describes is now covered by the panel taking its height from the window,
+which does not care how many units there are.
+
 ---
 
 ## HIST-2 — `action_id` is written by three services and read by nothing
@@ -2968,3 +2984,134 @@ the frontend's six JSON files, and which `_pdf_t` (`:324-334`) reads. Three keys
 six languages each, eighteen strings. The i18n validator never sees them, so
 they are reviewed alongside release z's batch but tracked separately from it.
 The existing `unallocated.person` / `unallocated.people` supply the count word.
+
+---
+
+## PANEL-3 — The people panel took its height from the units grid, and that was the wrong idea
+
+**Status:** ✅ CLOSED in v1.0.4y (2026-09-18). Found by Johannes on v1.0.4x. **Supersedes the two scoped patches, PANEL-1 and PANEL-2.**
+
+**Johannes's evidence, on v1.0.4x,** in a browser window about 1040px tall, on a
+group type with **two** units and **26** excluded people:
+
+- The expanded Excluded block ran off the bottom of the card and off the page.
+  Four more rows were visible below the card's rounded corner, painted on the
+  page background.
+- The unassigned list above it was cut off mid-row.
+- His own reading: it happens when there are few groups, or when the window is
+  not tall. He was right on both counts, and about the cause without naming it.
+
+**What was there.** `AllocationBoard.jsx:447-472` matched the docked people
+panel's height to the units grid beside it, by writing an inline `maxHeight`
+from a `ResizeObserver`. Two units is roughly two small cards, so the panel was
+clamped to a few hundred pixels and everything inside it — a header strip, a
+filter block, a pool that could not shrink below `24rem`, and a `shrink-0`
+Excluded block — had to fit in that or spill. Nothing clipped it, because the
+docked card had no `overflow-hidden`.
+
+**Why this entry exists rather than a third condition.** The line had already
+been scoped twice:
+
+- **PANEL-1** (v1.0.4w) stopped it clamping the *floating* panel.
+- **PANEL-2** (v1.0.4x) stopped it clamping against an *empty* grid.
+
+Two units is neither, so it still applied. Three releases spent narrowing one
+line is the signal that **the line was wrong, not wrongly scoped**. A panel of
+people has no reason to be the height of the rooms beside it. Looking even was
+the only thing the clamp ever bought, and it cost three releases and a defect
+that reached Johannes twice.
+
+### Resolution
+
+**The clamp is deleted** — the effect, the `rightPanelRef` that existed only to
+feed it, and the ref's attachment on the units column. Nothing writes a height
+on that panel any more; the only imperative style left on it is the
+`transform` the JS-driven sticky uses to pin it, which moves it rather than
+sizing it.
+
+**What replaces it.** The panel is bounded by the window instead of by its
+neighbour, and scrolls inside itself:
+
+- The docked panel gets `md:max-h-[calc(100vh-5rem)]` and `md:overflow-hidden`,
+  so it can never be taller than the window and nothing can paint outside the
+  card whatever its lists do.
+- The pool becomes `flex: 1 1 auto` with `minHeight: 6rem`, so it can **shrink**
+  — the old `24rem` floor could not, which was half the reason the panel
+  overflowed.
+- The Excluded block becomes a bounded flex column: `shrink min-h-0
+  max-h-[35vh] flex flex-col overflow-hidden`, with its header `shrink-0` and
+  its list `flex: 1 1 auto; min-height: 0; overflow-y: auto`.
+
+**The missing `min-h-0` was the mechanism.** A flex child's default
+`min-height: auto` refuses to shrink below its content, which is precisely how
+twenty-six rows escaped a card that was itself being clamped.
+
+**How the space divides, and why.** The Excluded block takes what it needs up to
+35vh; the pool takes the rest, down to a floor of 6rem, about four rows. Both
+scroll inside themselves. The floor is what stops a long excluded list squeezing
+the pool away entirely, and the 35vh cap is what stops the block doing the same
+in the other direction. In a short window both shrink and both stay usable; the
+block's header is `shrink-0`, so "Ausgenommen (26)" is visible even when its
+list has given up nearly all its room.
+
+**Accepted cost.** The two columns no longer match in height. That was the only
+thing the clamp bought.
+
+`poolCapPx` (`AllocationBoard.jsx:199-230`, v1.0.4l) is untouched and still caps
+the pool while the selection bar is up, so the block clears the fixed bar. It is
+a different mechanism for a different reason and was never part of this fault.
+
+---
+
+## ICON-1 — The undo control on an excluded row rendered as a colour emoji
+
+**Status:** ✅ CLOSED in v1.0.4y (2026-09-18). Found by Johannes on v1.0.4x.
+
+v1.0.4x replaced the word beside each excluded name with the character **`↩`**
+(U+21A9, LEFTWARDS ARROW WITH HOOK). That character is in Unicode's emoji set.
+Its default presentation is nominally text, but on a system carrying a colour
+emoji font it is drawn as **a white arrow on a filled blue rounded square** —
+which is what Johannes saw, sitting beside a flat grey `ⓘ`. His words: the thick
+blue background does not look nice, and the two controls do not match each
+other.
+
+**The general lesson, which is why this is filed rather than swapped quietly:** a
+character cannot be relied on to stay a character. `⊘`, `ⓘ` and `✕` happen to
+have no emoji presentation and had been fine for releases; `↩` looks like the
+same kind of thing and is not. Choosing glyphs by eye will keep producing this.
+
+### Resolution
+
+The row controls are drawn icons now. **`frontend/src/components/icons/RowIcons.jsx`**
+is a new four-icon module following the convention already set by
+`icons/MoreIcons.jsx` — a 24-unit `viewBox`, no fill, `stroke: currentColor` so
+each caller's own colour still applies, round caps and joins, Lucide-style — at
+row scale, 13px rather than the sidebar's 14, to sit on a 12px line of text.
+Every icon is `aria-hidden`, because each already sits inside a button carrying
+its own `aria-label` and would otherwise be announced twice.
+
+**Seven controls converted,** all of them row controls in the same panel, so the
+panel reads as one vocabulary:
+
+| Where | Was | Now |
+|---|---|---|
+| `ExcludedBlock.jsx` details | `ⓘ` | `IconInfo` |
+| `ExcludedBlock.jsx` undo | `↩` | `IconUndo` |
+| `AllocationBoard.jsx` pool chip, details | `ⓘ` | `IconInfo` |
+| `AllocationBoard.jsx` pool chip, exclude | `⊘` | `IconExclude` |
+| `AllocationBoard.jsx` unit member, details | `ⓘ` | `IconInfo` |
+| `AllocationBoard.jsx` unit member, exclude | `⊘` | `IconExclude` |
+| `AllocationBoard.jsx` unit member, remove | `✕` | `IconRemove` |
+
+**No accessible name changed.** Every one of the seven keeps the `aria-label`
+and `title` it carried before, so a screen reader hears exactly what it heard
+before and the existing tests, which find these controls by title and by
+accessible name, passed untouched.
+
+**Deliberately not converted,** because they are a different class of thing and
+converting them would be restyling rather than fixing: the `▶` disclosure
+markers, the `⠿` drag-handle hints, the `🔍` in the search box, the `✓` in the
+confirmed pill, the `×` on modal close buttons, and the `✕` on a mark-priority
+chip. None of them has emoji presentation. `🔍` does, and is left alone on
+purpose: it is decorative, has no button around it, and changing it is not this
+release's business.
