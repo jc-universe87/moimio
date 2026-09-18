@@ -216,6 +216,20 @@ html, body {
 :root { --input-bg: #FFFFFF; }
 .dark { --input-bg: #12202f; }
 
+/* v1.0.4z (SCROLL-1). Scrollbar thumb, following the same navy-on-light /
+   white-on-dark tint convention as --neutral-tint and --card-border, at the
+   weight a control needs rather than a surface: visible enough to aim at,
+   quiet enough to ignore. The hover value is what tells a pointer it is a
+   handle. */
+:root {
+  --scrollbar-thumb:       rgba(15,30,46,0.22);
+  --scrollbar-thumb-hover: rgba(15,30,46,0.38);
+}
+.dark {
+  --scrollbar-thumb:       rgba(255,255,255,0.20);
+  --scrollbar-thumb-hover: rgba(255,255,255,0.34);
+}
+
 @layer base {
   input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']),
   textarea,
@@ -244,13 +258,10 @@ html, body {
 }
 
 @layer utilities {
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
+  /* v1.0.4z: `.scrollbar-hide` used to live here. It hid a bar with
+     scrollbar-width:none and ::-webkit-scrollbar{display:none}, nothing in
+     the app ever used it, and leaving a hiding utility in the file after
+     SCROLL-1 would be an invitation. Deleted. */
 
   /*
     §v0.59a Safe-area convention.
@@ -334,5 +345,77 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .gate-flash {
     animation: none;
+  }
+}
+
+/*
+  ─── Scrollbars (v1.0.4z, SCROLL-1) ──────────────────────────────────────
+
+  Every scrollable area shows a slim, subtle, DRAGGABLE bar on a pointer
+  device.
+
+  WHAT THIS IS FIXING. Nothing in Moimio ever hid a scrollbar — the one
+  hiding utility that existed was dead code, and it is gone. Chrome on
+  Linux draws OVERLAY scrollbars: a bar painted on top of the content that
+  fades in while you scroll and fades out afterwards. An overlay bar is a
+  poor drag target by design, and once faded it is not a target at all. On
+  the People table, which scrolls sideways, dragging the bar is the obvious
+  way to move it, and there was nothing to take hold of.
+
+  WHY DEFINING RULES IS THE FIX rather than un-hiding anything: giving a
+  container ::-webkit-scrollbar rules opts it out of overlay behaviour in
+  Blink, and it gets a real, classic, permanently-drawn bar that takes its
+  own space and can be grabbed.
+
+  BOTH ENGINES, because neither is enough alone. `scrollbar-width` and
+  `scrollbar-color` are the standard properties, honoured by Firefox and by
+  current Chrome; they are INHERITED, so setting them on `html` reaches
+  every element without a universal selector. The ::-webkit-scrollbar
+  pseudo-elements cover the rest of Blink and WebKit, and are what actually
+  opts a container out of overlay drawing.
+
+  POINTER DEVICES ONLY. The whole block is inside the same media test the
+  board uses to gate its drag affordances. On a phone the system's own
+  overlay bar is the right answer and a permanent one would only eat width.
+
+  ONE RULE, NO OPT-OUTS. Every scrollable container in the app is listed in
+  BACKLOG.md under SCROLL-1; none of them wanted different treatment. If
+  one ever does, it opts out here with its reason, not in a component.
+*/
+@media (hover: hover) and (pointer: fine) {
+  /* Inherited, so this reaches every scrollable descendant. */
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* 10px of track, 6px of visible thumb: the 2px transparent border plus
+     background-clip leaves breathing room on each side so the bar reads as
+     slim without becoming hard to hit. */
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    background-clip: content-box;
+    border: 2px solid transparent;
+    border-radius: 6px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+
+  /* Where a vertical and a horizontal bar meet — the People and Check-in
+     tables, which scroll both ways. Left transparent so the corner does
+     not read as a third control. */
+  ::-webkit-scrollbar-corner {
+    background: transparent;
   }
 }

@@ -8,6 +8,18 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4z] — 2026-09-18
+You can see and grab every scrollbar again.
+
+### Fixed
+
+- **Scrollbars are visible and can be dragged again.** On long lists, and on
+  tables wider than the window, the bar had disappeared after a moment, so there
+  was nothing to take hold of with a mouse. Moving the pointer to the edge did
+  not bring it back. They are there now on every list and table in the app, slim
+  and out of the way, and they work in both light and dark. On a phone or tablet
+  nothing changes: the system's own behaviour is right there and is left alone.
+
 ## [1.0.4y] — 2026-09-18
 The people list keeps its own size, and the row buttons are drawn properly.
 
