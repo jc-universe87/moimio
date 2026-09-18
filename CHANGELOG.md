@@ -8,6 +8,32 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4u] — 2026-09-18
+Moving a whole workspace now takes one command.
+
+### Added
+
+- **Moving a whole workspace to your own Moimio now takes one command,**
+  instead of unzipping the file and uploading every event by hand, one at a
+  time. Point the command at the file, name an admin on the receiving
+  server, and every event comes back.
+
+- **Events keep their names** on a fresh server. Only when you add them to
+  a server that already has events of its own does a restored event get
+  " (Restored)" on the end, so you can tell the new arrivals apart.
+
+- **A trial run** shows exactly what would come back before anything at all
+  is written.
+
+- **One unreadable event no longer stops the rest.** That event is listed
+  with the reason it failed, and every other event still comes back.
+
+- **The file now also lists your team and your webhooks,** so you know who
+  had access to what, and which endpoints you were sending to. Neither list
+  contains passwords or secret keys. Nothing from either list is applied
+  when you restore: invite your team again, and re-enter your webhook
+  secrets on the new server.
+
 ## [1.0.4t] — 2026-09-18
 A restored event now carries its own history.
 

@@ -424,6 +424,11 @@ NOT_CARRIED: dict[str, str] = {
     # v1.0.4s: a permission must never come from a file. Who may see or
     # change an event is decided on the receiving instance, by inviting the
     # team again; the restore screen says so (STRINGS-1).
+    #
+    # v1.0.4u: the whole-workspace export carries the team as a reference
+    # list (`team.json`), per-event roles included, so a customer leaving
+    # can see who had what. It is a list to read, not a list to apply:
+    # restore never reads it, and this entry is unchanged by it.
     "event_user_assignments": "not_meaningful_elsewhere",
 }
 
@@ -1446,12 +1451,22 @@ async def confirm_restore(
     content: bytes,
     db: AsyncSession,
     actor_user_id: uuid.UUID | None = None,
+    *,
+    suffix_name: bool = True,
 ) -> dict:
     """
     Parse a backup ZIP and create a new event with fresh UUIDs.
 
     All relationships are re-keyed so the restored event is completely
     independent of the original. Returns the new event id and counts.
+
+    v1.0.4u: `suffix_name` decides whether the restored event's name gets
+    " (Restored)". It defaults to True, which is what the Backup page has
+    always done and what every existing caller expects. The whole-workspace
+    restore (`app.cli.import_all`) passes False when the receiving instance
+    has no events of its own: there is nothing to tell the restored events
+    apart from, so a customer moving to their own server gets their own
+    names back.
     """
     from app.models.allocation import Allocation
     from app.models.allocation_category import AllocationCategory
@@ -1609,7 +1624,9 @@ async def confirm_restore(
     # The event is the one row that cannot be skipped, so it keeps its
     # pre-existing fallback name. The suffix is added first and the result
     # shortened, or a name already at the column limit would overflow it.
-    new_name = f"{event_src.get('name') or 'Restored Event'} (Restored)"
+    # v1.0.4u: unless the caller asked for the name to be kept as it is.
+    base_name = event_src.get('name') or 'Restored Event'
+    new_name = f"{base_name} (Restored)" if suffix_name else base_name
     # Restore as DRAFT regardless of original status
     event = Event(
         id=new_event_id,

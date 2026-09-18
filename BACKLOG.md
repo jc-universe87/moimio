@@ -1517,7 +1517,61 @@ exactly as it did before.
 
 ## BACKUP-10 — There is no whole-workspace restore
 
-**Status:** Open. Found in session 86 phase 1 while tracing the hosted leaving path for BACKUP-1 (v1.0.4m). Not a data-loss bug.
+**Status:** ✅ CLOSED in v1.0.4u (2026-09-18). Found in session 86 phase 1 while tracing the hosted leaving path for BACKUP-1 (v1.0.4m). Not a data-loss bug.
+
+**Resolution.** `python -m app.cli.import_all --in <path> --as <email>`
+restores a whole-workspace export in one command, run inside the backend
+container the way `export_all` is. `--as` names an existing Super Admin on
+the receiving instance; an unknown address or a user of any other role is
+refused and nothing is written. Every event in the archive is restored
+through `backup_service.confirm_restore`, the same per-event restore the
+Backup page uses, with that admin as the actor, so every rule v1.0.4m to
+v1.0.4t settled applies unchanged.
+
+- **`--dry-run`** writes nothing at all: it opens the archive, reads each
+  event file through `preview_restore`, and lists what would come back.
+- **`--into-existing`** is the only way to restore onto an instance that
+  already has events, archived ones included.
+- **Names.** On an instance with no events each event keeps its own name.
+  With `--into-existing`, names get " (Restored)". This is
+  `confirm_restore`'s new `suffix_name` keyword, whose default is the
+  Backup page's behaviour, so every existing caller and test is untouched.
+- **One bad event costs that event.** Its failure is caught, its own work
+  rolled back, and the run carries on with the next event. The summary
+  names every event as restored or failed, with the reason, and the exit
+  code is 0 only when every event was restored, following `export_all`'s
+  convention.
+- **A single-event backup is refused** with a message sending it to the
+  Backup page, before a database session is even opened.
+
+**The two reference lists.** `team.json` and `webhooks.json` join the
+whole-workspace export and are always present, empty or not. `team.json`
+carries each account's name, email, system role, `is_active`,
+`can_manage_users`, `can_create_events`, and its per-event roles and
+permissions keyed by the event ids the manifest already lists.
+`webhooks.json` carries `managed_by == "user"` endpoints only, with name,
+address, event types and active flag. Never carried: `hashed_password`,
+`password_reset_token`, `password_reset_expires`, a webhook `secret`, and
+any SaaS-managed endpoint. Both files carry a `note` saying they are for
+reference and that restoring never applies them. Neither is ever part of a
+per-event backup, because an event admin can download one of those.
+
+**Nothing is applied.** The command never creates a user, never grants a
+role and never registers a webhook; it does not read either list at all. A
+permission must never come from a file. The register is unchanged, with a
+comment beside `NOT_CARRIED`'s `event_user_assignments` entry noting that
+the workspace export carries the team as a list to read.
+
+`test_v1_0_4u_workspace_restore.py` holds the whole of it, including a test
+that searches every decompressed byte of the archive for a password hash, a
+reset token and a webhook secret.
+
+**The documentation page** landed at `docs/moving-a-workspace.md`, linked
+from `docs/manual/09-data-export-gdpr.md` and
+`docs/installation/quick-guide.md`. The remaining follow-up, the hosted
+leaving email, is filed as SAAS-4.
+
+The original entry follows, as the record of what was found.
 
 `app.cli.export_all` writes an outer archive holding `manifest.json` plus
 `events/<event_id>.zip` per event, and the hosted control plane runs exactly
@@ -1564,7 +1618,8 @@ v1.0.4o rule about damaged lines applies unchanged.
 
 Follow-ups outside this code: a self-hosting documentation page, and the
 hosted leaving email should explain how to use the file, which is a wording
-change in `moimio-saas`.
+change in `moimio-saas`. Both are settled by v1.0.4u: the page is
+`docs/moving-a-workspace.md`, and the email is SAAS-4.
 
 ---
 difference between "you can leave" and "you can leave in an afternoon".
@@ -1732,6 +1787,13 @@ Both lines above are now decided, and both are needed.
   also say that the export carries **everyone's notes**, including private
   ones, since BACKUP-4 settles that too. A customer should know that before
   they click, not after.
+
+  **Added by v1.0.4u:** the same line must also say that the export carries
+  **two reference lists**, the team and the customer's own webhooks, and
+  that neither is applied by restoring. No passwords, no reset tokens and
+  no webhook secrets are in either. The customer should know before they
+  click that they will have to invite their team again and re-enter their
+  webhook secrets on the receiving server.
 
 ---
 - **The leaving (Danger Zone) screen says what the leaving export
@@ -2043,3 +2105,28 @@ item and not a one-line fix.
   the user's zone or the event's, and whether the box should offer a list
   instead of free text.
 - **Add any new strings to STRINGS-1.**
+
+---
+
+## SAAS-4 — The hosted leaving email does not say how to use the export
+
+**Status:** Open. Opened in session 86 alongside v1.0.4u, which closed
+BACKUP-10. **Not a change to this repo.** It is a wording change in
+`~/dev/moimio-saas`, filed here so it is not lost.
+
+v1.0.4u gives a leaving customer a whole-workspace export and one command
+that restores all of it onto their own Moimio, plus a documentation page
+(`docs/moving-a-workspace.md`) that walks through it. The hosted leaving
+email still hands over the file and says nothing about either.
+
+What the email should say, once someone writes it in `moimio-saas`:
+
+- **What the file is** and that it holds every event, archived ones
+  included, plus the two reference lists.
+- **That there is a command**, not twenty uploads, and a link to
+  `docs/moving-a-workspace.md` for the exact steps.
+- **What they will set up by hand** on the receiving server: accounts and
+  passwords, per-event roles, webhook secrets, and email sending.
+
+No CE code changes. The strings live in the hosted product, so they are not
+part of STRINGS-1 either.

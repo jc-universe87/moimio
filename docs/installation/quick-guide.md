@@ -175,6 +175,8 @@ Run this on a cron schedule. Store the dumps somewhere off the host. Restore by 
 
 The product also ships an in-app event-level backup (download a single archive of one event's data, restore it on another deployment) — see [`docs/manual/09-data-export-gdpr.md`](../manual/09-data-export-gdpr.md) in the user manual.
 
+To bring a whole workspace onto this server, every event in one go, see [Moving a workspace to your own Moimio](../moving-a-workspace.md).
+
 ---
 
 ## SMTP reference (optional)

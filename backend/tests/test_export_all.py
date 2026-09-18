@@ -7,6 +7,11 @@ Two layers:
   • `test_build_archive_orchestration` mocks the database and the
     (already CE-tested) `export_event_zip`, so the genuinely-new logic —
     enumeration, ZIP assembly, manifest — is verified without a database.
+
+v1.0.4u adds `team.json` and `webhooks.json` to the archive. What they
+carry and what they must never carry is pinned in
+test_v1_0_4u_workspace_restore.py; what belongs here is that the archive
+has them at all, and that the orchestration still assembles what it did.
 """
 
 import io
@@ -38,6 +43,9 @@ async def test_export_all_bundles_every_event(db):
         assert "manifest.json" in names
         assert f"events/{ev1.id}.zip" in names
         assert f"events/{ev2.id}.zip" in names
+        # v1.0.4u: the two reference lists join the archive.
+        assert "team.json" in names
+        assert "webhooks.json" in names
 
         manifest = json.loads(zf.read("manifest.json"))
         assert manifest["event_count"] == 2
@@ -68,8 +76,15 @@ async def test_export_all_empty_workspace_is_valid(db):
     data = await export_all.build_archive(db)
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
         manifest = json.loads(zf.read("manifest.json"))
+        # v1.0.4u: both lists are present even here, so an absent file
+        # never has to be read as "none of these exist".
+        team = json.loads(zf.read("team.json"))
+        hooks = json.loads(zf.read("webhooks.json"))
     assert manifest["event_count"] == 0
     assert manifest["events"] == []
+    assert team["users"] == []
+    assert hooks["endpoints"] == []
+    assert team["note"] and hooks["note"]
 
 
 # ── orchestration (no database) ──
@@ -120,12 +135,26 @@ async def test_build_archive_orchestration(monkeypatch):
 
     monkeypatch.setattr(export_all, "export_event_zip", fake_export_event_zip)
 
+    # v1.0.4u: the two reference lists have their own database queries and
+    # their own tests. Here they are stubbed to a fixed payload, so this
+    # test keeps saying one thing: what build_archive assembles.
+    async def fake_team(db):
+        return {"note": "stub", "user_count": 0, "users": []}
+
+    async def fake_hooks(db):
+        return {"note": "stub", "endpoint_count": 0, "endpoints": []}
+
+    monkeypatch.setattr(export_all, "build_team_list", fake_team)
+    monkeypatch.setattr(export_all, "build_webhook_list", fake_hooks)
+
     data = await export_all.build_archive(_FakeDB(rows))
 
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
         names = set(zf.namelist())
         assert names == {
             "manifest.json",
+            "team.json",
+            "webhooks.json",
             "events/11111111-1111-1111-1111-111111111111.zip",
             "events/22222222-2222-2222-2222-222222222222.zip",
         }

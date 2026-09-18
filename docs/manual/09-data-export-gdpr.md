@@ -114,6 +114,10 @@ The Backup page has an **↑ From backup** button at the top of the events list.
 
 Backups are versioned — restoring across major schema changes may require manual fixup. The backup zip includes the schema version it was generated against.
 
+### Moving a whole workspace
+
+The Backup page handles one event at a time. To move every event at once, to a Moimio you run yourself, there is a whole-workspace export and a single command that restores it. See [Moving a workspace to your own Moimio](../moving-a-workspace.md).
+
 ---
 
 ## Cancelled participants
