@@ -444,8 +444,18 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
   }, []);
 
   // Match left panel height to right panel on desktop
+  //
+  // v1.0.4w (PANEL-1): this used to check isMobileView and nothing else, so it
+  // kept writing maxHeight while the panel was FLOATING — clamping it to the
+  // units grid's height. An inline max-height beats an inline height whenever
+  // it is smaller, and width has no such clamp, which is exactly why the grip
+  // moved the panel wider but never taller, and why docking it back left it
+  // short. It also explains why the same drag worked on one event and not
+  // another: the clamp is the units grid, so twenty units gave a loose one and
+  // two gave a tight one. Nothing was ever stored per event.
+  // The value is written imperatively, so React cannot clear it — cleanup does.
   useEffect(() => {
-    if (isMobileView) return;
+    if (isMobileView || panelFloating) return;
     const rightEl = rightPanelRef.current;
     const leftEl = leftPanelRef.current;
     if (!rightEl || !leftEl) return;
@@ -454,8 +464,11 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
       if (h > 0) leftEl.style.maxHeight = `${h}px`;
     });
     observer.observe(rightEl);
-    return () => observer.disconnect();
-  }, [isMobileView, units]);
+    return () => {
+      observer.disconnect();
+      leftEl.style.maxHeight = '';
+    };
+  }, [isMobileView, panelFloating, units]);
 
   // v0.70d-1 R2: local showToast removed — the useToast hook
   // declared above provides the same API with the correct semantic

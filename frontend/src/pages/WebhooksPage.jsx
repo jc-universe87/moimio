@@ -367,8 +367,8 @@ export default function WebhooksPage() {
                     flex-wrap row collapsed badly on narrow widths,
                     causing the URL to break per-character and buttons
                     to overlap the state pill. */}
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                  <div className="min-w-0 sm:flex-1 overflow-hidden">
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                  <div className="min-w-0 lg:flex-1 overflow-hidden">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3
                         className="font-medium truncate"
@@ -408,7 +408,16 @@ export default function WebhooksPage() {
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-1 sm:justify-end sm:flex-shrink-0">
+                  {/* v1.0.4w (LAYOUT-1): `sm:flex-shrink-0` here claimed the
+                      group's full natural width — every button on one line —
+                      and never gave any back, so it never reached the width at
+                      which it would wrap and the `flex-wrap` was inert. The
+                      info column beside it, which does shrink, was squeezed to
+                      nothing: at ~780px the row was four buttons and no name.
+                      The group now shrinks and wraps, and the side-by-side
+                      layout waits for `lg` (1024px), which is the width the
+                      four labels actually need in German. */}
+                  <div className="flex flex-wrap gap-1 lg:justify-end">
                     <ActionBtn onClick={() => handleTest(ep)}>
                       {t('webhooks.action.test')}
                     </ActionBtn>

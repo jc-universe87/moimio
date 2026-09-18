@@ -95,7 +95,7 @@ export default function BackupPage() {
       {/* Restore from backup — always visible */}
       <div className="bg-card-solid rounded-xl shadow-sm border border-card p-5 mb-4">
         <div className="flex items-center justify-between">
-          <div>
+          <div className="min-w-0">
             <h2 className="font-heading font-bold text-body text-sm">{t('portability.restore')}</h2>
             <p className="text-xs text-subtle mt-0.5">{t('portability.restore_hint')}</p>
           </div>
@@ -109,7 +109,7 @@ export default function BackupPage() {
       {/* Multi-event backup */}
       <div className="bg-card-solid rounded-xl shadow-sm border border-card p-5">
         <div className="flex items-center justify-between mb-4">
-          <div>
+          <div className="min-w-0">
             <h2 className="font-heading font-bold text-body text-sm">{t('backup.download_events')}</h2>
             <p className="text-xs text-subtle mt-0.5">{t('backup.download_events.hint')}</p>
           </div>

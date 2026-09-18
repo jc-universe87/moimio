@@ -8,6 +8,51 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4w] — 2026-09-18
+Screens that had stopped fitting, a name that changed when you opened it, and a quieter log.
+
+### Fixed
+
+- **A group type keeps its name when you open it.** The list showed
+  "Zimmerbelegung" and the group type itself showed "Room Allocation", which
+  are the same group type in two languages. Both now show the name in whatever
+  language you are working in, and so does the banner that suggests which group
+  type to finish next.
+
+- **Pages fit narrow windows again.** On the Webhooks page at around 780 pixels
+  wide, the buttons beside each endpoint took the whole row and pushed the name,
+  the address and everything else out of view, so four endpoints looked like
+  four identical strips of buttons. The buttons now wrap and the details stay
+  readable. Two headings on the Backup page could be pushed off the same way and
+  no longer can.
+
+- **The pop-out people list can be made taller,** not only wider. Dragging its
+  corner downward did nothing, and docking it again left it too short for what
+  was in it. It also behaved differently from one event to the next, which came
+  down to how many rooms or groups the event had.
+
+- **The sidebar shows where you are.** Einteilung, Backup and Webhooks opened
+  without ever highlighting, so nothing on screen said which page you were on.
+  Workspace had the same fault on hosted accounts.
+
+- **A stray click no longer saves a rename you did not make.** Clicking a group
+  type's title and then clicking away saved it again, unchanged. Nothing was
+  lost, but nothing should have been written either.
+
+- **The gender column on the detailed roster PDF** is wide enough for its own
+  heading in English and German.
+
+### Changed
+
+- **Detailed logging is off by default.** Moimio used to record every database
+  query, with the values in it, which meant participant names, email addresses
+  and dates of birth were written into the server log during ordinary use.
+  Ordinary running now logs only what it needs to. Anyone who needs the detail
+  back can set `LOG_LEVEL=DEBUG` while they are looking into something.
+
+- **The server no longer watches its own files for changes** in the published
+  image, which was a development setting that had no purpose there.
+
 ## [1.0.4v] — 2026-09-18
 Exclusions now show up in the two people exports.
 

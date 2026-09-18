@@ -34,7 +34,9 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-moimio}:${POSTGRES_PASSWORD:-moimio_dev}@db:5432/${POSTGRES_DB:-moimio}
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production-use-64-chars-minimum}
-      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+      # v1.0.4w (OPS-1): INFO by default. At DEBUG the database layer echoes
+      # every query with its values, which writes personal data to the log.
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:6120}
       RATE_LIMIT_REGISTRATION: ${RATE_LIMIT_REGISTRATION:-10}
       SMTP_HOST: ${SMTP_HOST:-}

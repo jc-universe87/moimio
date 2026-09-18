@@ -18,6 +18,8 @@ import SetupHub from './SetupHub';
 import RegistrationPhasePage from './RegistrationPhasePage';
 import NoPermissionPage from './NoPermissionPage';
 import { getLandingForUser, canAccessSection } from '../services/landing';
+// v1.0.4w (LANG-1): the unassigned banner named the stored English name.
+import { typeName } from '../utils/groupTypeLabel';
 import ReportsPage from './ReportsPage';
 import { useI18n } from '../hooks/useI18n';
 import { useToast } from '../hooks/useToast';
@@ -875,7 +877,7 @@ export default function EventDetailPage() {
             />
             {topCat && (
               <UnassignedBanner
-                categoryName={topCat.name}
+                categoryName={typeName(topCat, t)}
                 count={topCount}
                 onPlaceThem={() => {
                   // Scroll to the specific category card. Each card in

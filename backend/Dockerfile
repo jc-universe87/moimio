@@ -33,4 +33,9 @@ EXPOSE 8000
 # The one-liner is in shell form so the && chain short-circuits on failure
 # — if migrations fail, uvicorn doesn't start, and compose will report the
 # container as unhealthy.
-CMD sh -c "sleep 3 && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+# v1.0.4w (CE-2): no --reload. The file watcher had nothing to watch in a
+# sealed image, burned CPU and inotify watches, and could in principle drop
+# in-flight requests on a stray filesystem touch. Local development is
+# unaffected: docker-compose.yml bind-mounts ./backend/app and a rebuild is
+# what picks up a change to the image anyway.
+CMD sh -c "sleep 3 && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"

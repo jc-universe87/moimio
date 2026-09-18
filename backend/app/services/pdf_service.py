@@ -1160,8 +1160,14 @@ def render_detailed(
         pdf.cell(0, 6, pdf.safe(_pdf_t(pdf.lang, "units.empty")), new_x="LMARGIN", new_y="NEXT")
         return bytes(pdf.output())
 
-    # Landscape A4: ≈ 267mm usable. Columns sum to 248mm, leaving breathing room.
-    col = {"name": 78, "sex": 10, "dob": 28, "phone": 42, "email": 72, "code": 18}
+    # Landscape A4: ≈ 267mm usable. Columns sum to 252mm, leaving breathing room.
+    # v1.0.4w (PDF-1): sex was 10mm, which two headers overran at 7.5pt bold —
+    # EN "GENDER" by 2.605pt and DE "GESCHL." by 3.362pt. They touched the next
+    # column rather than overlapping its text, which is why it went unnoticed.
+    # The 4mm comes out of the spare; no other column moves. Widening beats
+    # shortening the headers, which would lose the German abbreviation dot and
+    # need a change to the PDF's own translation table.
+    col = {"name": 78, "sex": 14, "dob": 28, "phone": 42, "email": 72, "code": 18}
 
     for unit in data["units"]:
         members = sorted(

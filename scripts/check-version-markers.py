@@ -3,10 +3,17 @@
 
 Markers:
   backend/app/version.py      __version__ = "1.0.4c"
+  backend/app/version.py      line-1 docstring "(v1.0.4c)"
   frontend/package.json       "moimioVersion": "v1.0.4c"
 
-Always: the two must name the same version (the frontend carries a
-leading "v", the backend does not).
+Always: the three must name the same version (the frontend and the
+docstring carry a leading "v", `__version__` does not).
+
+v1.0.4w (VERSION-1): the docstring is read here as a third always-checked
+marker. `bump-version.py` sets all three, but the docstring had drifted
+once already — at v1.0.4l it read "(v1.0.4k)" — because nothing checked
+it. Setting it and checking it are both needed: the setter stops the
+drift, the check proves the setter ran.
 
 On a tag push (GITHUB_REF_NAME starts with "v", or --tag given): the tag
 must equal the frontend marker, and CHANGELOG.md must have a
@@ -33,6 +40,21 @@ def backend_version() -> str:
     return m.group(1)
 
 
+def docstring_version() -> str:
+    """The version named in version.py's own line-1 docstring, e.g. "1.0.4c".
+
+    Returned without the leading "v" so it compares against `__version__`
+    directly. Line 1 only: a "(vX.Y.Z)" anywhere else in the file is prose,
+    not a marker.
+    """
+    line = (ROOT / "backend/app/version.py").read_text(
+        encoding="utf-8").split("\n", 1)[0]
+    m = re.search(r"\(v([^)]+)\)", line)
+    if not m:
+        sys.exit("backend/app/version.py: line-1 docstring names no (vX.Y.Z)")
+    return m.group(1)
+
+
 def frontend_version() -> str:
     pkg = json.loads((ROOT / "frontend/package.json").read_text(encoding="utf-8"))
     v = pkg.get("moimioVersion", "")
@@ -49,10 +71,14 @@ def main(argv: list[str]) -> int:
         tag = os.environ.get("GITHUB_REF_NAME")
 
     be = backend_version()
+    ds = docstring_version()
     fe = frontend_version()
     problems = []
     if f"v{be}" != fe:
         problems.append(f"backend {be!r} vs frontend {fe!r}")
+    if ds != be:
+        problems.append(
+            f"version.py docstring {ds!r} vs __version__ {be!r}")
 
     if tag and tag.startswith("v"):
         if tag != fe:

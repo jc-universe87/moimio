@@ -177,7 +177,13 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
   const commitInlineRename = async (catId) => {
     const trimmed = (renameDraft || '').trim();
     const existing = categories.find(c => c.id === catId);
-    if (!trimmed || (existing && trimmed === existing.name)) {
+    // v1.0.4w: compare against what the box SHOWED, not against the stored
+    // text. The draft is seeded with typeName() above, so for a default group
+    // type — stored "Room Allocation", shown "Zimmerbelegung" — the two never
+    // matched and a stray click saved a rename nobody asked for. The backend's
+    // matches_default guard meant no key was lost, so this was a needless
+    // write rather than a data fault.
+    if (!trimmed || (existing && trimmed === typeName(existing, t))) {
       // Nothing to save — empty or unchanged. Revert input state.
       setEditingCatRenameId(null);
       setRenameDraft('');
@@ -300,7 +306,7 @@ export default function OrganiseDashboard({ eventId, eventName, participantList,
                 title={isAdmin ? t('organise.title_click_to_rename') : undefined}
                 className={`font-heading text-xl font-bold ${isAdmin ? 'cursor-text hover:underline decoration-dotted decoration-1 underline-offset-4' : ''}`}
                 style={{ color: 'var(--text-primary)' }}>
-                {selectedCat.name}
+                {typeName(selectedCat, t)}
               </h2>
             )}
             {/* v0.60e: removed the "one per person / several per person"

@@ -123,6 +123,20 @@ export default function AdminLayout() {
   // otherwise (which also maps to 'board' but the variable name is clearer).
   const rawSectionParam = searchParams.get('section');
   const normalisedSection = rawSectionParam === 'organise' ? 'board' : rawSectionParam;
+  // v1.0.4w (NAV-1): the alias above rewrites the VALUE, but three nav items
+  // still carry id 'organise' (see the primary-nav lists below). Comparing a
+  // normalised value against an un-normalised id asked whether
+  // 'board' === 'organise', so Einteilung never highlighted. Normalise both
+  // sides through one helper rather than dropping the alias, which real v45
+  // bookmarks still need.
+  const sameSection = (a, b) => (
+    (a === 'organise' ? 'board' : a) === (b === 'organise' ? 'board' : b)
+  );
+  // v1.0.4w (NAV-1): Backup, Webhooks and Workspace navigate to paths rather
+  // than sections, and carried no active test at all — their classNames were
+  // hardcoded to the inactive style. Users had a one-off pathname check; this
+  // is that check, shared.
+  const pathActive = (path) => location.pathname === path;
   // activeSection is finalised below, after currentPhase is known so we
   // can pick the right default for the current phase's landing.
 
@@ -386,7 +400,7 @@ export default function AdminLayout() {
                       {primaryItems.map(item => (
                         <button key={item.id} onClick={() => navigateSection(item.id)}
                           className={`block w-full text-left px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-                            activeSection === item.id
+                            sameSection(activeSection, item.id)
                               ? 'bg-steel-blue text-white'
                               : 'text-white/70 hover:text-white hover:bg-white/5'
                           }`}>
@@ -421,7 +435,7 @@ export default function AdminLayout() {
                                   key={item.id}
                                   onClick={() => navigateSection(item.id)}
                                   className={`flex items-center gap-2 w-full text-left pl-5 pr-3 py-1.5 rounded-lg text-xs transition-colors ${
-                                    activeSection === item.id
+                                    sameSection(activeSection, item.id)
                                       ? 'bg-white/10 text-white'
                                       : 'text-white/45 hover:text-white/85 hover:bg-white/5'
                                   }`}
@@ -464,7 +478,7 @@ export default function AdminLayout() {
                   {setupItems.map(item => (
                     <button key={item.id} onClick={() => navigateSection(item.id)}
                       className={`block w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors ${
-                        activeSection === item.id
+                        sameSection(activeSection, item.id)
                           ? 'bg-white/10 text-white'
                           : 'text-white/50 hover:text-white/80 hover:bg-white/5'
                       }`}>
@@ -496,7 +510,7 @@ export default function AdminLayout() {
                         closeSidebar();
                       }}
                       className={`flex items-center gap-2.5 w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors ${
-                        location.pathname === '/admin/users'
+                        pathActive('/admin/users')
                           ? 'bg-white/10 text-white'
                           : 'text-white/50 hover:text-white/80 hover:bg-white/5'
                       }`}>
@@ -510,7 +524,11 @@ export default function AdminLayout() {
                       the BackupPage at /admin/backup. */}
                   {!isStaff && (
                     <button onClick={() => { navigate('/admin/backup'); closeSidebar(); }}
-                      className="flex items-center gap-2.5 w-full text-left px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">
+                      className={`flex items-center gap-2.5 w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                        pathActive('/admin/backup')
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/50 hover:text-white/80 hover:bg-white/5'
+                      }`}>
                       <IconBackup className="shrink-0" />
                       <span>{t('nav.backup')}</span>
                     </button>
@@ -528,7 +546,11 @@ export default function AdminLayout() {
                       only this configuration surface is hidden. */}
                   {isSuperAdmin && capabilities.outbound_webhooks && !capabilities.account_portal && (
                     <button onClick={() => { navigate('/admin/webhooks'); closeSidebar(); }}
-                      className="flex items-center gap-2.5 w-full text-left px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">
+                      className={`flex items-center gap-2.5 w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                        pathActive('/admin/webhooks')
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/50 hover:text-white/80 hover:bg-white/5'
+                      }`}>
                       <IconWebhook className="shrink-0" />
                       <span>{t('nav.webhooks')}</span>
                     </button>
@@ -542,7 +564,11 @@ export default function AdminLayout() {
                       account_portal (managed-instance), same as Manage account. */}
                   {isSuperAdmin && capabilities.account_portal && (
                     <button onClick={() => { navigate('/admin/workspace'); closeSidebar(); }}
-                      className="flex items-center gap-2.5 w-full text-left px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors">
+                      className={`flex items-center gap-2.5 w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                        pathActive('/admin/workspace')
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/50 hover:text-white/80 hover:bg-white/5'
+                      }`}>
                       <IconWorkspace className="shrink-0" />
                       <span>{t('nav.workspace')}</span>
                     </button>
