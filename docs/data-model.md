@@ -42,7 +42,7 @@ Event
  │    └── AllocationUnit
  ├── Participant
  │    ├── group_code            (STEM-NNN, links related registrations)
- │    ├── group_code_categories (JSONB: retired v1.0.4r, unread)
+ │    ├── group_code_categories (JSONB: retired v1.0.5, unread)
  │    ├── registration_status   (pending/confirmed/cancelled)
  │    ├── participant_number    (sequential per event; shown in table + email)
  │    ├── override_group_room   (opt-out of group-aware allocation)
@@ -75,7 +75,7 @@ User
 | `allocation_categories` | Named kinds of allocation per event. `rule_type` = exclusive/overlapping. `settings` JSON holds engine config. |
 | `allocation_units` | Named slots within a category. Capacity + gender restriction optional. |
 | `allocations` | Participant↔Unit links. UNIQUE(participant_id, unit_id). |
-| `participant_preference_requests` | "I'd like to be with so-and-so" submissions from the registration form (off by default per event). The organising team reads these and acts by hand; nothing in the engine acts on them. Their `category_scope` column, a limit to particular group types, was never enforced and never had a screen: it was retired in v1.0.4r and is dropped after v1.0.5. |
+| `participant_preference_requests` | "I'd like to be with so-and-so" submissions from the registration form (off by default per event). The organising team reads these and acts by hand; nothing in the engine acts on them. Their `category_scope` column, a limit to particular group types, was never enforced and never had a screen: it was retired in v1.0.5 and is dropped after it. |
 | `mark_definitions` | Colour-badge types per event ("Leader", "New to us", "Allergic to X"). |
 | `mark_assignments` | Badge↔participant links. |
 | `checkin_fields` | Custom tick columns for check-in mode ("Arrived", "Picked up pack", "Paid cash"). |
@@ -141,9 +141,9 @@ when the registrant doesn't supply one (`SURNAME-` plus a random
 three-digit suffix), and included in the registration confirmation
 email.
 
-`group_code_categories` (JSONB, nullable): **RETIRED in v1.0.4r, and
+`group_code_categories` (JSONB, nullable): **RETIRED in v1.0.5, and
 unread from that release on.** It limited one person's group code to
-particular group types, and until v1.0.4r the engine's PASS 1 did
+particular group types, and until v1.0.5 the engine's PASS 1 did
 enforce it — this page previously said it did not, which was wrong from
 the first public commit. No screen in any of the six languages could
 see or set it, no CSV column carried it, and no release announced it;

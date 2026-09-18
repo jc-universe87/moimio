@@ -135,7 +135,7 @@ CE (the application) owns:
 ## Image versions
 
 The two `image:` lines in `production.yml` reference specific GHCR
-tags (`ghcr.io/jc-universe87/moimio-backend:v1.0.0v` and similarly
+tags (`ghcr.io/jc-universe87/moimio-backend:v1.0.5` and similarly
 for frontend). These tags are bumped together each CE release.
 Never `:latest` — pinning is enforced.
 
