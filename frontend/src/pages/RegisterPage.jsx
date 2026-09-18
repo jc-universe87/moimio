@@ -87,8 +87,6 @@ function RegisterForm() {
         if (catRes.ok) setCategories(await catRes.json());
       }
     } catch (err) {
-      // v1.0.4ze (FORM-1): mark the boxes the server named.
-      if (err?.fieldErrors) setFieldErrors(err.fieldErrors);
       setError(err);
     } finally {
       setLoading(false);
@@ -338,6 +336,13 @@ function RegisterForm() {
       clearDraft();
       setSuccess(true);
     } catch (err) {
+      // v1.0.4zf (2.7): mark the boxes the server named.
+      //
+      // v1.0.4ze put this line on the page-LOAD catch by mistake, so a
+      // rejected submit never set `fieldErrors` at all. The banner appeared
+      // — it comes from `setError` — and pointed at markings that were never
+      // going to exist. That is the whole of what Johannes saw.
+      if (err?.fieldErrors) setFieldErrors(err.fieldErrors);
       setError(err);
     } finally {
       setSubmitting(false);
@@ -388,17 +393,55 @@ function RegisterForm() {
   };
   const hasCustomStyle = !!event?.settings?.style;
   const radius = `${Math.min(parseInt(cs.borderRadius), 16)}px`;
+  // v1.0.4zf: this statement was broken in v1.0.4ze, which inserted
+  // `epInputClass` between the string and its `+ (hasCustomStyle ? …)`
+  // continuation. Automatic semicolon insertion made that legal JavaScript
+  // and silently dropped ` focus:ring-steel-blue` from every input on the
+  // public form, leaving the orphaned continuation as a no-op expression.
+  // It built and it ran; it was simply wrong.
   const inputClass = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:border-transparent"
+    + (hasCustomStyle ? '' : ' focus:ring-steel-blue');
+
   // v0.70d-3c-8a: per-extra-person field error highlighting.
   // Returns inputClass with a burgundy border if the field has an
   // error in extraPersonErrors[idx]. Auto-clears as user types
   // (handled in updateEp via onChange path).
+  //
+  // v1.0.4zf (2.7): this is the house pattern, and the form's OWN fields now
+  // use it too via `fieldInputClass` below rather than a second way of
+  // marking a box.
   const epInputClass = (idx, field) => {
     const hasErr = extraPersonErrors[idx]?.[field];
     if (!hasErr) return inputClass;
     return inputClass.replace('border-gray-200', 'border-burgundy ring-1 ring-burgundy/40');
   };
-    + (hasCustomStyle ? '' : ' focus:ring-steel-blue');
+
+  // v1.0.4zf (2.7): the same, for the form's own fields. v1.0.4ze recorded
+  // `fieldErrors` in state and rendered none of it, so the banner pointed at
+  // markings that did not exist — worse than the raw error it replaced,
+  // because that at least named the field.
+  const fieldInputClass = (field) => {
+    if (!fieldErrors[field]) return inputClass;
+    return inputClass.replace('border-gray-200', 'border-burgundy ring-1 ring-burgundy/40');
+  };
+
+  // The message belongs WITH the box, not only in the summary at the top.
+  const fieldError = (field) => (fieldErrors[field] ? (
+    <p className="text-xs mt-1" style={{ color: 'var(--alert-burgundy)' }}>
+      {t(fieldErrors[field])}
+    </p>
+  ) : null);
+
+  // Clearing one clears the banner with the last of them (2.7.3).
+  const clearFieldError = (field) => {
+    if (!fieldErrors[field]) return;
+    setFieldErrors(prev => {
+      const next = { ...prev };
+      delete next[field];
+      if (Object.keys(next).length === 0) setError(null);
+      return next;
+    });
+  };
 
   const OPTIONAL_FIELDS = [
     { name: 'gender', labelKey: 'register.gender', type: 'select' },
@@ -465,13 +508,21 @@ function RegisterForm() {
                 <label className="block text-sm font-semibold text-gray-600 mb-1">
                   {t('register.first_name')} <span style={{ color: 'var(--alert-burgundy)' }}>*</span>
                 </label>
-                <input type="text" name="first_name" value={formData.first_name} onChange={handleChange} required className={inputClass} />
+                <input type="text" name="first_name" value={formData.first_name}
+                  onChange={(e) => { clearFieldError('first_name'); handleChange(e); }}
+                  required aria-invalid={!!fieldErrors.first_name}
+                  className={fieldInputClass('first_name')} />
+                {fieldError('first_name')}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-600 mb-1">
                   {t('register.last_name')} <span style={{ color: 'var(--alert-burgundy)' }}>*</span>
                 </label>
-                <input type="text" name="last_name" value={formData.last_name} onChange={handleChange} required className={inputClass} />
+                <input type="text" name="last_name" value={formData.last_name}
+                  onChange={(e) => { clearFieldError('last_name'); handleChange(e); }}
+                  required aria-invalid={!!fieldErrors.last_name}
+                  className={fieldInputClass('last_name')} />
+                {fieldError('last_name')}
               </div>
             </div>
             <div>
@@ -479,23 +530,10 @@ function RegisterForm() {
                 {t('register.email')} <span style={{ color: 'var(--alert-burgundy)' }}>*</span>
               </label>
               <input type="email" name="email" value={formData.email}
-                onChange={(e) => {
-                  if (fieldErrors.email) {
-                    setFieldErrors(prev => { const n = { ...prev }; delete n.email; return n; });
-                  }
-                  handleChange(e);
-                }}
+                onChange={(e) => { clearFieldError('email'); handleChange(e); }}
                 required aria-invalid={!!fieldErrors.email}
-                className={fieldErrors.email
-                  ? `${inputClass} border-2`
-                  : inputClass}
-                style={fieldErrors.email
-                  ? { borderColor: 'var(--alert-burgundy)' } : undefined} />
-              {fieldErrors.email && (
-                <p className="text-xs mt-1" style={{ color: 'var(--alert-burgundy)' }}>
-                  {t(fieldErrors.email)}
-                </p>
-              )}
+                className={fieldInputClass('email')} />
+              {fieldError('email')}
             </div>
 
             {/* Optional built-in fields */}
@@ -507,11 +545,15 @@ function RegisterForm() {
                   <label className="block text-sm font-semibold text-gray-600 mb-1">
                     {t(labelKey)} {required && <span style={{ color: 'var(--alert-burgundy)' }}>*</span>}
                   </label>
-                  <select name={name} value={formData[name]} onChange={handleChange} required={required} className={inputClass}>
+                  <select name={name} value={formData[name]}
+                    onChange={(e) => { clearFieldError(name); handleChange(e); }}
+                    required={required} aria-invalid={!!fieldErrors[name]}
+                    className={fieldInputClass(name)}>
                     <option value="">{t('register.gender.select')}</option>
                     <option value="male">{t('register.gender.male')}</option>
                     <option value="female">{t('register.gender.female')}</option>
                   </select>
+                  {fieldError(name)}
                 </div>
               );
               return (
@@ -519,7 +561,11 @@ function RegisterForm() {
                   <label className="block text-sm font-semibold text-gray-600 mb-1">
                     {t(labelKey)} {required && <span style={{ color: 'var(--alert-burgundy)' }}>*</span>}
                   </label>
-                  <input type={type} name={name} value={formData[name]} onChange={handleChange} required={required} className={inputClass} />
+                  <input type={type} name={name} value={formData[name]}
+                    onChange={(e) => { clearFieldError(name); handleChange(e); }}
+                    required={required} aria-invalid={!!fieldErrors[name]}
+                    className={fieldInputClass(name)} />
+                  {fieldError(name)}
                 </div>
               );
             })}

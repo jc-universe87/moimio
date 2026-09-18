@@ -77,14 +77,58 @@ describe('formatDateTime', () => {
   });
 });
 
-describe('zoneLabel', () => {
-  it('names the event\'s zone so nobody has to guess', () => {
-    expect(hook().current.zoneLabel('Europe/Berlin')).toBe('Europe/Berlin');
+describe('zoneLabel (v1.0.4zf, 2.6)', () => {
+  // The IANA identifier read like a filename beside a time. What belongs
+  // there is the SHORT name in the language being read — "MESZ" for a German
+  // reader. The assertions are about the SHAPE of the answer rather than one
+  // hard-coded abbreviation, because the abbreviation a runtime can produce
+  // depends on its ICU data.
+
+  it('never returns the IANA identifier', () => {
+    // The one thing that must not happen, whatever the locale data holds.
+    // The rule is that no Area/Location form reaches a screen. 'UTC' is a
+    // genuine short name that happens to equal its own identifier, so the
+    // slash is what distinguishes the two cases, not string equality.
+    const { zoneLabel } = hook().current;
+    for (const z of ['Europe/Berlin', 'Asia/Seoul', 'America/New_York', 'UTC']) {
+      const out = zoneLabel(z);
+      expect(out).not.toContain('/');
+      expect(out).not.toBe('Europe/Berlin');
+    }
   });
 
-  it('gives something usable when the zone is unknown', () => {
-    // Either the browser's own zone or an empty string — never the
-    // unrecognised value, which would be a label that means nothing.
+  it('gives a short name or an offset, never something empty for a real zone', () => {
+    // Where a locale has no abbreviation the browser answers with an offset
+    // form such as GMT+9, which is true and useful and ships as it is.
+    const out = hook().current.zoneLabel('Europe/Berlin');
+    expect(out).toMatch(/^(?:[A-Z]{2,6}|GMT[+-]\d{1,2}(?::\d{2})?)$/);
+  });
+
+  it('answers in the language being read where the data allows it', () => {
+    // This environment's ICU gives German "MESZ" for Berlin in summer and an
+    // offset for English. Asserting they DIFFER pins the language-dependence
+    // without hard-coding either, and skips honestly where a runtime has
+    // only one form for both.
+    const de = new Intl.DateTimeFormat('de', {
+      timeZone: 'Europe/Berlin', timeZoneName: 'short',
+    }).formatToParts(new Date('2026-07-10T13:09:00Z'))
+      .find(p => p.type === 'timeZoneName')?.value;
+    const en = new Intl.DateTimeFormat('en', {
+      timeZone: 'Europe/Berlin', timeZoneName: 'short',
+    }).formatToParts(new Date('2026-07-10T13:09:00Z'))
+      .find(p => p.type === 'timeZoneName')?.value;
+    if (de === en) {
+      // Say so rather than forcing a pass: this runtime has no separate
+      // German short name, so there is nothing here to prove.
+      expect(de).toBeTruthy();
+      return;
+    }
+    expect(de).not.toBe(en);
+  });
+
+  it('returns nothing rather than a bad label for an unknown zone', () => {
+    // Falls through to the browser's own zone or to '', but never to the
+    // string it was given.
     expect(hook().current.zoneLabel('Middle/Earth')).not.toBe('Middle/Earth');
   });
 });

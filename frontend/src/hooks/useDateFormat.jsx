@@ -1,9 +1,15 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { preferences as prefsApi, getToken } from '../services/api';
+import { useI18n } from './useI18n';
 
 const DateFormatContext = createContext(null);
 
 export function DateFormatProvider({ children }) {
+  // v1.0.4zf (2.6): the short zone name is language-dependent, so this hook
+  // needs to know which language is being read. I18nProvider wraps this one
+  // in App.jsx, and useI18n degrades to English without a provider, so this
+  // is safe in a bare render too.
+  const { lang } = useI18n();
   const [dateFormat, setDateFormat] = useState('DD/MM/YYYY');
   // v1.0.4ze (DATE-1): the user's zone, as the fallback when an event has
   // none. Stored since v1.0.0k and, until this release, read by nothing.
@@ -118,10 +124,36 @@ export function DateFormatProvider({ children }) {
     return `${formatDate(`${y}-${m}-${day}`)} ${formatTime(value, eventZone)}`;
   }, [formatDate, formatTime, resolveZone]);
 
-  // The zone as it should be NAMED beside a time (D8). Returns the resolved
-  // zone id, or '' when there is nothing worth naming.
-  const zoneLabel = useCallback(
-    (eventZone) => resolveZone(eventZone) || '', [resolveZone]);
+  // The zone as it should be NAMED beside a time (D8).
+  //
+  // v1.0.4zf (2.6): the SHORT name, in the language being read — "MESZ" for
+  // a German reader, "CEST" for an English one — not the IANA identifier.
+  // `Europe/Berlin` beside a time told an organiser nothing they wanted and
+  // read like a filename.
+  //
+  // The browser supplies it: `timeZoneName: 'short'` on the app's current
+  // locale. No table of abbreviations is built here — there are hundreds,
+  // they differ by language, and they change. Where a locale has no short
+  // form the browser gives an offset such as "GMT+9", which is a true and
+  // useful answer and ships as it is.
+  //
+  // The identifier must never reach the screen again, so the fallback when
+  // everything else fails is '' rather than the zone id.
+  const zoneLabel = useCallback((eventZone) => {
+    const zone = resolveZone(eventZone);
+    const sample = new Date();
+    try {
+      const parts = new Intl.DateTimeFormat(lang || 'en', {
+        timeZoneName: 'short',
+        ...(zone ? { timeZone: zone } : {}),
+      }).formatToParts(sample);
+      const named = parts.find(p => p.type === 'timeZoneName')?.value;
+      if (named) return named;
+    } catch {
+      // An unknown zone, or a locale this browser has no data for.
+    }
+    return '';
+  }, [resolveZone, lang]);
 
   const updateFormat = (newFormat) => {
     setDateFormat(newFormat);

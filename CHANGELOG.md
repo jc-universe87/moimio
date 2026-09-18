@@ -8,21 +8,25 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
-## [1.0.4ze] — 2026-09-18
+## [1.0.4zf] — 2026-09-18
 The wording, in one batch, in all six languages.
 
 ### Fixed
 
 - **A form that tells you what is wrong,** in your own language, beside the box
   that is wrong. A mistyped email address used to produce a line of program code
-  under a heading you could read. An obviously wrong address is now caught before
-  anything is sent at all.
+  under a heading you could read. The box itself is now outlined, the reason is
+  written under it, and both go as soon as you correct it. An obviously wrong
+  address is caught before anything is sent at all.
 
 - **Dates and times in the format you chose,** everywhere. Several columns
   ignored the setting completely and used whatever your browser preferred, so a
   German organiser who had chosen ISO saw American dates. Times are shown in the
-  event's own time zone, with the zone named so nobody has to guess, and always
-  on a 24-hour clock.
+  event's own time zone, and always on a 24-hour clock.
+
+- **Where a time is shown with its zone, the zone is named the way you would say
+  it,** in the language you are reading: MESZ rather than Europe/Berlin. Where a
+  language has no short name for a zone, the offset is shown instead.
 
 - **The roster PDF now has a page for everybody who is not in a group,** split
   between the people you excluded and the people the allocation could not place.

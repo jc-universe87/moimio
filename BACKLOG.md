@@ -775,7 +775,40 @@ VERSION-1.
 
 ## K-1 — Excluding out of a keep-as-is unit strands the vacated place
 
-**Status:** Open. Found in session 85 phase 1 while specifying the keep-as-is override for the exclusion work (v1.0.4j). Correct behaviour for j; needs surfacing in v1.0.4k.
+**Status:** ✅ CLOSED in v1.0.4ze, **completed in v1.0.4zf** (2026-09-18) — one of
+the five paths was silent. Found in session 85 phase 1 while specifying the keep-as-is override for the exclusion work (v1.0.4j). Correct behaviour for j; needs surfacing in v1.0.4k.
+
+**v1.0.4zf (2026-09-18) — does it fire at all?** Johannes could not confirm
+v1.0.4ze's browser check 9 and suspected the message never appeared. Established by
+reading every path that can exclude somebody, rather than by testing the one that
+was already known to work:
+
+| Path | `AllocationBoard.jsx` | Before zf | After zf |
+|---|---|---|---|
+| Pool chip's exclude control | `:2393` → `handleExclude` | fired | fires |
+| Unit member's exclude control | `:2695` → `handleExclude` | fired | fires |
+| Drag a person onto the Excluded block, one selected | `:1315` → `handleExclude` | fired | fires |
+| Drag a multi-selection onto the Excluded block | `:1314` → `handleBulkExclude` | **silent** | fires |
+| The bulk selection bar | `:2808` → `handleBulkExclude` | **silent** | fires |
+
+**Three of five fired; two did not.** `handleExclude` carried the whole offer,
+including the `vacated_kept_units` the endpoint returns. `handleBulkExclude` called
+the same endpoint in a loop and **threw every answer away**, so excluding four
+people at once said nothing about any place it stranded. Its one-person shortcut
+delegates to `handleExclude`, which is why a casual test of the bulk bar with a
+single person selected looks fine — and is likely part of why this went unnoticed.
+
+**Fixed by one shared helper.** `offerUnlock(vacated, name)` holds the offer;
+`handleExclude` calls it as before, and `handleBulkExclude` now keeps what each
+exclusion stranded in a `Map` keyed by unit id and offers them **after** the bulk
+toast rather than interrupting between people. Keying by unit id means a place is
+offered **once** however many of the people removed were sitting in it. Pinned by
+`frontend/src/components/AllocationBoard.test.jsx`, one test per path plus the
+de-duplication and the no-stranded-place case.
+
+**Whether Johannes's test would have shown anything** cannot be settled from here:
+if he used a chip or a member control with a locked unit in play, it should have
+fired. If he used the bulk bar, it could not have.
 
 **Moved to v1.0.4zc (2026-09-18), on the no-new-strings rule.** The ruling (D4,
 option B — say it at the moment of the exclusion and offer to unlock) stands and
@@ -2125,7 +2158,9 @@ v1.0.5.
 
 **The six locale files were in sync before this release and are in sync after it.**
 Established, not assumed: 1203 keys in each of `en`, `de`, `ko`, `es`, `fr` and
-`pt-BR`, with no key missing from any and none extra in any. So nothing had to be
+`pt-BR` before, **1218 in each after**, with no key missing from any and none extra
+in any. v1.0.4zf changed five German values and no key at all, so the count and the
+key set are the same after it. So nothing had to be
 filed, and the six-file check §6 asked for could be written as a real check rather
 than a English-only one.
 
@@ -2135,6 +2170,12 @@ than a English-only one.
 unsure of is marked ⚠ and listed at the end. Grouped by screen, because that is
 how a review is walked.
 
+**Corrected in v1.0.4zf (2026-09-18): the rows below record what shipped, not what
+v1.0.4ze proposed.** Every change marked **zf** came from Johannes's own review of
+the German and Korean — eight in all, six of them wording and two of them the
+consequence of a defect he found while reviewing (§2.6 and §2.7 of the v1.0.4zf
+brief). Nothing here changed English, and no key was added or removed.
+
 ---
 
 #### Registration form — the public one (FORM-1)
@@ -2142,7 +2183,7 @@ how a review is walked.
 | Key | English | German | Korean | |
 |---|---|---|---|---|
 | `errors.field.email` | Please enter a valid email address. | Bitte gib eine gültige E-Mail-Adresse ein. | 올바른 이메일 주소를 입력해 주세요. | new |
-| `errors.field.required` | This field is required. | Dieses Feld wird benötigt. | 필수 항목입니다. | new |
+| `errors.field.required` | This field is required. | Dieses Feld ist erforderlich. | 필수 항목입니다. | new — German corrected **zf** |
 | `errors.field.too_short` | This is too short. | Das ist zu kurz. | 너무 짧습니다. | new |
 | `errors.field.too_long` | This is too long. | Das ist zu lang. | 너무 깁니다. | new |
 | `errors.field.invalid` | This does not look right. | Das sieht nicht richtig aus. | 입력하신 내용을 다시 확인해 주세요. | new |
@@ -2156,7 +2197,7 @@ The German uses **du**, matching every other line a registrant reads.
 
 | Key | English | German | Korean | |
 |---|---|---|---|---|
-| `organise.exclude.left_locked_place` | {name} was removed from {unit}, which is locked. The place stays empty until you unlock it. | {name} wurde aus {unit} entfernt — diese Einheit ist gesperrt. Der Platz bleibt frei, bis du sie entsperrst. | {name}님을 {unit}에서 제외했습니다. 이 그룹은 잠겨 있어 잠금을 풀기 전까지 자리가 비어 있습니다. | new |
+| `organise.exclude.left_locked_place` | {name} was removed from {unit}, which is locked. The place stays empty until you unlock it. | {name} wurde aus {unit} entfernt — diese Einheit ist gesperrt. Der Platz bleibt frei, bis du die Sperre aufhebst. | {name}님을 {unit}에서 제외했습니다. 이 그룹은 잠겨 있어 잠금을 풀기 전까지 자리가 비어 있습니다. | new — German corrected **zf** |
 | `organise.exclude.unlock_now` | Unlock it | Entsperren | 잠금 해제 | new |
 | `organise.exclude.undo` | Include | Wieder berücksichtigen | 다시 포함 | **kept — see below** |
 
@@ -2166,7 +2207,7 @@ The German uses **du**, matching every other line a registrant reads.
 
 | Key | English | German | Korean | |
 |---|---|---|---|---|
-| `backup.mode.full.hint` | Every part of the event: participants, allocations, responses, notes, check-in and history. For backup and restore. | Das ganze Event: Teilnehmer, Zuteilungen, Antworten, Notizen, Check-in und Verlauf. Für Sicherung und Wiederherstellung. | 행사 전체: 참가자, 배정, 응답, 메모, 체크인, 변경 이력. 백업 및 복원용. | **corrected** |
+| `backup.mode.full.hint` | Every part of the event: participants, allocations, responses, notes, check-in and history. For backup and restore. | Das ganze Event: Teilnehmer, Zuweisungen, Antworten, Notizen, Check-in und Verlauf. Für Sicherung und Wiederherstellung. | 행사 전체: 참가자, 배정, 응답, 메모, 체크인, 변경 이력. 백업 및 복원용. | **corrected** — German *Zuteilungen* → *Zuweisungen* **zf** |
 
 The old line said "Everything" and named notes when the backup carried none. Both
 are now true: v1.0.4s added notes and check-in, v1.0.4t added history.
@@ -2203,13 +2244,22 @@ genuinely absent member.
 
 | Key | English | German | Korean | |
 |---|---|---|---|---|
-| `danger_zone.modal.export_contents` | The export holds every event with all of its data, including everyone's notes — private ones too. It also lists your team and your own webhooks for reference, without passwords or secret keys. Nothing in those two lists is applied when you restore: invite your team again, and enter your webhook secrets again. | Der Export enthält jedes Event mit allen Daten, einschließlich aller Notizen — auch der privaten. Außerdem listet er zur Ansicht euer Team und eure eigenen Webhooks auf, ohne Passwörter und ohne geheime Schlüssel. Aus diesen beiden Listen wird beim Wiederherstellen nichts übernommen: ladet euer Team erneut ein und tragt eure Webhook-Schlüssel neu ein. | 내보내기 파일에는 모든 행사와 그 데이터가 들어 있으며, 비공개 메모를 포함한 모든 메모가 포함됩니다. 팀과 직접 등록한 웹훅도 참고용으로 함께 제공되며, 비밀번호와 비밀 키는 포함되지 않습니다. 이 두 목록은 복원 시 적용되지 않으므로, 팀원을 다시 초대하고 웹훅 비밀 키를 다시 입력해 주세요. | new |
+| `danger_zone.modal.export_contents` | The export holds every event with all of its data, including everyone's notes — private ones too. It also lists your team and your own webhooks for reference, without passwords or secret keys. Nothing in those two lists is applied when you restore: invite your team again, and enter your webhook secrets again. | Der Export enthält jedes Event mit allen Daten, einschließlich aller Notizen — auch der privaten. Außerdem listet er zur Ansicht dein Team und deine eigenen Webhooks auf, ohne Passwörter und ohne geheime Schlüssel. Aus diesen beiden Listen wird beim Wiederherstellen nichts übernommen: lade dein Team erneut ein und trage deine Webhook-Schlüssel neu ein. | 내보내기 파일에는 모든 행사와 그 데이터가 들어 있으며, 비공개 메모를 포함한 모든 메모가 포함됩니다. 팀과 직접 등록한 웹훅도 참고용으로 함께 제공되며, 비밀번호와 비밀 키는 포함되지 않습니다. 이 두 목록은 복원 시 적용되지 않으므로, 팀원을 다시 초대하고 웹훅 비밀 키를 다시 입력해 주세요. | new — German corrected **zf** |
 
-**German uses "ihr" here**, not "du": this screen addresses the organising team,
-and that split is deliberate — the surrounding `danger_zone.*` lines use "du"
-because they address the one account holder clicking the button, while this
-sentence is about what the whole team will have to redo. Flagged so Johannes can
-overrule it if he wants one form throughout.
+**Overruled (zf).** v1.0.4ze shipped this line in "ihr / euer", reasoning that it
+addressed the organising team rather than the one account holder. Johannes read it
+beside the lines around it and ruled the other way: **every line on this screen is
+"du"**, and one sentence switching to "ihr" mid-screen reads as a mistake, not as a
+distinction. Rewritten in **du / dein** throughout, meaning unchanged. The
+marketing-versus-app split in `CLAUDE.md` is untouched — that is about marketing
+copy, and this is a screen.
+
+**`danger_zone.modal.body` (corrected, zf)** — the same screen's first line said
+*Zuteilungen*. Changed to *Zuweisungen* by §2.2's sweep:
+
+| Key | English | German | Korean | |
+|---|---|---|---|---|
+| `danger_zone.modal.body` | (unchanged) | Damit werden dieser Workspace und alle Events, Teilnehmer, Zuweisungen und Check-ins dauerhaft gelöscht. | (unchanged) | **corrected zf** |
 
 ---
 
@@ -2219,9 +2269,25 @@ overrule it if he wants one form throughout.
 |---|---|---|---|---|
 | `time.in_zone` | {time} ({zone}) | {time} ({zone}) | {time} ({zone}) | new — punctuation only, identical in all six |
 
-**No other new wording.** The zone name itself is the IANA string as stored
-(`Europe/Berlin`), not translated: it is an identifier, and translating it would
-make it useless for checking against anything else.
+**No other new wording.** `time.in_zone` keeps its shape in all six.
+
+**Corrected (zf): what fills `{zone}`.** v1.0.4ze put the IANA identifier in it —
+`15:09 (Europe/Berlin)` — on the reasoning that an identifier is checkable. Read on
+screen it is neither a time zone anybody names out loud nor in the reader's
+language. v1.0.4zf asks the browser instead, in the interface language:
+`15:09 (MESZ)` in German, `15:09 (GMT+2)` in English, `(GMT+9)` for Seoul. Where
+the browser has no short name it gives the offset form, which ships as it is. No
+table of abbreviations is built, and **the IANA identifier can no longer appear**.
+
+**Still true after zf, and worth knowing: no screen renders the zone at all.**
+`zoneLabel` and `time.in_zone` have exactly three references in the whole
+frontend, all three inside `useDateFormat.jsx` itself — the definition, the
+provider's export and the fallback. Nothing consumes either. So D8's "named on
+screen" is built and wired to nothing, and v1.0.4ze's CHANGELOG line claiming times
+are shown with the zone named was wrong when written. The formatter is correct and
+ready; **a screen has to ask for it.** Filed here rather than fixed, because
+v1.0.4zf's §2.6 is scoped to what fills `{zone}` and choosing which screens name a
+zone is a design question, not a correction.
 
 ---
 
@@ -2250,13 +2316,22 @@ the interface language.
 
 | Key | English | German | Korean | |
 |---|---|---|---|---|
-| `unallocated.page_title` | NOT ALLOCATED | NICHT ZUGETEILT | 미배정 | new, PDF |
+| `unallocated.page_title` | NOT ALLOCATED | NICHT EINGETEILT | 미배정 인원 | new, PDF — German and Korean corrected **zf** |
 | `unallocated.excluded` | EXCLUDED  ·  {n} {people} | AUSGENOMMEN  ·  {n} {people} | 제외됨  ·  {n}{people} | new, PDF |
-| `unallocated.unplaced` | NOT PLACED  ·  {n} {people} | NICHT ZUGETEILT  ·  {n} {people} | 배정 안 됨  ·  {n}{people} | new, PDF |
+| `unallocated.unplaced` | NOT PLACED  ·  {n} {people} | NICHT ZUGEWIESEN  ·  {n} {people} | 배정 안 됨  ·  {n}{people} | new, PDF — German corrected **zf** |
 
 The existing `unallocated.person` / `unallocated.people` supply `{people}`, as
 `unallocated.banner` already does. The Korean omits the space before `{people}`,
 matching how `unallocated.banner` is already written in that file.
+
+**Corrected (zf): the German page said the same thing twice.** The page title and
+its second block were both `NICHT ZUGETEILT`, so the page read as one heading
+repeated; in English the two differ. The title becomes `NICHT EINGETEILT`, matching
+the section's own name (Einteilung), and the block becomes `NICHT ZUGEWIESEN`,
+which is what the board itself says. Korean was a near-collision — `미배정` above
+`배정 안 됨` — and the title alone becomes `미배정 인원`, which separates them. **The
+other four languages were swept for the same fault and none has it:** in `en`, `es`,
+`fr` and `pt-BR` no page title equals one of its own block labels.
 
 ---
 
@@ -2279,7 +2354,7 @@ reviews himself.
 
 | Item | Code it needed |
 |---|---|
-| **FORM-1** | A `RequestValidationError` handler in `main.py` returning the app's `{key, params}` shape; `api.js` taught to stop stringifying FastAPI's array; per-field marking on the registration form, using the error state it already had for the extra-people cards |
+| **FORM-1** | A `RequestValidationError` handler in `main.py` returning the app's `{key, params}` shape; `api.js` taught to stop stringifying FastAPI's array; per-field marking on the registration form, using the error state it already had for the extra-people cards — **built in v1.0.4zf, not in v1.0.4ze: see FORM-1** |
 | **DATE-1** | `formatDateTime` and `formatTime` beside `formatDate`, 24-hour, resolving the event's zone with the user's as fallback; the eight files that called the browser's formatter directly converted |
 | **PDF page** | Exclusions loaded in `_load_pdf_data` (reusing `list_excluded_participant_ids`), `unallocated` split into two, the block renderer rewritten to take a label, and `render_signin` calling it for the first time |
 | **K-1** | The exclusion endpoint reports which **kept** units it vacated — computed in the endpoint, because `add_exclusion` has 39 callers and changing its signature would reach into six signed-off test files |
@@ -2635,7 +2710,55 @@ side.
 
 ## FORM-1 — A rejected form field shows the server's raw validation error
 
-**Status:** Open. Found by Johannes's manual test in session 86. Belongs to the
+**Status:** ✅ CLOSED in v1.0.4zf (2026-09-18). **Reopened after v1.0.4ze**, which
+shipped half of it. Found by Johannes's manual test in session 86. Belongs to the
+
+**Reopened and closed in v1.0.4zf (2026-09-18).** Johannes ran v1.0.4ze's twelve
+browser checks. Ten passed; **checks 1 and 2 failed, and they are one fault.** With
+`rest@gmail.com3242` the banner appeared and read *"Bitte prüfe die unten markierten
+Felder."* — and **no field was marked**: no border, no message under the box,
+nothing saying which box was meant. Correcting the address did not clear it. That is
+worse than the raw error it replaced, because the raw error at least named the
+field.
+
+**v1.0.4ze built the state and not the rendering.** Two separate faults, both mine,
+both in `RegisterPage.jsx`:
+
+1. **The state was never populated.** The line that reads the server's per-field map
+   — `if (err?.fieldErrors) setFieldErrors(err.fieldErrors)` — was patched onto the
+   **page-load** catch, not the **submit** catch. A rejected submit therefore never
+   set `fieldErrors` at all. A first-match string replacement landed on the first
+   `} catch (err) { setError(err);` in the file, which is the one that runs when the
+   event fails to load.
+2. **Nothing rendered it even when set.** No message element, no marked border, no
+   `aria-invalid` — only the summary banner, which points at markings that do not
+   exist.
+
+**A third fault, found while fixing those two and unrelated to the errors.** The
+v1.0.4ze edit had inserted `epInputClass` **between** `const inputClass = "…"` and
+its continuation line `+ (hasCustomStyle ? '' : ' focus:ring-steel-blue');`.
+Automatic semicolon insertion made that legal JavaScript: the const terminated at
+the string, the continuation became a dead expression statement, and **every input
+on the public form silently lost its focus ring.** No error, no warning, no test.
+Repaired in v1.0.4zf, with a comment on the const saying why the continuation must
+stay attached to it.
+
+**What shipped (v1.0.4zf).** The house pattern is `epInputClass` — the
+extra-person cards have marked their fields this way since v0.70d-3c-8a, swapping
+`border-gray-200` for `border-burgundy ring-1 ring-burgundy/40`. It is reused, not
+reinvented: `fieldInputClass(field)` is the same swap driven by `fieldErrors`,
+`fieldError(field)` renders the translated message directly under the box, and
+`clearFieldError(field)` runs from each field's own `onChange` — **and clears the
+banner with the last field error**, which is §2.7.3. Applied to first name, last
+name, email, the gender select and every optional field the server can reject, each
+also carrying `aria-invalid`. **No new string:** the five `errors.field.*` keys and
+`errors.validation.summary` all shipped in v1.0.4ze.
+
+**Pinned by `frontend/src/pages/RegisterPage.test.jsx`**, five tests, the form
+rendered for real against the server's actual 422 body. Note for anyone writing
+another test on this form: its labels carry no `htmlFor` and the inputs are their
+siblings rather than their children, so `getByLabelText` cannot reach them — query
+by `name`.
 
 **Decided (session 86, D6 and D7).**
 

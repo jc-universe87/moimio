@@ -1185,6 +1185,31 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     .filter(u => (allMembers[String(u.id)] || []).some(m => String(m.participant_id) === String(pid)))
     .map(u => u.name);
 
+  // v1.0.4zf (2.8): the stranded-place offer, in one place.
+  //
+  // Excluding somebody takes them out of every unit they hold in this group
+  // type, a locked one included, and the lock stays on — so the place stays
+  // empty across engine runs with nothing connecting the two. v1.0.4ze said
+  // so from `handleExclude`, which covers the pool chip, the unit-member
+  // control and a single drag. It did NOT cover the bulk bar, which calls
+  // the endpoint directly and threw the answer away, so excluding four
+  // people at once said nothing about any place it stranded.
+  const offerUnlock = async (vacated, name) => {
+    let unlocked = false;
+    for (const unit of vacated || []) {
+      const ok = await confirm({
+        message: t('organise.exclude.left_locked_place', { name, unit: unit.name }),
+        confirmLabel: t('organise.exclude.unlock_now'),
+      });
+      if (!ok) continue;
+      try {
+        await allocationUnits.update(eventId, category.id, unit.id, { is_kept: false });
+        unlocked = true;
+      } catch (err) { showToast(err, 'error'); }
+    }
+    return unlocked;
+  };
+
   const handleExclude = async (participantId) => {
     const pid = String(participantId);
     const name = findName(pid);
@@ -1209,26 +1234,8 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
         showToast(t('organise.toast.excluded', { name }), 'success');
       }
 
-      // v1.0.4ze (K-1): excluding somebody comes out of a LOCKED unit too,
-      // and the lock stays on — so the place they vacated stays empty
-      // across engine runs with nothing on screen connecting the two. Say
-      // it here, where the organiser still has the context, and offer the
-      // one action that fixes it. Not a permanent badge on the unit: this
-      // is an occasional event, and chrome for it would be worse.
-      const vacated = res?.vacated_kept_units || [];
-      for (const unit of vacated) {
-        const ok = await confirm({
-          // The sentence is the message, not the title: the overlay renders
-          // a title bold and short, and this is neither.
-          message: t('organise.exclude.left_locked_place', { name, unit: unit.name }),
-          confirmLabel: t('organise.exclude.unlock_now'),
-        });
-        if (!ok) continue;
-        try {
-          await allocationUnits.update(eventId, category.id, unit.id, { is_kept: false });
-        } catch (err) { showToast(err, 'error'); }
-      }
-      if (vacated.length > 0) await loadAll();
+      // v1.0.4ze (K-1), v1.0.4zf (2.8): see offerUnlock.
+      if (await offerUnlock(res?.vacated_kept_units, name)) await loadAll();
     } catch (err) { showToast(err, 'error'); }
   };
 
@@ -1258,8 +1265,19 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     if (list.length === 1) { await handleExclude(list[0]); return; }
     let ok = 0;
     let firstErr = null;
+    // v1.0.4zf (2.8): keep what each exclusion stranded, so the bulk path
+    // says it too. Collected across the loop and offered once at the end
+    // rather than interrupting between people; a unit is offered once even
+    // if several of the people removed were sitting in it.
+    const stranded = new Map();  // unit id -> { unit, name }
     for (const pid of list) {
-      try { await catApi.addExclusion(eventId, category.id, pid); ok++; }
+      try {
+        const res = await catApi.addExclusion(eventId, category.id, pid);
+        ok++;
+        for (const unit of res?.vacated_kept_units || []) {
+          if (!stranded.has(unit.id)) stranded.set(unit.id, { unit, name: findName(pid) });
+        }
+      }
       catch (err) { if (!firstErr) firstErr = err; }
     }
     setSelectedPeople(new Set());
@@ -1267,6 +1285,9 @@ export default function AllocationBoard({ eventId, eventName, category, allCateg
     if (onDataChange) onDataChange();
     if (firstErr && ok === 0) showToast(firstErr, 'error');
     else showToast(t('organise.toast.excluded_bulk', { n: ok }), 'success');
+    for (const { unit, name } of stranded.values()) {
+      if (await offerUnlock([unit], name)) await loadAll();
+    }
   };
 
   const handleBulkInclude = async (ids) => {
