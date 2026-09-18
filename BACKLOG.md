@@ -70,6 +70,9 @@ question is closed.
 ## ENGINE-3 — Capped rooms left empty when uncapped rooms exist
 
 **Status:** Open product question, surfaced during ENGINE-1 rewrite.
+
+**Decided (session 86).** **Reserved** — an open product question, not a
+defect, and not a v1.0.5 blocker. Revisit after v1.0.5.
 **Severity:** Low. Counter-intuitive but recoverable via manual drag/drop.
 
 In a category mixing capped (`cap=2`) and uncapped units, with enough
@@ -95,6 +98,9 @@ might need to distinguish.
 ## ENGINE-4 — Equalise sweep undermines Semantics A in mixed-capacity
 
 **Status:** Open product question, surfaced during ENGINE-1 rewrite.
+
+**Decided (session 86).** **Reserved** — an open product question, not a
+defect, and not a v1.0.5 blocker. Revisit after v1.0.5.
 **Severity:** Low. Internal consistency issue between two engine passes.
 
 The v0.74 "Semantics A" rule (constrained rooms drain first) and the
@@ -595,6 +601,14 @@ for the single row. File only; no change in v1.0.4i.
 
 **Status:** Open. Pre-existing since v1.0.4i; found in session 85 while reading the dashboard tile for the exclusion UI (v1.0.4k). Not fixed there.
 
+**Decided (session 86, D2).** **Option A** — filter the aggregate. Join
+`Participant` in `list_categories()` and drop cancelled and soft-deleted rows
+from the `excluded_count`. Option B, deleting exclusion rows when somebody
+cancels, is rejected: an exclusion records what an organiser decided about a
+person, and an unrelated change to that person's registration status must not
+erase it. v1.0.4v already settled the same point when it put exclusions into both
+people exports. Scheduled for **v1.0.4y**.
+
 `list_categories()` builds `excluded_count` from a bare count over
 `allocation_category_exclusions` (`allocation_service.py:101-109`). It
 never joins `Participant`, so the number includes exclusion rows
@@ -726,6 +740,15 @@ VERSION-1.
 
 **Status:** Open. Found in session 85 phase 1 while specifying the keep-as-is override for the exclusion work (v1.0.4j). Correct behaviour for j; needs surfacing in v1.0.4k.
 
+**Decided (session 86, D4).** **Option B** — say it at the moment of the
+exclusion, in the message that already fires, and offer to unlock the unit there.
+Not a permanent badge on the unit (option A), which is chrome for an occasional
+event; and certainly not unlocking automatically (option C), which silently
+undoes a decision the organiser made deliberately. The information belongs where
+the cause is, at the moment the organiser still has the context to act on it.
+Needs one or two new strings, so the wording rides with release **z** even if the
+code lands in **y**.
+
 From v1.0.4j, exclusion overrides a keep-as-is lock: an excluded
 participant comes out of a locked unit like any other. The unit's
 `is_kept` flag is left unchanged on purpose, so the place they vacated
@@ -793,6 +816,11 @@ had never been on screen.
 ## HIST-1 — `collapseMoves` is category-blind and can invent a cross-group-type "move"
 
 **Status:** Open. Pre-existing; found in session 85 while settling the exclusion phantom-move question for v1.0.4k. Only the exclusion-driven case was guarded there.
+
+**Decided (session 86, D5).** The one-line `category_id` fix closes this entry
+and is scheduled for **v1.0.4y**. Grouping the feed by `action_id` instead is a
+separate, larger improvement and is deferred to **after v1.0.5** — filed as
+**HIST-2**.
 
 `collapseMoves` in `AllocationHistory.jsx` collapses a consecutive
 {assign, unassign} pair in the newest-first feed into one "Moved from X
@@ -920,7 +948,28 @@ reported.
 
 ## EXCL-1 — Cannot drag a participant out of the Excluded block
 
-**Status:** Open, accepted for now. Found in manual testing of v1.0.4k (2026-09-17).
+**Status:** ❌ WON'T DO — decided by Johannes in session 86 (D1), closed in v1.0.4x. Found in manual testing of v1.0.4k (2026-09-17).
+
+**Resolution — dropped, permanently.** Dragging a person *onto* the Excluded
+block will go on working exactly as it does. Dragging one *out* of it will not be
+built, now or later. Three reasons, on the record:
+
+1. **The guard that would have to go is the one that matters.** The
+   `stopPropagation` calls at `ExcludedBlock.jsx:66-79` are what stop a drop
+   reaching the left panel's own "drop here to unassign" handler behind it. The
+   comment at `:20-25` records what happens without them: the drop "silently
+   unassigns and looks like it worked". Letting a drag *escape* the block means
+   unpicking exactly those calls. That is a bad failure to reintroduce for a
+   convenience.
+2. **There are already two ways back** — the control on each row, and the
+   selection bar for several people at once.
+3. **This entry never claimed it blocked anything.** It was filed as "Open,
+   accepted for now… not because it blocks anything", to record the asymmetry.
+   The asymmetry is now recorded and decided rather than left open forever.
+
+The row's controls were rebuilt in v1.0.4x under **EXCL-3**, which is where the
+other three complaints about this block were settled.
+
 
 Dragging a participant **onto** the Excluded block excludes them. Dragging
 one **out** of it does nothing; the only way back is the undo control on
@@ -936,7 +985,25 @@ because it blocks anything.
 
 ## EXCL-2 — Excluded names truncate at high counts because the undo label is long
 
-**Status:** Open. Found in manual testing of v1.0.4k (2026-09-17).
+**Status:** ✅ CLOSED in v1.0.4x (2026-09-18). Found in manual testing of v1.0.4k (2026-09-17).
+
+**Resolution.** The word became a glyph, so the name stopped competing for the
+row.
+
+Each chip was `name + undo control` on one line, the name with `truncate` and the
+control with `shrink-0`, so the name was the only thing that could yield. The
+label was `organise.exclude.undo`, a word, inside a 256px panel.
+
+v1.0.4x gives the name the whole row and puts two hover-revealed icon controls at
+the end of it, under **EXCL-3**. **No new string was needed**: the undo control
+already carried `organise.exclude.undo_title` as its `aria-label` and `title`
+(`ExcludedBlock.jsx:126-127`), so a screen reader hears exactly what it heard
+before. That was the deciding argument against the alternative of shortening the
+label, which would have meant a new word in six languages and a German review.
+
+`organise.exclude.undo` is now rendered nowhere. It is **not** deleted here — see
+STRINGS-1's delete list, where it joins `prefs.scope` for release z.
+
 
 Each chip in the Excluded block is `name + undo control` on one line, with
 the name truncating. The undo label is a word, not an icon
@@ -1806,6 +1873,25 @@ change in `moimio-saas`. Both are settled by v1.0.4u: the page is
 
 **Status:** Open. Found in session 86 phase 1 while reading `notes.author_id` for the backup work (v1.0.4m). Not fixed there.
 
+**Decided (session 86, D3).** **A hybrid, not the survey's option B.** The
+departing user's **unpublished notes are deleted** — they are that person's own
+working notes and have no meaning once the person is gone. Their **published
+notes stay, with the author shown as a removed user**, exactly as a restored
+event shows history from a departed user since v1.0.4t.
+
+**Reassigning authorship was rejected outright**, and that is the substance of
+this ruling: it would make the record say somebody wrote what they did not.
+
+**This needs the migration** that option C implies — `notes.author_id` must
+become nullable with `ON DELETE SET NULL`, because the deployed schema has it
+`NOT NULL` with no `ON DELETE` clause (confirmed by `\d notes` in session 86).
+The visibility rule at `api/notes.py:59` and `:137` is "published, or mine", so a
+null author is safe **only because the unpublished ones are deleted first** — no
+note is left that nobody can see.
+
+**Release y therefore carries one migration,** which it did not before this
+ruling. Whoever briefs y must plan for it.
+
 `api/users.py` deletes a user with a bare `db.delete(user)` and no sweep of
 anything they authored. `notes.author_id` is a foreign key to `users.id`
 declared with no `ondelete`, so the database default applies and deleting
@@ -1953,6 +2039,17 @@ once, in one release, before v1.0.5.
   ids for a setting nothing ever acted on. The key sits at line 894 of each of
   the six files. It is the only key this release left unused.
 
+### Removed by v1.0.4x
+
+- **`organise.exclude.undo`** is now rendered nowhere and should be deleted in
+  the same batch. v1.0.4x replaced the word beside each excluded name with a
+  glyph (EXCL-2, EXCL-3). Deliberately **not** deleted in v1.0.4x: the locale
+  files are release z's, in one pass, so the key stays unused until then rather
+  than half the six being touched twice.
+- **`organise.exclude.undo_title` stays and is now load-bearing.** It was the
+  control's `aria-label` and `title` before, and it is the only accessible name
+  the control has now. Do not confuse the two when deleting.
+
 ### Decided (session 86)
 
 Both lines above are now decided, and both are needed.
@@ -2030,6 +2127,12 @@ and the file travels under a promise that it holds none.
 ## ARCH-2 — `participants.override_group_room` is a column nothing reads
 
 **Status:** Open. Found in session 86 phase 1 while listing the columns the backup drops (BACKUP-2). Not a defect.
+
+**Decided (session 86).** **Reserved** — the column stays, documented as
+reserved. Dropping it would cost a migration, a change to a person's GDPR export
+(where it appears as their data) and a change to the backup register; the cost of
+dropping it and then wanting it back is all of that twice. Revisit after v1.0.5
+alongside ARCH-5.
 
 `override_group_room` is Boolean, NOT NULL, default false. Searching the
 whole backend and frontend finds it in four places and no more: the model,
@@ -2195,6 +2298,24 @@ side.
 ## FORM-1 — A rejected form field shows the server's raw validation error
 
 **Status:** Open. Found by Johannes's manual test in session 86. Belongs to the
+
+**Decided (session 86, D6 and D7).**
+
+**D6 — both ends, and the frontend half is not optional.** A
+`RequestValidationError` handler in `backend/app/main.py`, beside the existing
+`MoimioAppError` one, returning the app's own `{"key": ..., "params": ...}`
+shape; **and** `frontend/src/services/api.js` taught to recognise FastAPI's array
+form and stop stringifying it. The frontend half is mandatory on its own merits:
+`api.js:59` doing `JSON.stringify` on that array **is** the leak, and it would
+leak for any 422 from any endpoint however the server changes.
+
+**D7 — yes, catch an obviously wrong address before sending.** `RegisterPage.jsx`
+already has the machinery — per-field error state, highlighting (`:48-49`,
+`:368-370`) and auto-clear as the registrant types (`:679`) — built for the
+extra-people cards and simply never applied to the main email box. The 422 path
+is the safety net; catching it first is the fix.
+
+Both scheduled for **v1.0.4z**, with their strings.
 non-backup survey before v1.0.5.
 
 The public registration form was given the email `rest@gmail.com3242`, which
@@ -2233,6 +2354,26 @@ The wording this needs is filed in STRINGS-1.
 ## DATE-1 — Dates on screen ignore the user's date-format setting
 
 **Status:** Open. Found by Johannes's manual test in session 86, on the v1.0.4s
+
+**Decided (session 86, D8 and D9).**
+
+**D8 — the event's time zone, named on screen, with the user's as the fallback.**
+Nearly every time this product shows is a fact about the event: when somebody
+registered for it, when they were checked in at it, when a placement was made.
+An organiser standing at the venue wants venue time. Naming the zone matters
+because the two can differ silently, and a check-in time an hour out is worse
+than one that is labelled.
+
+**D9 — 24-hour everywhere.** Right for five of the six locales, defensible for
+the sixth, and it avoids adding a 12/24-hour preference, which would mean a
+migration for something nobody has asked for.
+
+Note that **neither timezone field is read by anything today**:
+`UserPreferences.timezone` and `Event.timezone` are written, exported, backed up
+and never formatted with. D8 is what finally makes them load-bearing, so the
+`Europe/London` default at `models/user_preferences.py:28` — inherited into every
+new event by `event_service.py:33-45` — must be settled in the same work.
+Scheduled for **v1.0.4z**.
 build. Belongs to the non-backup survey before v1.0.5.
 
 The settings panel had **Sprache: Deutsch** and **Datumsformat: YYYY-MM-DD
@@ -2458,7 +2599,39 @@ action row will get it wrong again.
 
 ## EXCL-3 — The Excluded block wants one considered pass, not four patches
 
-**Status:** Open, scheduled for v1.0.4x. Opened from the session 86 non-backup survey, at Johannes's request.
+**Status:** ✅ CLOSED in v1.0.4x (2026-09-18). Opened from the session 86 non-backup survey, at Johannes's request.
+
+**Resolution.** The block was rewritten once, as one pass, rather than patched
+four times. What shipped:
+
+- **The name gets the whole row.** `truncate` stays, but with the row to itself
+  instead of roughly half of it.
+- **Two icon controls, revealed on hover and focus,** grouped at the end of the
+  row: the `ⓘ` copied verbatim from the pool chip
+  (`AllocationBoard.jsx:2310-2317`), which opens the same `InsightPanel`; and an
+  undo glyph carrying the existing `organise.exclude.undo_title`. The row was
+  already a `group`, so the reveal needed no new wrapper. This is the idiom the
+  board already names at `AllocationBoard.jsx:2318-2321`.
+- **Both controls stay visible where there is no hover,** by the same
+  `HAS_FINE_POINTER` test the board uses for its drag affordances, so a tablet
+  loses nothing.
+- **The list scrolls inside its own card** — `maxHeight: 40vh` and
+  `overflowY: auto` — so twenty-six excluded people no longer run off the bottom
+  of the card. The panel-level half of that was **PANEL-1** in v1.0.4w; this is
+  the block-level half.
+
+**It settled four complaints at once:** EXCL-2 (names truncating), the missing
+details control, the card not growing with its list, and — by decision rather
+than by code — EXCL-1.
+
+**The drop behaviour is untouched.** The `stopPropagation` calls at
+`ExcludedBlock.jsx:66-79` are exactly as they were, and a test now pins them.
+
+**No new string.** The two controls reuse `insight.open` and
+`organise.exclude.undo_title`, both already translated six ways.
+
+**EXCL-1 was dropped** (D1), not deferred. Its entry carries the reasons.
+
 
 Four filed or found items are all about one block, and they pull against each
 other: adding an (i) takes width from a row where names already truncate.
@@ -2614,6 +2787,10 @@ No CE code changes. Filed here so it is not lost, as SAAS-4 is.
 
 **Status:** Open until v1.0.5 ships. Established by the session 86 non-backup survey. **This is the ship procedure; read it before pushing anything.**
 
+**Decided (session 86, D11).** Confirmed: **only `v1.0.5` is ever pushed as a
+tag.** The branch goes up first, on its own, without tags. `git push --tags` and
+`git push --follow-tags` are not to be used on this repository.
+
 Nothing in this repository described what pushing does, and the assumption
 carried in the session 86 briefs was that publishing images is a manual step.
 **It is not.**
@@ -2659,3 +2836,135 @@ workflow would have to be taught to ignore them first. That is not worth doing.
 
 Close this entry when v1.0.5 has shipped and the rule has been written into
 whatever release checklist replaces it.
+
+---
+
+## LOG-1 — Every SQL statement is logged twice at debug level
+
+**Status:** Open. Found by Johannes on v1.0.4w. **Untidiness, not a fault**, and invisible at the default level since OPS-1.
+
+At `LOG_LEVEL=DEBUG` each SQL statement appears in the container log twice, once
+per handler, for one logged message.
+
+**The cause, from a short read.** Two mechanisms are switched on by the same
+setting and neither knows about the other:
+
+- `backend/app/core/database.py:14` sets `echo=(settings.log_level == "DEBUG")`
+  on the engine. SQLAlchemy's `echo` does not merely set a level: it attaches its
+  **own** `StreamHandler` to the `sqlalchemy.engine` logger, writing to stdout.
+- `backend/app/core/logging.py:34-38` calls `logging.basicConfig(stream=sys.stdout)`,
+  which puts a handler on the **root** logger, and `:42-44` then raises
+  `sqlalchemy.engine` to `INFO` so the statements are emitted at all.
+
+`sqlalchemy.engine` propagates to root by default, so the record is written once
+by SQLAlchemy's own handler and once by the root handler. Same message, two
+handlers, two lines.
+
+**The likely one-line fix**, not taken here because nobody is looking at DEBUG
+output by default any more: set `propagate = False` on the `sqlalchemy.engine`
+logger in `setup_logging()`, or drop the `echo` flag and let the level alone do
+the work. Either makes it one line per statement. **Not chased** — it was filed
+because it is now understood, not because it is worth a release.
+
+Related: **OPS-1**, which made `INFO` the default and so made this invisible in
+ordinary use.
+
+---
+
+## PANEL-2 — The docked people list is clamped to the units grid even when there is no grid
+
+**Status:** ✅ CLOSED in v1.0.4x (2026-09-18). Found by Johannes on v1.0.4w.
+
+**What happens.** On a group type with no units yet, the right-hand panel is not
+a grid at all — it is the empty-state card, `p-12 text-center` with two short
+lines and an "add one" button (`AllocationBoard.jsx:2381-2399`), about 170px
+tall. The effect that matches the docked left panel's height to that panel
+(`AllocationBoard.jsx:457-471`) checks only `isMobileView` and `panelFloating`,
+so it still runs and clamps the people list to those 170px. A list of
+ninety-seven people is squeezed into a card the size of a paragraph.
+
+This is the same line PANEL-1 fixed in v1.0.4w, from the other direction: that
+release stopped it clamping the **floating** panel; this one stops it clamping
+against a grid that **does not exist**.
+
+**Resolution.** One line. The effect now also returns early when
+`units.length === 0`. React runs the previous effect's cleanup before re-running
+it, and that cleanup already clears the inline `maxHeight`, so a group type that
+loses its last unit releases the clamp correctly rather than keeping a stale one.
+
+With no clamp, the docked panel grows to fit and the pool inside it keeps its own
+`70vh` cap and scroll (`AllocationBoard.jsx:2239-2241`), which is the behaviour
+that was wanted all along.
+
+---
+
+## HIST-2 — `action_id` is written by three services and read by nothing
+
+**Status:** Open, **after v1.0.5** (decided session 86, D5). Established by the session 86 non-backup survey while settling HIST-1.
+
+Since v1.0.4j every allocation action stamps the rows it writes with a shared
+`action_id`: `allocation_service.py:344, 363, 383, 428, 575, 604, 664, 682` and
+`engine_service.py:1615, 1628, 1694, 1702, 1735, 1770`. It is on the model
+(`models/allocation_event.py:197`) and it is carried through backup and restore
+(`backup_service.py:409` registers it `copied`, `:2303-2325` restores it).
+
+**Nothing reads it.** It is not in `_serialise_event`
+(`allocation_events_service.py:159-175`), so the frontend has never seen it.
+
+**Why it matters.** `collapseMoves` in `AllocationHistory.jsx` *infers* that two
+rows were one action, from unit names and adjacency. `action_id` *records* it, at
+the moment of writing. A screen that groups by `action_id` cannot invent a move,
+cannot mis-pair across group types, and needs no exclusion guard — it would
+replace the guessing outright.
+
+**Why it is not a drop-in replacement.** Rows written before v1.0.4j carry no
+`action_id`, so any event older than that release would stop collapsing
+entirely. The honest shape is: group by `action_id` where it is present, fall
+back to the (HIST-1-corrected) `collapseMoves` where it is null, and keep the
+fallback with a comment saying when it can go.
+
+**Cost:** one line in `_serialise_event`, then a rework of the collapsing in the
+screen. HIST-1's one-line `category_id` fix in v1.0.4y is what closes the actual
+defect; this is the improvement, and it is deliberately not a v1.0.5 blocker.
+
+---
+
+## PDF-3 — The roster PDFs have no "Not allocated" page
+
+**Status:** Open, scheduled for v1.0.4z. Not a defect; scheduled work established by the session 86 non-backup survey.
+
+All three renderers should carry a "Not allocated" page with two labelled blocks,
+the excluded and the engine-unplaced, the second omitted when empty. Names only,
+no reasons.
+
+**Where it goes.** The three renderers are `render_compact`
+(`pdf_service.py:898`), `render_detailed` (`:1135`) and `render_signin`
+(`:1277`), registered at `:1448-1452`. There is already an unallocated block,
+`_render_unallocated_block` (`:848-880`), drawn before the units and called by
+compact (`:913`) and detailed (`:1154`). **`render_signin` does not call it at
+all**, so the sign-in sheet lists nobody who is unplaced today — the requirement
+that it must is an addition, not a preservation.
+
+**The data does not exist yet.** `pdf_service.py` has no reference to exclusions
+anywhere. `unallocated` (`:578-583`) is everyone not placed and not cancelled,
+which lumps the excluded together with the engine-unplaced and offers no way to
+tell them apart.
+
+**The work.** Load exclusions in `_load_pdf_data` — reuse
+`allocation_service.list_excluded_participant_ids(db, category_id)`
+(`:281-288`), which already returns exactly what is wanted; split `unallocated`
+into `excluded` and `unplaced`; rewrite `_render_unallocated_block` as two
+labelled blocks; and call it from `render_signin` too.
+
+### Decided (session 86, D10)
+
+The three headings, in English: the page title **"Not allocated"**, and the two
+blocks **"Excluded"** and **"Not placed"**.
+
+**These are PDF strings, not locale-file strings.** They go in
+`PDF_TRANSLATIONS` (`pdf_service.py:132`), which the PDFs carry instead of using
+the frontend's six JSON files, and which `_pdf_t` (`:324-334`) reads. Three keys
+— `unallocated.page_title`, `unallocated.excluded`, `unallocated.unplaced` — in
+six languages each, eighteen strings. The i18n validator never sees them, so
+they are reviewed alongside release z's batch but tracked separately from it.
+The existing `unallocated.person` / `unallocated.people` supply the count word.
