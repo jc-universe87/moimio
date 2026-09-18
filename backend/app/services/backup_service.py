@@ -1637,10 +1637,15 @@ async def confirm_restore(
         end_date=_parse_date(event_src.get("end_date")),
         status=EventStatus.DRAFT,
         settings=event_src.get("settings") or {},
-        # v1.0.4q: the restoring user, who genuinely created this row. With
-        # no actor the pre-v1.0.4q stand-in stays: the column is NOT NULL
-        # with no foreign key, so there is no blank to leave.
-        created_by=actor_user_id or new_event_id,
+        # v1.0.4q: the restoring user, who genuinely created this row.
+        #
+        # v1.0.4zd: with no actor this is now None, not the new event's own
+        # id. That stand-in was only ever safe because `events.created_by`
+        # had no foreign key; USER-1 gave it one, and an event id is not a
+        # user id, so it would now be a violation. None is the truthful
+        # answer in any case — nobody on this instance created that event —
+        # and the column is nullable for exactly that reason.
+        created_by=actor_user_id,
         # The app neither validates nor resolves a timezone anywhere: there
         # is no VALID_TIMEZONES beside VALID_DATE_FORMATS, and nothing
         # imports zoneinfo. So it is carried as it is.

@@ -457,9 +457,15 @@ async def test_9_created_by_is_the_restoring_user(db):
     assert (await db.get(Event, with_actor)).created_by == src["user"].id
 
     _, no_actor = await _restore(db, content, None)
-    # With nobody to name, the pre-v1.0.4q stand-in stays: the column is
-    # NOT NULL with no foreign key, so there is no blank to leave.
-    assert (await db.get(Event, no_actor)).created_by == no_actor
+    # v1.0.4zd: with nobody to name, this is now None.
+    #
+    # It used to be the new event's OWN id, a stand-in that was only ever
+    # safe because `events.created_by` had no foreign key. USER-1 gave it one
+    # (ON DELETE SET NULL, so an event survives its creator's departure), and
+    # an event id is not a user id — the old stand-in would now violate that
+    # key. None is the truthful answer in any case: nobody on this instance
+    # created the event, and the column is nullable for exactly that reason.
+    assert (await db.get(Event, no_actor)).created_by is None
 
 
 # ─── 10. show_in_form ─────────────────────────────────────────────────

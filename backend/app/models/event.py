@@ -4,7 +4,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import String, Text, Date, DateTime, Boolean, Enum as SAEnum, JSON, func
+from sqlalchemy import String, Text, Date, DateTime, Boolean, Enum as SAEnum, ForeignKey, JSON, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -74,8 +74,14 @@ class Event(Base):
             "require_email_confirmation": False,
         }
     )
-    created_by: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
+    # v1.0.4zd (USER-1): a real foreign key at last, nullable, ON DELETE SET
+    # NULL. Who created an event is a record of what happened, so it is kept
+    # when they leave and simply names nobody. Before this it was a bare
+    # NOT NULL uuid with no key, which never blocked a delete — it just went
+    # on pointing at an id that no longer existed.
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

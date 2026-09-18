@@ -8,6 +8,25 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.4zd] — 2026-09-18
+Deleting a user works, whatever they have done.
+
+### Fixed
+
+- **A user can be deleted, whatever they have done.** Deleting somebody who had
+  been using Moimio for a while failed outright, with an error that explained
+  nothing. Anybody who had so much as set their own language could not be removed.
+  What belongs to them alone — their drafts, their settings — goes with them. What
+  they published, and the record of what they did, stays and shows that the person
+  has been removed. Their access to events is taken away rather than left behind.
+
+- **A deleted user no longer appears on an event's team.** Their roles go when
+  their account does, and a team entry whose person is missing now says so instead
+  of showing an empty row.
+
+- **Events keep working when the person who created them leaves.** The event
+  stays; it simply no longer names a creator who is gone.
+
 ## [1.0.4zc] — 2026-09-18
 Notes say who wrote them, and the list stays sorted the way you left it.
 

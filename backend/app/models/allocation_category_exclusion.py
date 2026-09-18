@@ -2,9 +2,10 @@
 
 v1.0.4i: one row per (group type, participant) pair the organiser has
 excluded. Both FKs cascade: an exclusion has no meaning once either side
-is gone. `created_by` is a plain nullable UUID, not an FK, so deleting a
-user never blocks; the audit surface for who did it is allocation_events
-(event_type exclude / include).
+is gone. `created_by` became a real FK with ON DELETE SET NULL in v1.0.4zd
+(it was a bare UUID, which never blocked a delete but went on naming a user
+who no longer existed); the audit surface for who did it is
+allocation_events (event_type exclude / include).
 """
 
 import uuid
@@ -24,7 +25,14 @@ class AllocationCategoryExclusion(Base):
     allocation_category_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("allocation_categories.id", ondelete="CASCADE"), nullable=False, index=True)
     participant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("participants.id", ondelete="CASCADE"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # v1.0.4zd (USER-1): a real key now, ON DELETE SET NULL. Who excluded
+    # somebody is a record of what happened; it is written here and read
+    # nowhere, so the only thing that changes is that it stops pointing at
+    # a user who is gone.
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     __table_args__ = (
         UniqueConstraint("allocation_category_id", "participant_id", name="uq_category_exclusion_category_participant"),

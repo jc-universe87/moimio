@@ -286,7 +286,7 @@ export default function EventAssignmentsPanel({ eventId, isAdmin, onChange }) {
                 .filter(a => a.id !== editingAssignmentId)
                 .map(a => (
                   <option key={a.id} value={a.id}>
-                    {a.user_full_name || a.user_email}
+                    {a.user_full_name || a.user_email || t('history.actor.removed')}
                   </option>
                 ))}
             </select>
@@ -504,7 +504,7 @@ export default function EventAssignmentsPanel({ eventId, isAdmin, onChange }) {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                            {a.user_full_name || a.user_email}
+                            {a.user_full_name || a.user_email || t('history.actor.removed')}
                           </span>
                           {(() => {
                             const roleStyle = a.role === 'event_admin'

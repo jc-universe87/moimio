@@ -17,7 +17,12 @@ class UserPreferences(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, unique=True, index=True
+        # v1.0.4zd (USER-1): CASCADE. A preferences row is theirs alone and
+        # has no meaning without them. It had no ON DELETE clause, so the
+        # default NO ACTION applied, and it is what made deleting any user
+        # who had ever opened the settings panel fail with a raw 500.
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, unique=True, index=True
     )
     language: Mapped[str] = mapped_column(String(10), default="en", nullable=False)
     date_format: Mapped[str] = mapped_column(

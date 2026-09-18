@@ -5,10 +5,12 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select, delete as sa_delete
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import hash_password
+from app.core.exceptions import MoimioAppError
 from app.core.logging import get_logger
 from app.models.user import User, UserRole
 from app.api.deps import get_current_user
@@ -169,5 +171,19 @@ async def delete_user(
         )
     )
 
-    await db.delete(user)
-    await db.flush()
+    # v1.0.4zd (USER-1, §4.6): the database now answers for every reference to
+    # a user — preferences and event roles cascade, records keep the row and
+    # forget the person. Nothing should reach this handler. But a raw 500 is
+    # what sent this entry round twice, so if a reference is ever added
+    # without thought, the organiser gets the app's own error rather than a
+    # database message: `errors.conflict` already exists in all six locales
+    # and is the key the frontend maps 409 to.
+    try:
+        await db.delete(user)
+        await db.flush()
+    except IntegrityError as exc:
+        await db.rollback()
+        logger.warning(
+            "user_delete_blocked", user_id=str(user_id), error=str(exc.orig),
+        )
+        raise MoimioAppError("errors.conflict", status_code=409)
