@@ -1936,7 +1936,85 @@ change in `moimio-saas`. Both are settled by v1.0.4u: the page is
 
 ## USER-1 — Deleting a user does not handle their notes
 
-**Status:** ✅ CLOSED in v1.0.4zb (2026-09-18). Found in session 86 phase 1 while reading `notes.author_id` for the backup work (v1.0.4m). Not fixed there.
+**Status:** ♻️ **REOPENED — v1.0.4zb narrowed it, did not settle it.** Fixed across every reference in v1.0.4zd (2026-09-18). Found in session 86 phase 1 while reading `notes.author_id` for the backup work (v1.0.4m).
+
+**What v1.0.4zc's test found.** Johannes tested it: steps 3 and 4 failed.
+
+- **Deleting an established user still failed,** with a red banner reading *Ein
+  Fehler ist aufgetreten* and *Request failed (500)*. A newly created user deleted
+  cleanly.
+- **A deleted user still appeared in Team & Berechtigungen.**
+
+**What v1.0.4zb actually achieved.** It fixed the one reference anybody had looked
+at, `notes.author_id`, and closed the entry on that evidence. The account is held
+by five more. A new account holds none of them, which is exactly why it deleted —
+and why the fix looked complete.
+
+**The verbatim failure**, reproduced in the test copy against a real established
+account before anything was changed:
+
+```
+ERROR:  update or delete on table "users" violates foreign key constraint
+        "user_preferences_user_id_fkey" on table "user_preferences"
+DETAIL:  Key (id)=(7eb8e228-…) is still referenced from table "user_preferences".
+```
+
+**`user_preferences` is the only blocker,** and it is a devastating one to have
+missed: a preferences row is written the moment somebody sets their language, date
+format or time zone — that is, the moment they start using the product. "An
+established user" is precisely "a user who has opened the settings panel once".
+Proved by deleting the heaviest account in the workspace (12 notes, 8 events, 4230
+history rows, 154 mark assignments) in a rolled-back transaction: with the
+preferences row gone first, it deletes cleanly.
+
+### Every reference to a user, and its fate
+
+From the **database**, not the models — the models have been wrong about this
+before. Six foreign keys and two bare columns.
+
+| Reference | Was | Kind (§4) | Fate | How |
+|---|---|---|---|---|
+| `user_preferences.user_id` | NOT NULL, **NO ACTION** | theirs alone | **deleted with them** | **CASCADE** — the row is meaningless without its user |
+| `event_user_assignments.user_id` | NOT NULL, CASCADE | grant of access | deleted with them | CASCADE — already correct |
+| `notes.author_id` | nullable, SET NULL | drafts theirs alone; published a record | drafts swept, published kept | code sweep + SET NULL — already correct (v1.0.4zb) |
+| `allocation_events.actor_user_id` | nullable, SET NULL | a record | kept, shown as removed | SET NULL — already correct (v1.0.4t) |
+| `mark_definitions.created_by_user_id` | nullable, SET NULL | a record | kept, shown as removed | SET NULL — already correct |
+| `mark_assignments.assigned_by_user_id` | nullable, SET NULL | a record | kept, shown as removed | SET NULL — already correct |
+| **`events.created_by`** | NOT NULL, **no FK at all** | a record | kept, shown as removed | **nullable + new FK, SET NULL** |
+| **`allocation_category_exclusions.created_by`** | nullable, **no FK at all** | a record | kept | **new FK, SET NULL** |
+
+**The two bare columns are the "rots quietly" case §3.2 asked for.** Neither
+raises an error, because neither is a foreign key; both simply keep pointing at an
+id that no longer exists. `events.created_by` is read by
+`SetupHub.jsx:394-396` for a permission test, where a dangling id silently matches
+nobody; `allocation_category_exclusions.created_by` is written at
+`allocation_service.py:388` and **read nowhere at all**.
+
+No user id was found inside any JSON column. `event_user_assignments.permissions`
+is a surface-to-level map; `allocation_events.meta` holds participant ids in
+`cluster_members`, not user ids; `events.settings` holds no id.
+
+**One consequence worth naming.** Giving `events.created_by` a real foreign key
+breaks a stand-in that restore has relied on: `backup_service.py:1643` writes
+`created_by=actor_user_id or new_event_id`, using the **event's own id** as a
+placeholder user id, which was only ever safe because no foreign key checked it.
+With a real key that becomes a violation, so restore now writes `None` there —
+which is the truthful answer anyway, since nobody on this instance created that
+event.
+
+### Why the ghost on the team screen was not a surviving row
+
+`event_user_assignments.user_id` has cascaded since it was created, and it works:
+deleting a user with two roles in a rolled-back transaction took both roles with
+them. **The ghost was the failed delete.** `UserManagementPage.jsx:107-109` calls
+the endpoint, then reloads on success and shows the banner on failure — it never
+removes the row optimistically. So the account Johannes "deleted" was still there,
+still on the team, because the 500 meant nothing had happened.
+
+Filed separately as **TEAM-1**, because the screen has a real weakness underneath
+the false alarm.
+
+**The migration is `104zd0000`** — see its own entry below.
 
 **Resolution — the hybrid, as ruled (D3).** Deleting a user now sweeps what they
 wrote before the row goes:
@@ -3629,3 +3707,85 @@ the columns that table actually sorts by; anything unrecognised — a column sin
 removed, a direction that is not `asc` or `desc`, unreadable storage in a private
 window — is ignored and the default applies. Never an error, never an empty table.
 **The default is unchanged** for anybody who has never sorted.
+
+---
+
+## TEAM-1 — A team row renders blank if its user is missing
+
+**Status:** ✅ CLOSED in v1.0.4zd (2026-09-18). Found while establishing USER-1's ghost.
+
+The ghost Johannes reported — a deleted user still in Team & Berechtigungen — was
+the failed delete, not a surviving row: the account was never deleted, so of
+course it was still on the team. `event_user_assignments.user_id` has cascaded
+correctly all along.
+
+**But the screen has a real weakness underneath the false alarm.**
+`event_assignments.py:47-59` builds each row with `assignment_out(a, user)` and
+adds `user_email`, `user_full_name` and `user_is_active` **only when the user was
+found**. `EventAssignmentsPanel.jsx:289` and `:507` then render
+`{a.user_full_name || a.user_email}` — so an assignment whose user is missing
+renders as a **blank row**: no name, no email, nothing to identify or remove.
+
+That state should not be reachable through deletion, and after v1.0.4zd it
+certainly is not. It is reachable by other means — a restored database missing a
+user, a hand-edited row, a future code path that forgets. §4.4 of the v1.0.4zd
+brief asks that a missing user be safe *everywhere it can now appear*, and a blank
+row is not safe: it is a row nobody can act on.
+
+**Resolution.** Both render sites fall back to the same wording every other
+surface uses for this, `history.actor.removed` — "[removed user]". No new key.
+
+### Every place a missing user can appear, checked rather than assumed
+
+| Surface | What it shows | Verdict |
+|---|---|---|
+| `AllocationHistory.jsx:288` | `history.actor.removed` | safe since v1.0.4t |
+| `NotesModal.jsx:82` | `history.actor.removed` | safe since v1.0.4zc |
+| `InsightPanel.jsx:446` | `history.actor.removed` | safe since v1.0.4zc |
+| `MarksPanel.jsx:540-544` | `marks.unknown_user`, or `marks.created_by_system` when the id is null | already safe, with its own wording |
+| `MarkAssignModal.jsx:99-107` | falls back to a time-only line when there is no name | already safe |
+| **`EventAssignmentsPanel.jsx:289, :507`** | **blank** | **fixed here** |
+| PDF cover, "Exported by" | `current_user.full_name` — the person running the export, always present | not a stored reference |
+| A participant's own data export | coarsens the actor on purpose and names no user | correct, and pinned by a test since v1.0.4zc |
+
+---
+
+## MIGRATION-104zd0000 — every remaining reference to a deleted user
+
+**Status:** ✅ SHIPPED in v1.0.4zd (2026-09-18). The second and last schema change of the v1.0.4m–v1.0.5 series.
+
+**Revision:** `104zd0000`, on top of `104zb0000`.
+
+**What it changes**, three references, none of them a data rewrite:
+
+1. **`user_preferences.user_id`** — the foreign key is recreated with **`ON DELETE
+   CASCADE`**. It had no `ON DELETE` clause at all, so the default `NO ACTION`
+   applied, and it is the one that produced the 500. A preferences row is theirs
+   alone and meaningless without them.
+2. **`events.created_by`** — becomes **nullable** and gains a **real foreign key**
+   with `ON DELETE SET NULL`. It had no foreign key, so it quietly kept pointing
+   at a deleted id.
+3. **`allocation_category_exclusions.created_by`** — gains a **foreign key** with
+   `ON DELETE SET NULL`. Already nullable; same rot, smaller blast radius.
+
+**What a self-hoster has to do: nothing.** The backend image runs `alembic upgrade
+head` on start, so a pull and restart applies it. No row is rewritten; step 2
+widens one column and the other two only add or replace a constraint.
+
+**Safe on existing data, verified rather than assumed.** A foreign key cannot be
+added to a column holding values that are not in the parent table, so that check
+came first, not after. On the session-86 database: **8 events, 0 with a creator
+who no longer exists; 71 exclusions, 0 with a dangling `created_by`.** Both keys
+can therefore be added without a cleanup step. A self-hoster whose data does have
+a dangling id would see the migration fail loudly on that constraint rather than
+silently drop anything — which is the right way round, and is why no `NOT VALID`
+or pre-clean was used.
+
+**Downgrade works, and costs one thing.** It restores all three constraints to
+what they were. Before reinstating `events.created_by NOT NULL` it must do
+something about rows whose creator has since been deleted and is therefore null,
+and there is no honest value to put back. It deletes those events, and its
+docstring says so plainly. That is a heavier cost than v1.0.4zb's downgrade, which
+deleted a few authorless notes — an event carries participants and allocations
+with it. **Anybody downgrading past this revision should take a dump first**, and
+the docstring says that too.
