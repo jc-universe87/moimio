@@ -547,7 +547,20 @@ delete the three branches and the six strings.
 
 ## DASH-1 — Dashboard "unassigned" is derived by subtraction and can go negative
 
-**Status:** Open. Pre-existing; found in session 84 while reading the line for the exclusion work (v1.0.4i). Not fixed there.
+**Status:** ✅ CLOSED in v1.0.4zb (2026-09-18). Pre-existing; found in session 84 while reading the line for the exclusion work (v1.0.4i). Not fixed there.
+
+**Resolution.** `list_categories()` gained a fourth aggregate,
+`placed_people_count`, built with `func.count(distinct(Allocation.participant_id))`
+beside the three it already ran. The tile subtracts that instead of
+`allocated_count`.
+
+`allocated_count` counts allocation ROWS and stays exactly as it was, because the
+units grid legitimately wants places used. In an overlapping group type one
+person can hold several places, so subtracting rows from a head-count
+under-reported the unassigned figure and, once the row count passed the
+participant count, went below zero. The tile no longer clamps, because there is
+nothing left to clamp.
+
 
 `OrganiseDashboard.jsx:470` computes the tile's unassigned figure as
 `totalParticipants - allocated_count`. `allocated_count` comes from
@@ -565,7 +578,18 @@ read the stats payload. File only; no change in v1.0.4i.
 
 ## DASH-2 — Create and update category return the raw ORM row, so a tile fed from it shows blanks
 
-**Status:** Open, **re-scoped in v1.0.4w** — real at the API, not reachable from any screen. Scheduled for the v1.0.4y counts release. Pre-existing; found in session 84 while reading the endpoints for the exclusion work (v1.0.4i). Not fixed there.
+**Status:** ✅ CLOSED in v1.0.4zb (2026-09-18). Pre-existing; found in session 84 while reading the endpoints for the exclusion work (v1.0.4i). Not fixed there.
+
+**Resolution.** `api_create_category` and `api_update_category` now answer with
+the matching entry from `list_categories()` rather than the raw ORM row, so the
+create, update and list endpoints all speak one shape.
+
+As the v1.0.4w re-scope recorded, this was never reachable from a screen: both
+callers discard the response and re-list. It is fixed because an endpoint that
+answers differently from the one that lists the same thing will eventually be
+believed, and it cost two lines in a file being opened anyway for DASH-1 and
+DASH-3.
+
 
 **Re-scope (session 86 survey).** The defect in the endpoints is exactly as
 described below and is unchanged. What the entry gets wrong is the consequence:
@@ -599,7 +623,20 @@ for the single row. File only; no change in v1.0.4i.
 
 ## DASH-3 — `excluded_count` counts exclusion rows for cancelled and removed participants, so the unassigned figure under-reports
 
-**Status:** Open. Pre-existing since v1.0.4i; found in session 85 while reading the dashboard tile for the exclusion UI (v1.0.4k). Not fixed there.
+**Status:** ✅ CLOSED in v1.0.4zb (2026-09-18). Pre-existing since v1.0.4i; found in session 85 while reading the dashboard tile for the exclusion UI (v1.0.4k). Not fixed there.
+
+**Resolution — option A, as ruled (D2).** The `excluded_count` aggregate in
+`list_categories()` now joins `Participant` and counts only rows belonging to
+somebody still on the roster: not cancelled, not soft-deleted.
+
+Option B, deleting exclusion rows when somebody cancels, stays rejected. An
+exclusion records what an organiser decided about a person, and an unrelated
+change to that person's registration status must not erase it — the same
+reasoning that put exclusions into both people exports in v1.0.4v.
+
+Count-only change. Both frontend subtractions, `OrganiseDashboard.jsx` and
+`EventDetailPage.jsx`, are untouched and are now correct because their input is.
+
 
 **Decided (session 86, D2).** **Option A** — filter the aggregate. Join
 `Participant` in `list_categories()` and drop cancelled and soft-deleted rows
@@ -740,6 +777,15 @@ VERSION-1.
 
 **Status:** Open. Found in session 85 phase 1 while specifying the keep-as-is override for the exclusion work (v1.0.4j). Correct behaviour for j; needs surfacing in v1.0.4k.
 
+**Moved to v1.0.4zc (2026-09-18), on the no-new-strings rule.** The ruling (D4,
+option B — say it at the moment of the exclusion and offer to unlock) stands and
+is unchanged. It cannot ship in v1.0.4zb because **the wording does not exist**:
+the `organise.exclude.*` namespace has ten keys and none of them says anything
+about a locked unit, a vacated place, or unlocking one. Shipping the backend half
+without the message would leave the organiser exactly as uninformed as before,
+which is the whole complaint. The two keys it needs, with proposed English, are
+in the v1.0.4zb release report and go into zc's batch.
+
 **Decided (session 86, D4).** **Option B** — say it at the moment of the
 exclusion, in the message that already fires, and offer to unlock the unit there.
 Not a permanent badge on the unit (option A), which is chrome for an occasional
@@ -815,7 +861,26 @@ had never been on screen.
 
 ## HIST-1 — `collapseMoves` is category-blind and can invent a cross-group-type "move"
 
-**Status:** Open. Pre-existing; found in session 85 while settling the exclusion phantom-move question for v1.0.4k. Only the exclusion-driven case was guarded there.
+**Status:** ✅ CLOSED in v1.0.4zb (2026-09-18). Pre-existing; found in session 85 while settling the exclusion phantom-move question for v1.0.4k. Only the exclusion-driven case was guarded there.
+
+**Resolution.** One clause added to `collapseMoves`: a pair collapses only when
+both rows carry the same `category_id`. `category_id` was already on the
+serialised row (`allocation_events_service.py:169`), so no backend change was
+needed.
+
+The feed is scoped to one participant but spans every group type, and the
+function compared only unit names. Removing somebody from Room A and later
+placing them in Team 1 — two unrelated actions in two different group types —
+rendered as "Moved from Room A to Team 1". The v1.0.4k guard closed only the
+route exclusions made easy to hit.
+
+The collapsed row also took `category_name` from the newer of the two rows, so
+even the label on an invented move named the wrong group type. That stops mattering
+once the two rows must share a group type.
+
+Grouping the feed by `action_id` instead, which would replace the guessing
+outright, is **HIST-2** and is deliberately after v1.0.5.
+
 
 **Decided (session 86, D5).** The one-line `category_id` fix closes this entry
 and is scheduled for **v1.0.4y**. Grouping the feed by `action_id` instead is a
@@ -1871,7 +1936,34 @@ change in `moimio-saas`. Both are settled by v1.0.4u: the page is
 
 ## USER-1 — Deleting a user does not handle their notes
 
-**Status:** Open. Found in session 86 phase 1 while reading `notes.author_id` for the backup work (v1.0.4m). Not fixed there.
+**Status:** ✅ CLOSED in v1.0.4zb (2026-09-18). Found in session 86 phase 1 while reading `notes.author_id` for the backup work (v1.0.4m). Not fixed there.
+
+**Resolution — the hybrid, as ruled (D3).** Deleting a user now sweeps what they
+wrote before the row goes:
+
+- **Their unpublished notes are deleted.** A draft is that person's own working
+  note and nobody else was ever meant to read it.
+- **Their published notes stay, with no author.** `notes.author_id` becomes NULL,
+  which is the same honest answer v1.0.4t gives for history written by a departed
+  user.
+
+**Reassigning authorship was rejected** and stays rejected: it would make the
+record say somebody wrote what they did not.
+
+**No new string was needed, and none was used.** Checked rather than assumed:
+`api/notes.py:62-69` returns `author_id` as a raw UUID and **no `.jsx` file reads
+`author_id`, `author_name` or `authorName`** — no screen has ever shown a note's
+author, so there is no label to change. The existing `history.actor.removed`
+wording was available if one had been needed.
+
+**Why deleting the drafts is what makes the null safe.** The visibility rule is
+"published, or mine" (`api/notes.py:59` and `:137`). A null author matches nobody,
+so a null-author *unpublished* note would be visible to no one and unreachable
+forever. Deleting them first means no such row can exist. That is the load-bearing
+half of the ruling, not a tidy-up.
+
+**The migration is `104zb0000`** — see its own note below.
+
 
 **Decided (session 86, D3).** **A hybrid, not the survey's option B.** The
 departing user's **unpublished notes are deleted** — they are that person's own
@@ -2707,7 +2799,32 @@ Johannes's call before v1.0.4x.**
 
 ## STREAM-2 — Cancelling or removing a participant does not reach the allocation board
 
-**Status:** Open, scheduled for v1.0.4y. Found by the session 86 non-backup survey while settling STREAM-1, which does not reproduce.
+**Status:** ✅ CLOSED in v1.0.4zb (2026-09-18). Found by the session 86 non-backup survey while settling STREAM-1, which does not reproduce.
+
+**Resolution.** Three endpoints in `api/participants.py` now publish
+`participant_changed` on the `organise:<event_id>` topic. The board already
+refetches on any message it receives (`AllocationBoard.jsx:406-418`), so **no
+frontend change was needed at all.**
+
+**Every participant-writing endpoint was considered:**
+
+| Endpoint | Taken? | Why |
+|---|---|---|
+| `patch_participant` (`:276`) | **yes** | The cancel path, and also renames, gender and group code — every field it can change is rendered on a board chip |
+| `delete_participant` (`:421`) | **yes** | A soft-deleted person must leave every open board |
+| `batch_commit` (`:568`) | **yes** | A bulk import adds people to the board and told nobody; one publish per commit, not per row |
+| `public_register` (`:37`) | no | Already publishes `registration_created`, and `EventDetailPage.jsx:367-377` turns that into a `loadData()` that refreshes the roster the board is given |
+| the confirm path (`:189`) | no | Same — already publishes `registration_confirmed` on the same topic |
+| `checkin_participant` (`:371`) | no | Publishes on `checkin:` already, and checking in does not change who belongs on the board |
+| `reassign_group_code` (`:339`) | no | Changes a value the board displays but not whether the person belongs; rare, and an organiser doing it is looking at the person already |
+| `resend_confirmation` (`:446`) | no | Sends an email, writes nothing the board reads |
+| `batch_preview` (`:518`) | no | Read-only |
+
+So the line is: **the writes that change who belongs on the board and that nobody
+was told about.** Additions through the public form were already covered by the
+registration stream; removals were covered by nothing, which is the gap this
+entry named.
+
 
 There are three broadcast topics: `organise:<id>`
 (`api/allocations.py:29-45`), `registration:<id>` (`api/participants.py:124`,
@@ -3336,3 +3453,61 @@ gate, one rule set in the stylesheet, no component opt-outs, and the dead
 it: a scrolling container in Johannes's Chrome where `offsetWidth - clientWidth`
 is greater than zero, which means the bar takes space and is therefore classic
 rather than overlay.
+
+---
+
+## MIGRATION-104zb0000 — `notes.author_id` becomes nullable
+
+**Status:** ✅ SHIPPED in v1.0.4zb (2026-09-18). The only schema change of the v1.0.4m–v1.0.5 series.
+
+Recorded here so a self-hoster reading the backlog can find it without reading
+alembic.
+
+**Revision:** `104zb0000`, on top of `104j00000`, which was head from v1.0.4j.
+
+**What it changes**, on one table and one column:
+
+- `notes.author_id` becomes **nullable**.
+- Its foreign key to `users.id` is recreated with **`ON DELETE SET NULL`**. It had
+  no `ON DELETE` clause, so PostgreSQL's default `NO ACTION` applied and deleting
+  any user who had ever written a note raised an integrity error that reached the
+  organiser as a 500 (**USER-1**).
+
+**What a self-hoster has to do: nothing.** The backend image runs
+`alembic upgrade head` on start (`backend/Dockerfile`), so a `docker compose pull`
+and restart applies it. It adds no column, rewrites no row, and takes a brief lock
+on one small table.
+
+**Safe on existing data, verified rather than assumed.** On the session-86 test
+database: 13 notes, **0 with a null author**, 5 published. Widening a NOT NULL
+column to nullable cannot fail on rows that all have values, and no row changes.
+
+**Downgrade works, and is not lossless by choice.** It restores the plain foreign
+key and `NOT NULL`. A row whose author is already null cannot satisfy `NOT NULL`,
+and there is no honest value to put back — the user is gone, and inventing an
+author is exactly what D3 rejected. So the downgrade **deletes any note with a
+null author first**, and its docstring says so. The alternative, failing on those
+rows, would leave an operator stuck half-way with no way back; deleting a handful
+of authorless notes is the lesser loss and is at least truthful.
+
+---
+
+## LOG-2 — A note's author is returned but never shown
+
+**Status:** Open. Noted in v1.0.4zb while implementing USER-1. Not a defect; a loose end worth recording.
+
+`api/notes.py:62-69` returns `author_id` on every note as a raw UUID. **Nothing in
+the frontend reads it** — no `.jsx` file mentions `author_id`, `author_name` or
+`authorName`. So a note never shows who wrote it, on any screen.
+
+Two consequences, neither urgent:
+
+- It made USER-1 cheaper than expected: there was no author label to change when
+  `author_id` became nullable, so that work needed no new string.
+- It is either a missing feature or a field that should not be on the wire. "Who
+  wrote this note" is a reasonable thing for a team to want; a bare UUID is not
+  useful to anyone, and if the answer is that nobody wants it, the field could go.
+
+Whoever picks it up should decide which, rather than leaving a UUID travelling to
+a client that ignores it. If it becomes a label, it needs a string and the
+null-author case already has wording in `history.actor.removed`.
