@@ -1,6 +1,6 @@
 """LEGAL-1 — the `workspace_settings` table, one row, one setting.
 
-Revision ID: 105a00000
+Revision ID: 106a00000
 Revises: 104zd0000
 Create Date: 2026-09-19
 
@@ -31,7 +31,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "105a00000"
+revision = "106a00000"
 down_revision = "104zd0000"
 branch_labels = None
 depends_on = None

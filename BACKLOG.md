@@ -4246,7 +4246,7 @@ the docstring says that too.
 
 ## LEGAL-1 — A customer has nowhere to put their own privacy notice
 
-**Status:** Fixed in the working tree on 2026-09-19, not yet released: a workspace-level `privacy_notice_url` (new one-row table `workspace_settings`, revision `105a00000`), set on the Workspace settings page by a super admin, rendered as a link after the consent sentence on the public form. Established 2026-09-19 (second establish report of that date).
+**Status:** Fixed in the working tree on 2026-09-19, not yet released: a workspace-level `privacy_notice_url` (new one-row table `workspace_settings`, revision `106a00000`), set on the Workspace settings page by a super admin, rendered as a link after the consent sentence on the public form. Established 2026-09-19 (second establish report of that date).
 **Severity:** Medium. The hosted Terms (§10) make the customer responsible for
 giving participants the information data-protection law requires; the product
 gives them no place to do it.
@@ -4392,3 +4392,36 @@ change is one line: `isHostedEdition` reads the new field. A new environment
 variable needs `production.yml` updated in a separate CE release first, or
 hosted tenants will not receive it (see the environment-variables note in
 CLAUDE.md).
+
+---
+
+## UPDATE-2 — A CE install on a LAN address over plain HTTP gets no service worker at all
+
+**Status:** Open. Found 2026-09-19 while verifying [UPDATE-1](#update-1--the-refresh-button-can-hang-and-says-it-checks-something-it-does-not).
+**Severity:** Low. Nothing breaks; three features are silently absent, and the install guide does not say so.
+
+**What happens.** Browsers only register a service worker in a secure context:
+HTTPS, or `localhost` / `127.0.0.1`. A CE install reached at a bare LAN address
+over HTTP, say `http://192.168.1.20:6120`, is neither, so the registration in
+`main.jsx` is declined without an error. The app runs; it simply never gets the
+service worker. That means no offline caching, no "new version available"
+prompt, and nothing for the refresh button (UPDATE-1) to clear.
+
+**How it was confirmed.** A full Chrome registration dump on 2026-09-19 showed no
+entry for such an origin, while `demo.moimio.app` on the same browser showed a
+healthy active worker.
+
+**Same family as `VITE_API_URL`.** The install guide's port advice around
+`VITE_API_URL` (`docs/installation/quick-guide.md`) describes a variable the
+frontend does not read (flagged in the v1.0.0l CHANGELOG entry): correct on
+the author's machine, silently half-working for a stranger following the guide
+on theirs. This is the same shape. Every example in the guide uses
+`http://localhost:6120`, which is a secure context, so the author never sees it.
+
+**Cheapest fix is the install guide, not code.** One sentence in
+`docs/installation/quick-guide.md`, where the app URL is first given: serve
+Moimio over HTTPS, or open it as `localhost`, or the offline caching and the
+update prompt will not work. A reverse proxy with a certificate is the usual
+answer for anything reached from other machines. No code change makes a browser
+register a worker on an insecure origin, so there is nothing to do in `sw.js`,
+`UpdatePrompt.jsx` or `registerType`.

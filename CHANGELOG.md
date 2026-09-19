@@ -8,6 +8,32 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [1.0.6] — 2026-09-19
+A link to your own privacy notice on the registration form, and a legal notice
+that points to the documents that apply.
+
+### Added
+
+- **A link to your own privacy notice on the registration form.** Set the
+  address in Workspace settings and the public form shows it right after the
+  consent sentence, so participants can read how your organisation handles
+  their data. Leave it empty and nothing is shown.
+
+### Changed
+
+- **The legal notice links to the documents that apply** instead of stating
+  terms of its own. A self-hosted install shows the MIT licence disclaimer.
+
+### Fixed
+
+- **The refresh button in the legal notice can no longer hang,** and its label
+  now says what it does.
+
+### For self-hosters
+
+- **One database change applies itself** on the first start of the new image.
+  Nothing to run by hand; take your usual backup first, as with any upgrade.
+
 ## [1.0.5] — 2026-09-18
 Exclusions, backups that hold the whole event, and moving a workspace in one command.
 

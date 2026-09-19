@@ -1222,7 +1222,7 @@
   "welcome.what_it_does_body": "Der Kern von Moimio ist die Zuweisungs-Engine. Sie nimmt deine Teilnehmerliste und verteilt sie auf Zimmer, Kleingruppen, Tische oder jede andere Struktur, die dein Event benötigt. Dabei berücksichtigt sie Kapazitäten, Geschlechterregeln, Markierungen sowie Gruppen von Teilnehmern, die gemeinsam angemeldet sind, sodass du einen Vorschlag erhältst, der bereits sehr nah an dem liegt, was du manuell erstellen würdest. Anmeldung, Check-in und die übrigen Bereiche der App dienen dazu, diese Zuweisung vorzubereiten und abzuschließen. Der gesamte Ablauf gliedert sich in drei Phasen: Vorbereitung, Anmeldung und Durchführung des Events.",
   "welcome.what_it_does_title": "Wofür Moimio gedacht ist",
   "workspace.page.title": "Workspace-Einstellungen",
-  "workspace.privacy.help": "Die Webadresse des Datenschutzhinweises eurer eigenen Organisation. Wenn sie gesetzt ist, zeigt das öffentliche Anmeldeformular direkt nach dem Einwilligungssatz einen Link darauf, damit Teilnehmende nachlesen können, wie ihr mit ihren Daten umgeht. Leer lassen, um keinen Link anzuzeigen.",
+  "workspace.privacy.help": "Die Webadresse des Datenschutzhinweises eurer eigenen Organisation. Wenn sie hinterlegt ist, zeigt das öffentliche Anmeldeformular direkt nach dem Einwilligungssatz einen Link dorthin, damit Teilnehmende nachlesen können, wie ihr mit ihren Daten umgeht. Leer lassen, um keinen Link anzuzeigen.",
   "workspace.privacy.label": "Link zum Datenschutzhinweis",
   "workspace.privacy.title": "Datenschutzhinweis"
 }
