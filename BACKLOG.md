@@ -4241,3 +4241,118 @@ docstring says so plainly. That is a heavier cost than v1.0.4zb's downgrade, whi
 deleted a few authorless notes — an event carries participants and allocations
 with it. **Anybody downgrading past this revision should take a dump first**, and
 the docstring says that too.
+
+---
+
+## LEGAL-1 — A customer has nowhere to put their own privacy notice
+
+**Status:** Open. Established 2026-09-19 (second establish report of that date).
+**Severity:** Medium. The hosted Terms (§10) make the customer responsible for
+giving participants the information data-protection law requires; the product
+gives them no place to do it.
+
+**What the public registration form shows today.** One fixed consent sentence,
+`register.gdpr`, as the label of a required checkbox (`RegisterPage.jsx:829-846`,
+and again per extra person at `:1126-1136`). It is present in all six locales at
+line 964 of each file. It contains no link. Nothing about it is configurable: no
+per-event field, no workspace setting, no environment variable.
+
+**What exists in the way of legal or privacy links anywhere in the product:
+nothing.** Checked and found empty: every `href=` literal in `frontend/src` (three
+in total, none legal: a Google Fonts stylesheet, the "Powered by Moimio" footer
+link to `moimio.app`, and the form's own `/register/<id>` link); all six locale
+files (`grep -c http` is 0 in each); the email module (`core/email.py`, whose
+only URLs are the confirmation and password-reset links); the PDF service (no URL
+in the file); `index.html`.
+
+**Where such a URL could be stored today: nowhere.** `core/config.py` has four
+URL-valued settings (`buy_credit_url`, `account_url`, `moimio_demo_mail_url`,
+`moimio_webhook_url`); none is a legal or privacy URL. No model column and no
+Alembic revision mentions privacy, legal, imprint or terms. `GET /api/capabilities`
+carries `account_url` and `demo_mail_url` and nothing else URL-shaped.
+
+**Why it matters more for hosted than for CE.** A self-hoster is their own
+controller and their own operator; the gap is the same, but the Terms are not in
+play. A hosted customer has signed Terms that require them to inform participants,
+and the form they were given cannot carry the notice.
+
+---
+
+## LEGAL-2 — The Legal Notice modal makes a liability claim no document backs, and makes it to both editions
+
+**Status:** Open. Established 2026-09-19 (both establish reports of that date).
+**Severity:** Medium. It is a legal statement shown to every logged-in user.
+
+**What the modal shows.** `AdminLayout.jsx:639-687`, opened from the sidebar
+version line (`:628-631`). Its body: `legal.software_by`, the hardcoded names
+"Pistio" and "Johannes Kim", `legal.trading_name`, `legal.sole_trader`, then
+`legal.no_warranty`, then the refresh button ([UPDATE-1](#update-1--the-refresh-button-can-hang-and-says-it-checks-something-it-does-not)),
+then Close. No link of any kind.
+
+**`legal.no_warranty`** (en): "This software is provided as-is. Pistio accepts no
+liability for data loss or service interruption." Present in all six locales at
+line 572 of each. One string fusing two claims: an as-is clause, and a blanket
+exclusion of liability.
+
+**How that sits against the documents that do bind.**
+
+- **Hosted.** The published Terms at `moimio.app/en/legal/terms/` carry their own
+  limitation of liability (§20, narrow and carved out), an as-is clause that keeps
+  "reasonable skill and care" (§14), and an entire-agreement clause (§24) that
+  does not include the in-app modal. The modal's sentence is broader than §20,
+  weaker than §14, and has no contractual force of its own.
+- **Community Edition.** The Terms say in §2, §3 and §15 that they do not cover
+  CE; the MIT licence alone governs. The MIT text (`LICENSE:15-19`) is the only
+  warranty statement that applies, and the modal does not show it.
+
+**The modal cannot tell the editions apart today.** There is no conditional in it
+(`capabilities`, `hosted`, `saas`, `demo`: none appear between `:639` and `:687`).
+One bundle serves both editions; the string is chosen by language only. The
+only signal in the component that separates a hosted tenant from a CE install is
+`capabilities.account_portal` (`:547`, `:565`, `:582`), from
+`FEATURE_ACCOUNT_PORTAL` (`core/config.py:60`, default false; the SaaS sets it
+true per tenant). It is a feature flag for the account-portal link, not a
+statement of product edition.
+
+**Locale mismatch, if links were ever added.** The app has six locales; the site
+publishes legal pages in three (`en`, `de`, `ko`). A URL built from the app
+locale would 404 for `es`, `fr` and `pt-BR`.
+
+**Nowhere else.** The first establish report scanned every English locale value
+and the backend for liability, warranty or as-is wording and found this one key,
+plus the MIT text in `LICENSE`. The PDF translation table has none.
+
+---
+
+## UPDATE-1 — The refresh button can hang, and says it checks something it does not
+
+**Status:** Open. Established 2026-09-19 (both establish reports of that date).
+**Severity:** Low. The function is right; the label and one `await` are wrong.
+
+**What it does.** `handleCheckForUpdates`, `AdminLayout.jsx:43-71`: asks the
+browser for the service-worker registration and awaits `reg.update()`, deletes
+every entry in `caches`, then in a `finally` calls `window.location.reload()`.
+That is a cache clear and a hard reload. It is the right escape hatch for a
+browser that is holding a stale shell, and it is what the component's own
+comment (`:34-41`) says it is for.
+
+**What it does not do.** Check anything. No version is fetched, none is compared,
+nothing on screen ever says "up to date" or "new version found" (first report,
+A3 and A5). The two labels are `legal.check_for_updates` ("Check for new
+version") and `legal.checking_for_updates` ("Checking…"), present in all six
+locales at lines 570–571.
+
+**The hang.** `isCheckingForUpdate` is set true at `:45` and set false nowhere in
+the file: `grep -n setIsCheckingForUpdate` gives the declaration at `:42` and
+the single call at `:45`. The only exit from the spinner is the reload in
+`finally`. If `await reg.update()` (`:53`) never settles, `finally` never runs,
+the reload never happens, and the button stays disabled with its spinner until
+the modal is closed or the page reloaded by hand. There is no timeout and no
+`AbortController` in the file. Whether a given browser can leave that promise
+unsettled is browser behaviour, not code, and was not tested; the code offers no
+defence against it either way.
+
+**Why awaiting it buys nothing.** The caches are cleared and the page reloaded
+regardless of what `update()` returns. A reload after a cache clear refetches
+every asset from the origin whether or not the service worker noticed a new
+`sw.js` first.
