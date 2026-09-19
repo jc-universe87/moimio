@@ -21,6 +21,8 @@ from app.models.checkin_value import CheckInValue  # noqa: F401
 from app.models.mark import MarkDefinition, MarkAssignment  # noqa: F401
 from app.models.event_assignment import EventUserAssignment  # noqa: F401
 from app.models.preference_request import ParticipantPreferenceRequest  # noqa: F401
+# LEGAL-1: the one-row table of installation-wide settings
+from app.models.workspace_settings import WorkspaceSettings  # noqa: F401
 # v1.0.0g: outbound webhook subsystem
 from app.models.outbound_webhook import (  # noqa: F401
     OutboundWebhookEndpoint,

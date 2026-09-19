@@ -8,9 +8,11 @@ import WelcomePanel from './WelcomePanel';
 import ThemeToggle from './ThemeToggle';
 import InstallPrompt from './InstallPrompt';
 import UpdatePrompt from './UpdatePrompt';
+import LegalNotice from './LegalNotice';
 import { useI18n } from '../hooks/useI18n';
 import { useEventPhase, PHASE } from '../hooks/useEventPhase';
 import { events as eventsApi } from '../services/api';
+import { forceReload } from '../utils/forceReload';
 import {
   IconDetails, IconRegistrationForm,
   IconMarks, IconStaff,
@@ -26,48 +28,32 @@ const MOIMIO_VERSION = typeof __MOIMIO_VERSION__ !== 'undefined' ? __MOIMIO_VERS
 export default function AdminLayout() {
   const { user, staffContext, logout } = useAuth();
   const { capabilities } = useCapabilities();
+  // LEGAL-2: the one place the edition is decided. `account_portal` is the
+  // managed-instance signal the SaaS sets per tenant (FEATURE_ACCOUNT_PORTAL,
+  // default false in CE). It is a feature flag for the account-portal link,
+  // standing in here for an explicit hosted flag the capabilities endpoint
+  // does not yet have (see BACKLOG CAP-1). Everything that shows a hosted
+  // tenant its contract, and a self-hoster the MIT text, reads this and
+  // not the flag.
+  const isHostedEdition = capabilities.account_portal === true;
   const { t } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
   const [showPrefs, setShowPrefs] = useState(false);
   const [showLegal, setShowLegal] = useState(false);
-  // v0.99f: manual "check for new version" affordance in the legal modal.
-  // Pre-fix, the only user-facing update path was the auto-detected
-  // UpdatePrompt toast — when that didn't fire (browser-specific SW
-  // quirks, HTTP-cached SW script, mobile lifecycle weirdness), users
-  // had no way to force-pull a new build. The button below clears all
-  // service-worker caches and triggers a hard reload, so the next page
-  // load is guaranteed to refetch every asset from the origin. Brief
-  // checking-state spinner so a click feels acknowledged before reload.
-  const [isCheckingForUpdate, setIsCheckingForUpdate] = useState(false);
-  const handleCheckForUpdates = async () => {
-    if (isCheckingForUpdate) return;
-    setIsCheckingForUpdate(true);
-    try {
-      // Best-effort: nudge the SW to check for updates first. If a new
-      // build is on the server, this triggers the install of a waiting
-      // SW. The hard reload that follows then activates it.
-      if ('serviceWorker' in navigator) {
-        try {
-          const reg = await navigator.serviceWorker.getRegistration();
-          if (reg) await reg.update();
-        } catch { /* ignore */ }
-      }
-      // Wipe every cache the browser holds for this origin (Workbox
-      // precache, runtime caches, anything else). Without this, the
-      // reload could be served from cache and miss the new shell.
-      if (typeof caches !== 'undefined') {
-        try {
-          const keys = await caches.keys();
-          await Promise.all(keys.map(k => caches.delete(k)));
-        } catch { /* ignore */ }
-      }
-    } finally {
-      // Reload regardless of whether the cache cleanup partially
-      // failed — a fresh page request is still the right next step,
-      // and any partial cache state will be replaced on the next load.
-      window.location.reload();
-    }
+  // v0.99f: the escape hatch in the legal modal. When the UpdatePrompt toast
+  // does not fire (browser-specific SW quirks, HTTP-cached SW script, mobile
+  // lifecycle weirdness), this clears every cache and hard-reloads, so the
+  // next load refetches every asset from the origin. UPDATE-1: the work
+  // moved to utils/forceReload, which no longer awaits the service-worker
+  // nudge without a timeout; an update() that never settled used to leave
+  // the spinner running forever. The spinner state has one exit, the
+  // reload, and that is now guaranteed to arrive.
+  const [isReloading, setIsReloading] = useState(false);
+  const handleForceReload = async () => {
+    if (isReloading) return;
+    setIsReloading(true);
+    await forceReload();
   };
   // v0.70d-2c (R3-C-hybrid): the "View welcome tour" menu item opens
   // WelcomePanel in a fixed overlay. State here rather than inside the
@@ -555,14 +541,14 @@ export default function AdminLayout() {
                       <span>{t('nav.webhooks')}</span>
                     </button>
                   )}
-                  {/* Workspace settings — currently houses only the Danger
-                      Zone (customer-triggered workspace deletion). v1.0.1:
-                      gated on capabilities.account_url, the "managed instance"
-                      signal the SaaS injects (same gate as Manage account).
-                      Self-hosters have no SaaS endpoint, so the delete action
-                      is a no-op for them — hide it. v1.0.1e-6: gated on
-                      account_portal (managed-instance), same as Manage account. */}
-                  {isSuperAdmin && capabilities.account_portal && (
+                  {/* Workspace settings. Until LEGAL-1 this held only the Danger
+                      Zone and was gated on account_portal (managed-instance),
+                      because a self-hoster has no SaaS endpoint to send the
+                      deletion request to. It now also holds the organisation's
+                      privacy notice URL, which every edition needs, so the
+                      entry shows for every super admin; the Danger Zone
+                      section inside the page keeps the account_portal gate. */}
+                  {isSuperAdmin && (
                     <button onClick={() => { navigate('/admin/workspace'); closeSidebar(); }}
                       className={`flex items-center gap-2.5 w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors ${
                         pathActive('/admin/workspace')
@@ -658,27 +644,28 @@ export default function AdminLayout() {
                 Johannes Kim<br />
                 {t('legal.sole_trader')}
               </p>
-              <p className="text-gray-400 text-[10px]">
-                {t('legal.no_warranty')}
-              </p>
+              {/* LEGAL-2: hosted sees links to its Terms, Privacy Policy and
+                  DPA; CE sees the MIT disclaimer. The old one-line liability
+                  claim is gone from all six locales. */}
+              <LegalNotice hosted={isHostedEdition} />
             </div>
-            {/* v0.99f: manual update check. Clears caches and hard-reloads —
-                fresh asset request guaranteed. The button is in the legal
-                modal rather than the main UI because (a) it's a corner-
-                case escape hatch most users never need, and (b) when the
-                auto-detected UpdatePrompt isn't firing, this gives users
-                an obvious way to force a refresh. */}
+            {/* v0.99f: clears caches and hard-reloads, fresh asset request
+                guaranteed. In the legal modal rather than the main UI because
+                it is a corner-case escape hatch most users never need, and
+                when the auto-detected UpdatePrompt isn't firing it gives them
+                an obvious way to force a refresh. UPDATE-1: the label says
+                what it does; it never checked a version. */}
             <button
               type="button"
-              onClick={handleCheckForUpdates}
-              disabled={isCheckingForUpdate}
+              onClick={handleForceReload}
+              disabled={isReloading}
               className="mt-4 w-full py-2 rounded-xl text-xs font-semibold border border-steel-blue text-steel-blue hover:bg-steel-blue hover:text-white transition-colors disabled:opacity-60 disabled:cursor-wait inline-flex items-center justify-center gap-1.5">
-              {isCheckingForUpdate && (
+              {isReloading && (
                 <span className="inline-block animate-spin" aria-hidden="true">⟳</span>
               )}
-              {isCheckingForUpdate
-                ? t('legal.checking_for_updates')
-                : t('legal.check_for_updates')}
+              {isReloading
+                ? t('legal.clearing_cache')
+                : t('legal.clear_cache_and_reload')}
             </button>
             <button onClick={() => setShowLegal(false)}
               className="mt-2 w-full py-2 rounded-xl bg-deep-navy text-white text-xs font-semibold hover:bg-mid-navy transition-colors">

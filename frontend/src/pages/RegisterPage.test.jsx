@@ -43,9 +43,14 @@ const VALIDATION_422 = {
   },
 };
 
-function mockFetch({ rejectSubmit = true } = {}) {
+function mockFetch({ rejectSubmit = true, privacyNoticeUrl = null, workspaceFails = false } = {}) {
   return vi.fn(async (url, opts = {}) => {
     const u = String(url);
+    // LEGAL-1: the workspace's privacy notice URL, or null, or a broken read.
+    if (u.includes('/workspace/public')) {
+      if (workspaceFails) return { ok: false, status: 500, json: async () => ({}) };
+      return { ok: true, status: 200, json: async () => ({ privacy_notice_url: privacyNoticeUrl }) };
+    }
     if (opts.method === 'POST' && u.includes('/register')) {
       if (!rejectSubmit) {
         return { ok: true, status: 201, json: async () => ({ id: 'p1' }) };
@@ -287,5 +292,49 @@ describe('the form does its own checking', () => {
       en['errors.register.extra_people_incomplete'].replace('{count}', '1'),
     )).toBeInTheDocument();
     expect(registerPosts()).toHaveLength(0);
+  });
+});
+
+describe('the privacy notice link (LEGAL-1)', () => {
+  const consentLabel = () =>
+    document.querySelector('input[name="gdpr_consent"]').closest('div').querySelector('label');
+
+  it('renders nothing extra when the workspace has not set a URL', async () => {
+    await renderForm({ privacyNoticeUrl: null });
+    expect(screen.queryByTestId('privacy-notice-link')).toBeNull();
+    // The consent sentence is exactly what it was.
+    expect(consentLabel().textContent).toBe(`${en['register.gdpr']} *`);
+  });
+
+  it('renders a link right after the consent sentence when one is set', async () => {
+    await renderForm({ privacyNoticeUrl: 'https://example.org/privacy' });
+    const link = await screen.findByTestId('privacy-notice-link');
+    expect(link.getAttribute('href')).toBe('https://example.org/privacy');
+    expect(link.textContent).toBe(en['register.privacy_notice']);
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    // Sentence, link, required marker, in that order.
+    expect(consentLabel().textContent).toBe(`${en['register.gdpr']} ${en['register.privacy_notice']} *`);
+  });
+
+  it('shows the same link on an extra person\'s card', async () => {
+    await renderForm({ privacyNoticeUrl: 'https://example.org/privacy' });
+    await screen.findByTestId('privacy-notice-link');
+    fireEvent.click(screen.getByText(new RegExp(en['register.add_person'])));
+    const card = document.getElementById('extra-person-0');
+    expect(card.querySelector('[data-testid="privacy-notice-link"]')).not.toBeNull();
+  });
+
+  it('does not block registration when the URL is unset', async () => {
+    await renderForm({ rejectSubmit: false, privacyNoticeUrl: null });
+    fillValid();
+    submitForm();
+    await waitFor(() => expect(registerPosts()).toHaveLength(1));
+  });
+
+  it('leaves the form intact when the workspace read fails', async () => {
+    await renderForm({ workspaceFails: true });
+    expect(document.querySelector('#register-form')).not.toBeNull();
+    expect(screen.queryByTestId('privacy-notice-link')).toBeNull();
   });
 });

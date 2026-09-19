@@ -459,3 +459,15 @@ export const dangerZone = {
     body: JSON.stringify({ confirmation }),
   }),
 };
+
+// LEGAL-1: installation-wide settings an admin sets from the screen. The
+// public read is what the registration form needs (the organisation's own
+// privacy notice URL, or null); the admin pair is super-admin only.
+export const workspaceSettings = {
+  getPublic: () => request('/workspace/public'),
+  get: () => request('/admin/workspace/settings'),
+  update: (data) => request('/admin/workspace/settings', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+};

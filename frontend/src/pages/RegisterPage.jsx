@@ -20,6 +20,11 @@ const isCompleteGroupCode = (code) => /^[A-Z0-9]+-\d+$/.test((code || '').trim()
 function RegisterForm() {
   const { eventId } = useParams();
   const [event, setEvent] = useState(null);
+  // LEGAL-1: the organisation's own privacy notice, a workspace setting.
+  // Null until the public read answers, and null when nothing is set; the
+  // link renders only when there is one, so an install that has not set it
+  // is exactly what it was.
+  const [privacyNoticeUrl, setPrivacyNoticeUrl] = useState(null);
   const [fields, setFields] = useState([]);
   const [customFields, setCustomFields] = useState([]);
   const [formData, setFormData] = useState({
@@ -80,6 +85,15 @@ function RegisterForm() {
       if (fieldsRes.ok) setFields(await fieldsRes.json());
       const cfRes = await fetch(`/api/events/${eventId}/custom-fields/public`);
       if (cfRes.ok) setCustomFields(await cfRes.json());
+      // LEGAL-1: best effort. A failure here must not take the form down
+      // with it, so it is not allowed to throw into the outer catch.
+      try {
+        const wsRes = await fetch('/api/workspace/public');
+        if (wsRes.ok) {
+          const ws = await wsRes.json();
+          setPrivacyNoticeUrl(typeof ws?.privacy_notice_url === 'string' && ws.privacy_notice_url ? ws.privacy_notice_url : null);
+        }
+      } catch { /* no link, nothing else changes */ }
       // Load categories for preference scope selector (if prefs enabled)
       if (eventData.settings?.enable_group_preferences) {
         setPrefEnabled(true);
@@ -414,6 +428,24 @@ function RegisterForm() {
       setSubmitting(false);
     }
   };
+
+  // LEGAL-1: rendered after the consent sentence, primary and extra person
+  // alike. A plain link in a new tab, opener-isolated because this page is
+  // unauthenticated. Nothing when the workspace has not set one.
+  const privacyNoticeLink = privacyNoticeUrl ? (
+    <>
+      {' '}
+      <a
+        href={privacyNoticeUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-testid="privacy-notice-link"
+        className="underline hover:text-steel-blue transition-colors"
+      >
+        {t('register.privacy_notice')}
+      </a>
+    </>
+  ) : null;
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-off-white">
@@ -839,7 +871,7 @@ function RegisterForm() {
                   aria-invalid={!!fieldErrors.gdpr_consent}
                   className="mt-0.5 h-4 w-4 text-steel-blue border-gray-300 rounded focus:ring-steel-blue" />
                 <label className="text-xs text-gray-600 leading-relaxed">
-                  {t('register.gdpr')} <span style={{ color: 'var(--alert-burgundy)' }}>*</span>
+                  {t('register.gdpr')}{privacyNoticeLink} <span style={{ color: 'var(--alert-burgundy)' }}>*</span>
                 </label>
               </div>
               {fieldError('gdpr_consent')}
@@ -1131,7 +1163,7 @@ function RegisterForm() {
                         onChange={e => updateEp({ gdpr_consent: e.target.checked })}
                         className="mt-0.5 h-4 w-4 text-steel-blue border-gray-300 rounded" />
                       <label className="text-xs text-gray-600 leading-relaxed">
-                        {t('register.gdpr')} <span style={{ color: 'var(--alert-burgundy)' }}>*</span>
+                        {t('register.gdpr')}{privacyNoticeLink} <span style={{ color: 'var(--alert-burgundy)' }}>*</span>
                       </label>
                     </div>
                   </div>

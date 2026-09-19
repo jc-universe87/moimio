@@ -36,6 +36,7 @@ from app.api.streams import router as streams_router
 from app.api.outbound_webhooks import router as outbound_webhooks_router
 from app.api.billing_info import router as billing_info_router
 from app.api.danger_zone import router as danger_zone_router
+from app.api.workspace_settings import router as workspace_settings_router
 from app.version import __version__
 
 settings = get_settings()
@@ -192,6 +193,7 @@ app.include_router(assignments_router)
 app.include_router(pref_router)
 app.include_router(streams_router)
 app.include_router(danger_zone_router)
+app.include_router(workspace_settings_router)
 
 # Capability-gated routers (v1.0.0g)
 #

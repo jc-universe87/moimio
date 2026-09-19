@@ -4246,7 +4246,7 @@ the docstring says that too.
 
 ## LEGAL-1 — A customer has nowhere to put their own privacy notice
 
-**Status:** Open. Established 2026-09-19 (second establish report of that date).
+**Status:** Fixed in the working tree on 2026-09-19, not yet released: a workspace-level `privacy_notice_url` (new one-row table `workspace_settings`, revision `105a00000`), set on the Workspace settings page by a super admin, rendered as a link after the consent sentence on the public form. Established 2026-09-19 (second establish report of that date).
 **Severity:** Medium. The hosted Terms (§10) make the customer responsible for
 giving participants the information data-protection law requires; the product
 gives them no place to do it.
@@ -4280,7 +4280,7 @@ and the form they were given cannot carry the notice.
 
 ## LEGAL-2 — The Legal Notice modal makes a liability claim no document backs, and makes it to both editions
 
-**Status:** Open. Established 2026-09-19 (both establish reports of that date).
+**Status:** Fixed in the working tree on 2026-09-19, not yet released: `legal.no_warranty` removed from all six locales; hosted sees links to Terms, Privacy Policy and DPA on moimio.app (site language, English fallback); CE sees the MIT disclaimer verbatim and no link. The edition is derived once in `AdminLayout` from `account_portal`; see [CAP-1](#cap-1--the-edition-is-inferred-from-a-feature-flag). Established 2026-09-19 (both establish reports of that date).
 **Severity:** Medium. It is a legal statement shown to every logged-in user.
 
 **What the modal shows.** `AdminLayout.jsx:639-687`, opened from the sidebar
@@ -4326,7 +4326,7 @@ plus the MIT text in `LICENSE`. The PDF translation table has none.
 
 ## UPDATE-1 — The refresh button can hang, and says it checks something it does not
 
-**Status:** Open. Established 2026-09-19 (both establish reports of that date).
+**Status:** Fixed in the working tree on 2026-09-19, not yet released: the service-worker nudge is raced against a 1.5 s timeout in `utils/forceReload.js`, and the button now reads "Clear cache and reload". Established 2026-09-19 (both establish reports of that date).
 **Severity:** Low. The function is right; the label and one `await` are wrong.
 
 **What it does.** `handleCheckForUpdates`, `AdminLayout.jsx:43-71`: asks the
@@ -4356,3 +4356,39 @@ defence against it either way.
 regardless of what `update()` returns. A reload after a cache clear refetches
 every asset from the origin whether or not the service worker noticed a new
 `sw.js` first.
+
+---
+
+## CAP-1 — The edition is inferred from a feature flag
+
+**Status:** Open. Filed 2026-09-19 while fixing [LEGAL-2](#legal-2--the-legal-notice-modal-makes-a-liability-claim-no-document-backs-and-makes-it-to-both-editions).
+**Severity:** Low today; it is a legal statement, so the coupling is named rather than left implicit.
+
+**What decides "hosted" in the frontend.** `capabilities.account_portal`, from
+`FEATURE_ACCOUNT_PORTAL` (`core/config.py:60`, default false; the SaaS sets it
+true per tenant). It exists to decide whether the "Manage account" link to the
+SaaS billing portal is meaningful. It is a feature flag, not a statement of
+which product the person is running.
+
+**What now reads it as an edition.** LEGAL-2 made the Legal Notice modal show a
+hosted tenant links to its Terms, Privacy Policy and DPA, and a Community
+Edition install the MIT disclaimer with no link, because the Terms say in §2,
+§3 and §15 that they do not cover CE. `AdminLayout.jsx` derives one named
+value, `isHostedEdition`, from the flag, with a comment saying it stands in for
+a real one; `LegalNotice` and `WorkspacePage` (the Danger Zone section) take it
+as a prop or derive it the same way. Nothing reads the bare flag for that
+purpose.
+
+**The risk it names.** If `FEATURE_ACCOUNT_PORTAL` were ever switched on for a CE
+install, for whatever reason, the modal would tell a self-hoster they are
+bound by a contract that does not exist, and offer them a link to it. The
+reverse, a hosted tenant with the flag off, would show them the MIT text and
+hide their Terms.
+
+**What a dedicated capability would look like.** One boolean on
+`GET /api/capabilities`, say `hosted`, from its own setting the SaaS sets at
+provisioning, with `account_portal` left to mean what it means. The frontend
+change is one line: `isHostedEdition` reads the new field. A new environment
+variable needs `production.yml` updated in a separate CE release first, or
+hosted tenants will not receive it (see the environment-variables note in
+CLAUDE.md).
