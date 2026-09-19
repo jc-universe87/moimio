@@ -4246,7 +4246,7 @@ the docstring says that too.
 
 ## LEGAL-1 — A customer has nowhere to put their own privacy notice
 
-**Status:** Fixed in the working tree on 2026-09-19, not yet released: a workspace-level `privacy_notice_url` (new one-row table `workspace_settings`, revision `106a00000`), set on the Workspace settings page by a super admin, rendered as a link after the consent sentence on the public form. Established 2026-09-19 (second establish report of that date).
+**Status:** ✅ CLOSED in v1.0.6 (2026-09-20), fixed 2026-09-19: a workspace-level `privacy_notice_url` (new one-row table `workspace_settings`, revision `106a00000`), set on the Workspace settings page by a super admin, rendered as a link after the consent sentence on the public form. Established 2026-09-19 (second establish report of that date).
 **Severity:** Medium. The hosted Terms (§10) make the customer responsible for
 giving participants the information data-protection law requires; the product
 gives them no place to do it.
@@ -4280,8 +4280,9 @@ and the form they were given cannot carry the notice.
 
 ## LEGAL-2 — The Legal Notice modal makes a liability claim no document backs, and makes it to both editions
 
-**Status:** Fixed in the working tree on 2026-09-19, not yet released: `legal.no_warranty` removed from all six locales; hosted sees links to Terms, Privacy Policy and DPA on moimio.app (site language, English fallback); CE sees the MIT disclaimer verbatim and no link. The edition is derived once in `AdminLayout` from `account_portal`; see [CAP-1](#cap-1--the-edition-is-inferred-from-a-feature-flag). Established 2026-09-19 (both establish reports of that date).
+**Status:** ✅ CLOSED in v1.0.6 (2026-09-20), fixed 2026-09-19: `legal.no_warranty` removed from all six locales; hosted sees links to Terms, Privacy Policy and DPA on moimio.app (site language, English fallback); CE sees the MIT disclaimer verbatim and no link. The edition is derived once in `AdminLayout` from `account_portal`; see [CAP-1](#cap-1--the-edition-is-inferred-from-a-feature-flag). Established 2026-09-19 (both establish reports of that date).
 **Severity:** Medium. It is a legal statement shown to every logged-in user.
+**Verified:** the hosted branch was checked on demo.moimio.app after the v1.0.6 deploy, under real hosted capabilities, not a local flag flip. The CE branch was checked in the German click-through on the local stack.
 
 **What the modal shows.** `AdminLayout.jsx:639-687`, opened from the sidebar
 version line (`:628-631`). Its body: `legal.software_by`, the hardcoded names
@@ -4326,8 +4327,9 @@ plus the MIT text in `LICENSE`. The PDF translation table has none.
 
 ## UPDATE-1 — The refresh button can hang, and says it checks something it does not
 
-**Status:** Fixed in the working tree on 2026-09-19, not yet released: the service-worker nudge is raced against a 1.5 s timeout in `utils/forceReload.js`, and the button now reads "Clear cache and reload". Established 2026-09-19 (both establish reports of that date).
+**Status:** ✅ CLOSED in v1.0.6 (2026-09-20), fixed 2026-09-19: the service-worker nudge is raced against a 1.5 s timeout in `utils/forceReload.js`, and the button now reads "Clear cache and reload". Established 2026-09-19 (both establish reports of that date).
 **Severity:** Low. The function is right; the label and one `await` are wrong.
+**Verified after release (2026-09-20):** update detection confirmed working on demo.moimio.app after the v1.0.6 deploy. The prompt fired in a tab that had been open across the deploy. `UpdatePrompt.jsx` and the `registerType: 'prompt'` config are correct as written. The earlier non-appearance is explained by no tab having been open across a deploy, and by the refresh button applying a waiting update silently when it is clicked first. Nothing to fix there.
 
 **What it does.** `handleCheckForUpdates`, `AdminLayout.jsx:43-71`: asks the
 browser for the service-worker registration and awaits `reg.update()`, deletes
@@ -4425,3 +4427,60 @@ update prompt will not work. A reverse proxy with a certificate is the usual
 answer for anything reached from other machines. No code change makes a browser
 register a worker on an insecure origin, so there is nothing to do in `sw.js`,
 `UpdatePrompt.jsx` or `registerType`.
+
+---
+
+## CI-1 — `ubuntu-latest` moves to Ubuntu 26 on 2026-10-19, under the workflow that publishes releases
+
+**Status:** Open. Filed 2026-09-20 from the runner warnings on the v1.0.6 publish run.
+**Severity:** Medium, because of when it would show. Nothing is wrong today.
+**Date that matters:** 2026-10-19.
+
+**What runs where.** All three jobs in `.github/workflows/build.yml` (`checks`,
+`build`, `release`) say `runs-on: ubuntu-latest`. GitHub has announced that this
+label starts pointing at Ubuntu 26 from 2026-10-19
+(github.com/actions/runner-images/issues/14748). Nothing in the repo pins an
+Ubuntu version, so the switch happens to us on that date without a commit.
+
+**Why it is not just a CI nuisance.** Pushing a version tag is what publishes the
+images (SHIP-1). If the new runner breaks any of the three jobs, the first
+release after 2026-10-19 produces no images and no GitHub release, and the only
+signal is a red run that nobody is watching unless they go and look. The tag is
+already on the remote by then, so a fix means a `v1.0.xy` follow-up tag rather
+than a retry.
+
+**What could break.** The jobs use `python3` from the runner (`checks`), Docker
+Buildx and the `docker/*` actions (`build`), and `gh` plus a shell script
+(`release`). Any of those can change version or default on a new image; the
+likely candidates are the system Python and the Docker toolchain.
+
+**A dry run before then is cheap.** `checks` and `build` also run on every push to
+`main`, so one commit to `main` that sets `runs-on: ubuntu-26.04` (the pinned
+label, once GitHub publishes it) exercises both without a tag, and can be
+reverted or kept the same day. Only `release` needs a tag; it is a shell
+script and `gh`, and can be read for anything Ubuntu-specific rather than run.
+Either way, do it in a sitting before 2026-10-19, not during the first release
+after it.
+
+**The other choice.** Pin `runs-on: ubuntu-24.04` now and move deliberately later.
+That trades the surprise for a known later chore. Either is fine; not deciding
+is the one bad option.
+
+---
+
+## CI-2 — The workflow's actions target Node 20, which the runner now forces to Node 24
+
+**Status:** Open. Filed 2026-09-20 with [CI-1](#ci-1--ubuntu-latest-moves-to-ubuntu-26-on-2026-10-19-under-the-workflow-that-publishes-releases); rides with it.
+**Severity:** Low. Works today; the runner is compensating.
+
+**What the warning says.** Every run prints: "Node.js 20 is deprecated. The
+following actions target Node.js 20 but are being forced to run on Node.js 24:
+actions/checkout@v4, docker/build-push-action@v5, docker/login-action@v3,
+docker/metadata-action@v5, docker/setup-buildx-action@v3"
+(github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners).
+
+**What to do.** Bump each of the five `uses:` lines in `build.yml` to the major
+version that targets Node 24, checking each action's release notes for any
+input renamed on the way. Do it in the same sitting as the CI-1 dry run, so one
+push to `main` proves both. A CI config change with no runtime effect needs no
+version bump.
