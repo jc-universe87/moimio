@@ -4484,3 +4484,91 @@ version that targets Node 24, checking each action's release notes for any
 input renamed on the way. Do it in the same sitting as the CI-1 dry run, so one
 push to `main` proves both. A CI config change with no runtime effect needs no
 version bump.
+
+---
+
+## LOG-3 — What reaches the application log at the default level, checked against the DPA
+
+**Status:** Verified 2026-09-20, no defect. Recorded so nobody re-investigates it. Raised by the SaaS SAAS-5 work.
+**Severity:** None today. An optional tightening is LOG-4.
+
+**What was checked.** Every logging call in `backend/app` (0 `.debug()`, 50
+`.info()`, 9 `.warning()`, 1 `.error()`, 4 `.exception()`), including keyword
+arguments on continuation lines, for participant fields.
+
+**What was found.** Four sites write a personal email address at or above the
+default `INFO` level:
+
+- `core/email.py:338`, INFO, `email_sent`, `to=` the recipient
+- `core/email.py:342`, ERROR, `email_failed`, `to=` the recipient
+- `core/email.py:314`, WARNING, `email_skipped`, `to=` the recipient
+- `api/auth.py:42`, WARNING, `login_failed`, `email=` the address typed at login
+
+At `api/participants.py:138-150`, `:214` and `:545-555` the recipient is the
+participant, so every registration writes the participant's address once per
+mail sent. No site writes a name, date of birth, postal address or telephone
+number: subjects carry only the event name (`core/email.py:56-115`), and the
+one other `name=` in a log call, `api/events.py:76`, is the event's.
+
+**Against the DPA.** Annex 2 of the published DPA, "Data minimisation in logs",
+states that application logs contain no participant names, postal addresses,
+dates of birth or telephone numbers, and that a small number of operational
+entries may contain an email address. **The code matches that statement
+exactly.** Documented, accurate behaviour, not a defect.
+
+**The exception is DEBUG**, where SQL echo writes every bound parameter
+(OPS-1, LOG-1). That is why the hosted control plane now pins every tenant to
+`INFO` (SaaS SAAS-5, v0.8.20). A self-hoster is not told this plainly: the
+v1.0.5 notes say query logging "wrote participant names and addresses" and
+then offer `LOG_LEVEL=DEBUG` "when you need it back". That implies DEBUG
+writes participant data without saying so, and the sentence reads as an offer
+rather than a warning. See [DOCS-1](#docs-1--the-install-guide-does-not-say-that-log_leveldebug-writes-participant-data-to-the-log).
+
+---
+
+## LOG-4 — Log the participant's id, not their email address, at the three mail sites
+
+**Status:** Open. Optional. Filed 2026-09-20 with [LOG-3](#log-3--what-reaches-the-application-log-at-the-default-level-checked-against-the-dpa).
+**Severity:** Low. Not a broken promise; a better sentence to be able to make.
+
+**The change.** At `core/email.py:314`, `:338` and `:342`, log the participant's
+internal id (or the user's, for the password reset path) instead of `to=` the
+address. `api/auth.py:42` is a failed login and the address is the only handle
+there; it can stay, or log a hash.
+
+**What it buys.** Annex 2's last clause, "a small number of operational log
+entries may contain an email address", could then be tightened to a flat
+statement that application logs contain no participant personal data. That is
+a materially better sentence to hand a German DPO, and it costs three log
+lines. The DPA text is the hosted product's; the CE change is what makes it
+true.
+
+**Not part of** SAAS-5 and not urgent.
+
+---
+
+## DOCS-1 — The install guide does not say that `LOG_LEVEL=DEBUG` writes participant data to the log
+
+**Status:** Open. Documentation only, no version bump. Filed 2026-09-20 from [LOG-3](#log-3--what-reaches-the-application-log-at-the-default-level-checked-against-the-dpa). **For the docs overhaul: item 36, install-and-operate.**
+**Severity:** Low. The warning exists in one place a self-hoster may never read.
+
+**Where the sentence is, and is not.** `.env.example:10-12` says it plainly:
+DEBUG makes SQLAlchemy echo every statement with its bound parameters, so
+participant names, emails and dates of birth land in the container log on
+every request. `docs/installation/quick-guide.md` never mentions `LOG_LEVEL`
+at all (no hit for `log_level` or `logging`), and `SECURITY.md` does not
+either. The v1.0.5 CHANGELOG entry implies it without saying so and reads as
+an offer ("Set `LOG_LEVEL=DEBUG` when you need it back"). That entry is
+superseded, stays as written, and is not the place to fix this.
+
+**What to add.** One explicit sentence in the install guide, in "5. Production
+hardening" or wherever the overhaul puts operating advice: `LOG_LEVEL=DEBUG`
+writes participant names, addresses and dates of birth to the container log on
+every request; leave it at `INFO` on any install holding real participants and
+debug on a copy with made-up data.
+
+**Why it is worth a sentence.** The hosted product pins every tenant to `INFO`
+because Annex 2 of its DPA promises logs free of names and dates of birth
+(SaaS SAAS-5). A self-hoster is their own processor and makes their own
+promises, but the guide is where they learn what the knob does, and today it
+does not tell them.
