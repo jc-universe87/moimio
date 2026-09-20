@@ -5220,6 +5220,15 @@ redirect; a browser in HTTPS-first mode upgrades it before sending, which
 softens this and does not fix it. For a self-hoster whose proxy does not
 listen on 80, or does not redirect, the link is simply dead.
 
+**No HSTS either (checked 2026-09-20).** `demo.moimio.app` sends no
+`Strict-Transport-Security` header, so nothing on the server side tells a
+browser to upgrade the `http://` link before it is sent; the upgrade, where
+it happens, is the browser's own HTTPS-first behaviour. Mail security
+scanners and link previewers do not do that: they fetch the URL as written,
+in plain text, with the token in it. Filed on its own as
+[HSTS-1](#hsts-1--no-strict-transport-security-on-demomoimioapp), since it is
+worth having whether or not the link is fixed.
+
 **The fix, agreed 2026-09-20, NOT YET WRITTEN.**
 
 - A `trusted_proxies` directive in `frontend/Caddyfile`, with
@@ -5294,3 +5303,47 @@ address from each request, so it works on whatever domain you give it."
 Truth over rhetorical force: the sentence is true only if
 [PROXY-1](#proxy-1--does-the-frontends-caddy-overwrite-an-outer-proxys-x-forwarded-proto)
 comes back clean, or is fixed. Publish it after that, not before.
+
+---
+
+## HSTS-1 — No `Strict-Transport-Security` on `demo.moimio.app`
+
+**Status:** Open. Filed 2026-09-20 while confirming [PROXY-1](#proxy-1--does-the-frontends-caddy-overwrite-an-outer-proxys-x-forwarded-proto). **Independent of PROXY-1 and worth having on its own: it is what a security scan looks for.**
+
+**Checked 2026-09-20.** `https://demo.moimio.app/` answers with no
+`Strict-Transport-Security` header. So do `moimio.app`, `www.moimio.app` and
+`app.moimio.app`, which are separate infrastructure (Cloudflare in front) and
+are checked, not assumed, below.
+
+**Why it matters on its own.** HSTS tells a browser that has visited the site
+once to use HTTPS for every later request to it, before anything is sent. It is
+the standard mitigation for exactly the PROXY-1 shape (a plain link, a token in
+the query string), it is one of the first things any automated security scan
+reports on, and a self-hoster's or customer's reviewer will ask about it.
+Without it, the port-80 redirect is the only thing between the token and the
+wire.
+
+**The hosted fix is a header in the outer proxy's Caddyfile.** It cannot be
+applied by a plain reload, because a reload drops the tenant routes the control
+plane added at runtime, so it needs the edit, restart, reconcile-routes, verify
+sequence that **B.13 already requires**. **Fold it into B.13 during the drill
+sitting**: no extra risk, one extra line, in the same window. A sensible first
+value is a short `max-age` (a day) until the redirect and the routes are seen
+to hold, then the usual year; `includeSubDomains` only after every subdomain
+that will ever exist is confirmed HTTPS, and `preload` not at all until that is
+settled.
+
+**Also check, separately:** `moimio.app` and `www.moimio.app` (Cloudflare
+Pages) and `app.moimio.app` (Cloudflare in front of a different origin). Their
+header is set in Cloudflare, not in a Caddyfile, and none of them sends it
+today either. Same value, same order of caution.
+
+**For self-hosters, a guide sentence, not a code change.** The CE frontend
+Caddyfile is not the TLS terminator in any supported layout, so HSTS belongs on
+whatever proxy the self-hoster puts in front, and the install-and-operate
+document (item 36) should say so in the same breath as the `X-Forwarded-Proto`
+bullet held under INSTALL-1.
+
+**Closes when** `demo.moimio.app` answers with the header (checked with one
+`curl -I`), and the three Cloudflare hosts either do too or have a recorded
+reason not to.
