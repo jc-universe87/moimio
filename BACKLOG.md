@@ -71,7 +71,47 @@ question is closed.
 
 ## ENGINE-3 — Capped rooms left empty when uncapped rooms exist
 
-**Status:** Open product question, surfaced during ENGINE-1 rewrite.
+**Status:** ✅ CLOSED 2026-09-20, no release: **overtaken by v1.0.4.** The
+behaviour described below no longer occurs. Surfaced during ENGINE-1 rewrite.
+
+**Established 2026-09-20 (establish sitting, Part C), by hand trace of the
+code, not by a test run.** The entry and the test's docstring date from
+v1.0.0i, when a room with no capacity was given a guessed capacity and the
+evening-out fractions were computed against that guess. v1.0.4 (CHANGELOG
+"Evening out treats a blank capacity as an ordinary unit"; the code comments
+say v1.0.3) changed the rule: an uncapped room is compared as if it held the
+average capacity of the capped rooms in that group type
+(`engine_service.py:1415-1441`). The dealing order is by capacity ascending
+with unlimited last (`:732-737`, `_UNCAPPED` at `:133`).
+
+**The trace, with the test's own scenario** (25 people; Room 1 unlimited,
+Room 2 cap 2, Room 3 unlimited):
+
+- Dealing starts with Room 2. It takes the 1st and 4th person, is full, and
+  is skipped from then on. The other 23 alternate into Rooms 1 and 3: 12 / 11.
+- Evening out: average capped capacity is 2, so the unlimited rooms are
+  weighed as if they held 2. Fractions: Room 2 100%, Room 1 600%, Room 3
+  550%. Nothing can move into Room 2 (full, `fits_capacity` at `:1355`).
+  Moving one person between Rooms 1 and 3 leaves the gap at 0.5 either way,
+  which fails the strict-improvement test at `:1522`. Nothing moves.
+- **Result: 2 / 12 / 11. The capped room is full, not empty.**
+
+With few people (3 in the same category) dealing gives 1 / 1 / 1 and evening
+out sees three rooms at 50% and leaves them: the small room is filled in
+proportion, not first. That is the rule, and it is defensible: a capacity is a
+limit, not a request.
+
+**Why nothing noticed.** `test_engine.py:519` asserts Room 2 holds *at most*
+2, which is true of both "empty" and "full". The behaviour inverted and the
+test stayed green. See [TEST-ENGINE-1](#test-engine-1--the-engine-tests-assert-too-loosely-to-detect-a-change-in-behaviour).
+
+**Option 2 of the sitting (give capped rooms priority in evening out as
+well) is the same change as ENGINE-4's option D, seen from the other side.
+They are decided together, if ever.**
+
+---
+
+*Original entry, as filed (v1.0.0i), kept for the record:*
 
 **Decided (session 86).** **Reserved** — an open product question, not a
 defect, and not a v1.0.5 blocker. Revisit after v1.0.5.
@@ -99,7 +139,59 @@ might need to distinguish.
 
 ## ENGINE-4 — Equalise sweep undermines Semantics A in mixed-capacity
 
-**Status:** Open product question, surfaced during ENGINE-1 rewrite.
+**Status:** Decided 2026-09-20, **option C: evening out stays the default; the
+toggle's hint text is rewritten to say the consequence; option D parked.**
+Surfaced during ENGINE-1 rewrite.
+
+**Established 2026-09-20 (establish sitting, Part C), by hand trace, and it
+matches the test's docstring exactly.** Room for 4, room for 2, four people,
+evening out on:
+
+- Dealing starts with the small room: 1st small, 2nd big, 3rd small (full),
+  4th big. **2 / 2**, which is what "constrained rooms fill first" promised.
+- Evening out: small 100%, big 50%. Moving one person small → big gives 50%
+  and 75%: the gap shrinks from 0.5 to 0.25 and the big room does not
+  overshoot (`engine_service.py:1522-1525`). The move is made. **1 / 3.** No
+  further move helps.
+
+**The two rules genuinely conflict.** By the sweep's own measure, equal
+fullness as a fraction, 1 / 3 (50%, 75%) is *better* than 2 / 2 (100%, 50%).
+The sweep runs last and wins. The organiser gets neither promise in full: one
+person alone in the 2-room, three in the 4-room, with the history line "moved
+to even out group sizes", which is true and does not say they had been paired
+a moment earlier.
+
+**The lever already exists.** "Even out group sizes" is per category
+(`AllocationBoard.jsx:1838-1856`, default on). Off, the dealing result stands:
+2 / 2. The current hint (`en.json:224`) describes the mechanism ("evens out
+how full each group is") and not what it costs when rooms differ in size.
+
+**Decided: option C.** Keep the default. Rewrite the hint to say the
+**consequence, not the mechanism**. English, drafted here; Johannes does the
+other five:
+
+> `engine.settings.equalise.hint`: "A final pass evens out how full each
+> group is. Group codes, marks and gender restrictions are never broken to do
+> it. When rooms differ in size it can leave one person alone in a small
+> room. Off: small rooms stay full and groups are left as the earlier steps
+> filled them."
+
+One string, six locales, no version bump beyond the letter suffix; ships with
+the next release that touches the frontend.
+
+**Option D, parked:** refine the sweep so it never takes a person out of a
+room that is exactly full when the destination is larger. Keeps evening out on
+and gives 2 / 2 here, but it is a new rule with edge cases (a full room of 3
+beside an empty room of 10) and needs a scenario set before anyone writes it.
+Built only if an organiser reports the lonely-room case. **If D is ever built
+it is the same change as ENGINE-3's option 2, and they are decided together.**
+
+**Why nothing noticed.** `test_engine.py:597-603` asserts "both rooms used, no
+overflow", which 2 / 2 and 1 / 3 both satisfy. See [TEST-ENGINE-1](#test-engine-1--the-engine-tests-assert-too-loosely-to-detect-a-change-in-behaviour).
+
+---
+
+*Original entry, as filed (v1.0.0i), kept for the record:*
 
 **Decided (session 86).** **Reserved** — an open product question, not a
 defect, and not a v1.0.5 blocker. Revisit after v1.0.5.
@@ -4929,3 +5021,89 @@ ships; item 36 must not copy the decision as if it were the behaviour.
 
 **Closes when** DATE-3 ships, and DATE-1's text is corrected to say what
 v1.0.4ze actually did.
+
+---
+
+## TEST-ENGINE-1 — The engine tests assert too loosely to detect a change in behaviour
+
+**Status:** Open. **High priority.** Filed 2026-09-20 from the establish sitting, Part C.
+
+**Why it is high.** This is a product sold on producing the same answer twice.
+A test suite that cannot tell "the capped room is empty" from "the capped room
+is full" is not protecting that promise.
+
+**The two cases in hand.**
+
+- `test_engine.py:519`
+  (`test_v073a_mixed_explicit_and_implicit_caps_place_everyone`) asserts Room 2
+  holds *at most* 2. The real outcome, traced 2026-09-20, is *exactly* 2 with 25
+  people. [ENGINE-3](#engine-3--capped-rooms-left-empty-when-uncapped-rooms-exist)'s
+  behaviour **inverted in v1.0.4**, from "capped room empty" to "capped room
+  full", and the test stayed green.
+- `test_engine.py:597-603` (`test_v074_constrained_units_fill_first`) asserts
+  "both rooms used, no overflow". The distinction that matters is 2 / 2 versus
+  1 / 3 ([ENGINE-4](#engine-4--equalise-sweep-undermines-semantics-a-in-mixed-capacity)),
+  and both satisfy it.
+
+Both were relaxed in v1.0.0i (ENGINE-1) to stop them failing, with a docstring
+noting the product question. Relaxing an assertion to "something happened"
+made the tests unable to detect the next change.
+
+**What to do.**
+
+1. Tighten those two to the exact outcome: `== 2` for Room 2 in the first;
+   `1 / 3` with evening out on and `2 / 2` with it off in the second, so the
+   toggle's promise is pinned from both sides.
+2. **Sweep the rest of the engine tests for the same looseness.** Every
+   assertion of the form `<=`, `>= 1`, "both used", "all placed" on a scenario
+   whose exact distribution is the point. For each: either assert the exact
+   placement counts, or state in the docstring why the exact figure is not the
+   contract. Files: `test_engine.py`, `test_v1_0_0e_equalise_and_warning.py`,
+   `test_allocation_events.py`, and any other test that calls `run_engine`.
+3. Add one test per documented sentence in
+   [GUIDE-1](#guide-1--the-engine-guides-opening-section-six-sentences-that-are-true-today),
+   so the guide and the engine cannot drift apart silently.
+
+Runs against the hand traces of 2026-09-20 first; if a trace and a run
+disagree, the run wins and the trace is corrected in ENGINE-3 or ENGINE-4.
+
+---
+
+## GUIDE-1 — The engine guide's opening section: six sentences that are true today
+
+**Status:** Open. Filed 2026-09-20 from the establish sitting, Part C. **For the docs overhaul: item 36, the engine guide.**
+
+Written for the sceptical organiser who wants to know why a result is what it
+is. These are the opening section, verbatim from the Part C report, and each
+was read against the code on 2026-09-20 (`engine_service.py:732-771` dealing,
+`:817-827` and `:1415-1543` evening out, `:829-860` backfill).
+
+1. Rooms are dealt to in turn, smallest room first, unlimited rooms last. A
+   full room is skipped.
+2. A capacity is a limit. A room with no limit accepts any number of people.
+3. "Even out group sizes" is a final pass that makes each room equally full
+   **as a fraction of its capacity**. A room with no limit is treated for this
+   comparison as an average-sized room of its group type. It never breaks a
+   group code, a mark or a gender restriction, and it never puts anyone over a
+   limit.
+4. Because it works in fractions, evening out can move one person out of a
+   small full room into a larger half-empty one. If you want small rooms
+   filled first, switch evening out off for that group type.
+5. Anyone the engine moves in the evening-out pass keeps the reason they were
+   first placed; the history shows both.
+6. The engine does not change who is placed, only where; nobody becomes
+   unplaced by evening out.
+
+**The guide must never say that a capped room is "used first" or "given
+priority".** It is dealt to first; it is not protected afterwards. If
+[ENGINE-4](#engine-4--equalise-sweep-undermines-semantics-a-in-mixed-capacity)'s
+option D is ever built, sentence 4 changes and this warning is revisited; until
+then it stands.
+
+Sentence 4 and the toggle's hint text (ENGINE-4, option C) say the same thing
+and must keep saying the same thing.
+
+Customer-facing style applies when this goes into the guide: no em or en
+dashes, bullet markers `•`, "click" not "press", no anthropomorphising verbs
+for the engine. The sentences above already comply except for the bold, which
+is for this file.
