@@ -1,7 +1,9 @@
 # Moimio CE — Backlog
 
-Persistent, accumulates across ships. Closed items stay in place with a
-`✅ CLOSED in vX` status line, so the reasoning stays next to the finding.
+Persistent, accumulates across ships. Closed items stay in place, so the
+reasoning stays next to the finding. The status line reads
+`✅ CLOSED in vX` when the fix shipped in a release, or
+`✅ CLOSED <date>, no release` when it was a docs or CI commit on `main`.
 
 ---
 
