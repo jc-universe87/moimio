@@ -2543,9 +2543,35 @@ and the file travels under a promise that it holds none.
 
 ## ARCH-2 — `participants.override_group_room` is a column nothing reads
 
-**Status:** Open. Found in session 86 phase 1 while listing the columns the backup drops (BACKUP-2). Not a defect.
+**Status:** Decided 2026-09-20, **drop it in the v1.0.7 migration, with ARCH-5.** Found in session 86 phase 1 while listing the columns the backup drops (BACKUP-2). Not a defect.
 
-**Decided (session 86).** **Reserved** — the column stays, documented as
+**Established 2026-09-20 (establish sitting, Part A).** Present since the
+first CE commit (`76532db`), no CHANGELOG entry, intent not established. Nothing
+reads it for behaviour. No screen sets it, but the admin update schema accepts
+it (`schemas/participant.py:42`) and `participant_service.py:293-304` copies
+every supplied field onto the record with no filter, so a hand-made API call or
+a script can set it to true; the API then reports it as true
+(`schemas/participant.py:80`), the GDPR export lists it as the person's data
+(`data_export_service.py:373`), and nothing changes. Carried in a backup
+(`backup_service.py:204`, restored at `:1966`).
+
+**`docs/data-model.md:155-158` documents an engine rule that has never
+existed.** It says: "if true, the allocation engine ignores this participant's
+group code when placing them into exclusive-rule categories". No such rule is
+in the engine or the allocation service, and never was in CE. The paragraph
+goes with the column. See [DOCS-2](#docs-2--data-modelmd-needs-a-verification-pass-not-a-tidy-up).
+
+**Decided 2026-09-20: drop.** The session 86 reservation was priced on "a drop
+costs a migration"; v1.0.7 is already a migration release for ARCH-5 and the
+removal sites are the same files. **After removal the API must reject the
+field, not ignore it silently**: a request that still sends
+`override_group_room` fails. A silent ignore is the current problem in a
+different coat. Removal sites: model, two schema fields, the export line, the
+backup register line and the restore line, `test_v1_0_4q_columns_and_dates.py`
+(`NEW_CSV_COLUMNS` at `:76`, `:161`, `:235`) and
+`test_v1_0_4o_round_trip.py:280-282`, and the data-model paragraph.
+
+**Superseded, decided (session 86).** **Reserved** — the column stays, documented as
 reserved. Dropping it would cost a migration, a change to a person's GDPR export
 (where it appears as their data) and a change to the backup register; the cost of
 dropping it and then wanting it back is all of that twice. Revisit after v1.0.5
@@ -2659,8 +2685,32 @@ which is all that release could sensibly do about it.
 
 ## ARCH-5 — Step 2: drop the retired limit columns, once v1.0.5 has run safely
 
-**Status:** Open, and deliberately not before v1.0.5. Opened in session 86 as
+**Status:** Decided 2026-09-20, **drop both in v1.0.7.** Opened in session 86 as
 step 2 of v1.0.4r, which retired both limits (see ARCH-3 and ARCH-4).
+
+**Established 2026-09-20 (establish sitting, Part A).** Every remaining
+reference was listed and classified. Nothing reads either column for
+behaviour: not the engine, not the API, not any screen; the frontend has no
+reference at all. The only live sites are the carrying ones decided in v1.0.5:
+the two model fields, the GDPR export (`data_export_service.py:202,230,372`),
+and the backup register, writer and restore (`backup_service.py:193,369,
+1131-1132,1198,1957-1958,2181-2182`). ARCH-5 is ready.
+
+**The scope is more than a migration.** The batch also removes the export
+keys, the backup register entries and their restore lines, and rewrites the
+parts of five test files that set or assert on these values (listed below),
+and corrects `ARCHITECTURE.md:162` and `docs/data-model.md:45,78,144`, which
+say "dropped after v1.0.5".
+
+**Restore direction, checked.** A backup made on v1.0.6 restores on v1.0.7:
+restore only insists that `participants.csv` has an `id` column
+(`backup_service.py:1417-1418`) and reads every other column by name, so an
+extra column is ignored. `BACKUP_VERSION` stays at `"1"`.
+
+**One open check for the build:** a backup made on **v1.0.7** restored onto a
+**v1.0.6** install. The v1.0.6 restore code asks for both columns by name and
+gets nothing; whether it writes the model default or fails has not been read.
+Establish before the release, and say the answer in the CHANGELOG entry.
 
 v1.0.4r stopped reading and writing two columns but left them in place, so that
 a rollback to v1.0.4q or earlier still finds the data it expects. Once v1.0.5
@@ -4162,6 +4212,32 @@ removed, a direction that is not `asc` or `desc`, unreadable storage in a privat
 window — is ignored and the default applies. Never an error, never an empty table.
 **The default is unchanged** for anybody who has never sorted.
 
+### Decided 2026-09-20: it stays in the browser (item 10)
+
+**Established (establish sitting, Part A).** The sort is kept in browser
+storage under `moimio.sort.<screen>.<userId>` (`useRememberedSort.jsx:38`), for
+two screens, People and Check-in (`PeopleTable.jsx:106-110`,
+`CheckInPanel.jsx:119-124`). It remembers column and direction, per screen,
+**not per event**, built-in columns only. `user_preferences` exists with three
+typed columns and no JSON column (`models/user_preferences.py`), created on
+first fetch (`api/user_preferences.py:52-57`), and must not be confused with
+`workspace_settings`, which is one row for the whole installation.
+
+**Decided: no migration; the sort follows the device.** The principle it
+follows, and which every later preference is measured against:
+
+- **Settings that describe the person follow the account**: language, date
+  format, timezone. Same everywhere they sign in.
+- **Settings that describe how a screen looks on one machine follow the
+  device**: sort order, column visibility and column order
+  (`PeopleTable.jsx:144-154` is browser-only for the same reason).
+
+Language currently breaks this principle; see
+[PREF-1](#pref-1--language-is-kept-in-two-places-and-the-browser-copy-wins).
+
+**For the manual (item 36):** one sentence saying the sort is remembered per
+browser, on the computer where it was set.
+
 ---
 
 ## TEAM-1 — A team row renders blank if its user is missing
@@ -4611,7 +4687,30 @@ the GHCR download figures ever say otherwise.
 
 ## SHIP-2 — `backend/deploy/production.yml` pins the previous release
 
-**Status:** Open. Found 2026-09-20 during the workflow sitting.
+**Status:** Decided 2026-09-20, **wait for v1.0.7.** Found 2026-09-20 during the workflow sitting.
+
+**Established 2026-09-20 (establish sitting, Part A).** `scripts/bump-version.py`
+rewrites three markers (`__version__`, the `version.py` line-1 docstring,
+`moimioVersion`) and knows nothing of `production.yml`;
+`scripts/check-version-markers.py` checks those three always, and the tag and
+the CHANGELOG heading on a tag push. Adding the pins is about eight lines in
+each script, not one. **A sixth marker exists:** `backend/deploy/README.md:138`
+names `v1.0.5` as its example and says the tags "are bumped together each CE
+release"; both halves have been wrong since v1.0.6. Checked and cleared as
+non-markers: `package.json` `"version": "0.1.0"` (unread), `SECURITY.md:78`
+(`1.0.x`, deliberately), service-worker cache names, `docker-compose.yml`
+(builds from source), the README badges.
+
+**Decided, for the v1.0.7 release commit:**
+
+- `bump-version.py` sets the two `image:` pins in `production.yml`, insisting
+  exactly two lines changed.
+- `check-version-markers.py` enforces them **in the always-checked set**, not
+  only on a tag push, so a docs commit between releases cannot drift them.
+- `deploy/README.md:138` loses its version number rather than gaining a check:
+  it refers to "the current release tag". Prose examples are the markers that
+  drift.
+- The v1.0.5 pins are **not** corrected by hand before then.
 **Severity:** Low for hosted, medium for a self-hoster using the file directly.
 
 **What is wrong.** `backend/deploy/production.yml:51` and `:118` pin
@@ -4634,3 +4733,68 @@ the shipped release; whether that rides in a no-bump docs sitting is a
 version-policy call. The real fix is `bump-version.py` updating those two lines
 and `check-version-markers.py` enforcing them, so the step stops depending on
 memory. **That belongs with v1.0.7**, where the version is changing anyway.
+
+---
+
+## API-1 — The participant update copies every supplied field onto the record, unfiltered
+
+**Status:** Open. Filed 2026-09-20 from the establish sitting, Part A, while reading ARCH-2.
+
+`participant_service.py:293-304` takes the admin update payload, drops
+`custom_fields` out for separate handling, and then `setattr`s **every remaining
+key** onto the participant. The filter is the update schema alone
+(`schemas/participant.py`, `ParticipantUpdate`): any field the schema declares is
+writable by a script, whether or not any screen is meant to set it.
+`override_group_room` was the case in hand ([ARCH-2](#arch-2--participantsoverride_group_room-is-a-column-nothing-reads)):
+accepted, stored, reported, and connected to nothing.
+
+**To establish:** whether any **other** field is exposed this way. Read
+`ParticipantUpdate` field by field and, for each, name the screen that sends it.
+A field no screen sends is either a script-only API contract that should be
+documented as such, or a `override_group_room` waiting to be found. The same
+pattern is at `event_service.py:145-165`, `custom_fields.py:112-116`,
+`allocations.py:223,554` and `user_preferences.py:77-88`; read those with the
+same question once the participant one is answered.
+
+---
+
+## PREF-1 — Language is kept in two places, and the browser copy wins
+
+**Status:** Open. Filed 2026-09-20 from the establish sitting, Part A, while establishing the remembered sort ([SORT-1](#sort-1--the-people-list-forgets-how-you-sorted-it)).
+
+`user_preferences.language` is stored per account
+(`models/user_preferences.py`). The frontend also stores the admin language in
+browser storage as `moimio_lang` (`useI18n.jsx:27,72,124`). When both exist,
+**the browser copy wins**: `UserPreferencesPanel.jsx:30-32` applies the account
+language only `if (data.language && !localStorage.getItem('moimio_lang'))`.
+
+**Why it is a defect.** Under the principle recorded in SORT-1 on 2026-09-20,
+settings that describe the person follow the account. Language describes the
+person. Today a user who set German on one machine and English on another sees a
+different language on each, and changing it in the account settings on one does
+not change the other.
+
+**Not decided:** which way to fix it. The account copy should win, and the
+browser copy then serves only the moment before the account is known (the login
+page, the first paint). What that means for the registration page's own
+session-only language override (`useI18n.jsx:28,128-136`) has to be read
+before anything changes.
+
+---
+
+## DOCS-2 — `data-model.md` needs a verification pass, not a tidy-up
+
+**Status:** Open. Filed 2026-09-20 from the establish sitting, Part A. **For the docs overhaul: item 36.**
+
+`docs/data-model.md:155-158` describes an allocation rule for
+`override_group_room` that the software does not have and, as far as CE's
+history shows, never had ([ARCH-2](#arch-2--participantsoverride_group_room-is-a-column-nothing-reads)).
+A document that states one rule the software lacks cannot be assumed right about
+the others.
+
+**What the pass is.** Every sentence in `data-model.md` that says what the
+software *does* with a column, as opposed to what the column *is*, gets checked
+against the code that would do it, and either cited or removed. This is the
+same method the 2026-09-20 establish sitting used for ARCH-5, and it is what
+separates a verification from a tidy-up: a tidy-up would have left `:155-158`
+in place, nicely worded.
