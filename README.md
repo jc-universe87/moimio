@@ -61,6 +61,10 @@ Once you've installed Moimio, upgrading to a newer version is a single command f
 
 The script automatically backs up `.env` and takes a `pg_dump` snapshot of your database before any changes, verifies the new version starts up healthy, and prints rollback instructions if anything goes wrong. Backups live in the parent directory as `pgdata-pre-upgrade-<timestamp>.sql.gz` — keep them until you're confident the new version is stable, then delete them.
 
+### Container images
+
+Every release publishes `ghcr.io/jc-universe87/moimio-backend:<tag>` and `ghcr.io/jc-universe87/moimio-frontend:<tag>`, where `<tag>` is the version, for example `v1.0.6`. Always pin a version. The `:latest` tag is frozen at v1.0.6, no longer moves, and is not supported; if you are pulling it, switch to a version tag.
+
 ---
 
 ## Documentation

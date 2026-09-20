@@ -2,7 +2,7 @@
 
 For people comfortable with a terminal, Docker, and a small amount of sysadmin. If that's not you, the [Beginner Guide](beginner.md) covers the same ground at a slower pace with more handholding.
 
-Time required: **30–60 minutes** from a fresh server to a logged-in admin. Most of that is image pulls.
+Time required: **30–60 minutes** from a fresh server to a logged-in admin. Most of that is the first `docker compose up --build`, which builds the two Moimio images from source on your machine.
 
 ---
 
@@ -141,8 +141,10 @@ You should land on the events list — empty for now. Create your first event fr
 Before exposing Moimio to the public internet:
 
 - Put a TLS-terminating reverse proxy in front of port 6120. Caddy, Traefik, or a Cloudflare Tunnel on the host all work well; Nginx + Let's Encrypt is the classic option.
+- HTTPS is also what makes the in-app features work. Browsers register the service worker only on HTTPS or on `localhost`, so an install opened on a plain-HTTP LAN address such as `http://192.168.1.20:6120` gets no offline caching, no "new version available" prompt and nothing for the "Clear cache and reload" button to clear, and no error anywhere says why.
 - Restrict the backend port (6121) and the database port (6122) to localhost in your firewall — they don't need to be public.
 - Read [`SECURITY.md`](../../SECURITY.md) — the "Hardening recommendations for self-hosters" section covers the rest (strong SECRET_KEY, DB password rotation, Docker host patching, SMTP credential discipline).
+- Leave `LOG_LEVEL=INFO` on any install that holds real participants. `LOG_LEVEL=DEBUG` writes participant names, addresses and dates of birth to the container log on every request; debug on a copy with invented data instead.
 
 ---
 

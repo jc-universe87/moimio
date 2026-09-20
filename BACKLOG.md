@@ -1,7 +1,7 @@
 # Moimio CE — Backlog
 
-Persistent, accumulates across ships. Open items only; closed ones move
-to the relevant version's `CHANGELOG.md` entry.
+Persistent, accumulates across ships. Closed items stay in place with a
+`✅ CLOSED in vX` status line, so the reasoning stays next to the finding.
 
 ---
 
@@ -4399,7 +4399,7 @@ CLAUDE.md).
 
 ## UPDATE-2 — A CE install on a LAN address over plain HTTP gets no service worker at all
 
-**Status:** Open. Found 2026-09-19 while verifying [UPDATE-1](#update-1--the-refresh-button-can-hang-and-says-it-checks-something-it-does-not).
+**Status:** ✅ CLOSED 2026-09-20, no release: one bullet in `docs/installation/quick-guide.md`, "5. Production hardening", beside the TLS reverse-proxy advice. Found 2026-09-19 while verifying [UPDATE-1](#update-1--the-refresh-button-can-hang-and-says-it-checks-something-it-does-not).
 **Severity:** Low. Nothing breaks; three features are silently absent, and the install guide does not say so.
 
 **What happens.** Browsers only register a service worker in a secure context:
@@ -4432,7 +4432,7 @@ register a worker on an insecure origin, so there is nothing to do in `sw.js`,
 
 ## CI-1 — `ubuntu-latest` moves to Ubuntu 26 on 2026-10-19, under the workflow that publishes releases
 
-**Status:** Open. Filed 2026-09-20 from the runner warnings on the v1.0.6 publish run.
+**Status:** ✅ CLOSED 2026-09-20, no release: `runs-on: ubuntu-24.04` pinned on all three jobs in `build.yml`, a docs/CI commit on `main`. The deadline is gone; the move to Ubuntu 26.04 is a separate, deliberate dry run. Filed 2026-09-20 from the runner warnings on the v1.0.6 publish run.
 **Severity:** Medium, because of when it would show. Nothing is wrong today.
 **Date that matters:** 2026-10-19.
 
@@ -4549,7 +4549,7 @@ true.
 
 ## DOCS-1 — The install guide does not say that `LOG_LEVEL=DEBUG` writes participant data to the log
 
-**Status:** Open. Documentation only, no version bump. Filed 2026-09-20 from [LOG-3](#log-3--what-reaches-the-application-log-at-the-default-level-checked-against-the-dpa). **For the docs overhaul: item 36, install-and-operate.**
+**Status:** ✅ CLOSED 2026-09-20, no release, the same day it was filed: one bullet in `docs/installation/quick-guide.md`, "5. Production hardening". The superseded v1.0.5 CHANGELOG entry stays as written. Filed 2026-09-20 from [LOG-3](#log-3--what-reaches-the-application-log-at-the-default-level-checked-against-the-dpa). **For the docs overhaul: item 36, install-and-operate.**
 **Severity:** Low. The warning exists in one place a self-hoster may never read.
 
 **Where the sentence is, and is not.** `.env.example:10-12` says it plainly:
@@ -4572,3 +4572,63 @@ because Annex 2 of its DPA promises logs free of names and dates of birth
 (SaaS SAAS-5). A self-hoster is their own processor and makes their own
 promises, but the guide is where they learn what the knob does, and today it
 does not tell them.
+
+---
+
+## CI-3 — `:latest` was published on every release despite the workflow saying it was not; frozen at v1.0.6, not deleted
+
+**Status:** ✅ CLOSED 2026-09-20, no release: `flavor: latest=false` on the metadata action, and a "Container images" note in `README.md` (which GHCR shows on the package page) saying `:latest` is frozen, unsupported, and to pin a version. **Nothing was deleted, and that is deliberate; read on before any registry cleanup.**
+**Severity:** Low. Nobody following the install guide pulls from GHCR at all; it builds from source.
+
+**What was found (2026-09-20).** `build.yml` carried the comment "NO `latest`,
+version tags only by CE convention", and no `flavor:` key. `docker/metadata-action`'s
+default is `latest=auto`, which its README says adds `latest` for
+`type=ref,event=tag`. So every release tag push added `:latest` as well. On
+2026-09-20 `:latest` and `:v1.0.6` resolved to the same digest on both images
+(backend `sha256:592cdefe…`, frontend `sha256:46cf3c50…`).
+
+**Why it was not deleted.** GHCR deletes package *versions*, identified by
+digest, and a version carries all its tags. `:latest` and `:v1.0.6` are one
+version. Deleting it would remove `v1.0.6`, and break every pinned pull, to
+solve a problem that may affect nobody. The preference for a loud failure over
+a silent pin was right; the mechanism is not available.
+
+**The loud failure arrives later, for free.** With `latest=false`, `:latest`
+stays on v1.0.6's digest permanently. When v1.0.6 is one day old enough to prune
+from the registry, deleting that package version removes `:latest` with it, and
+anyone still pulling it gets the unmistakable failure that was wanted, at a
+point when the image is unambiguously stale. **That is the intended resolution,
+not an accident to undo.**
+
+**Not done, worth knowing.** `:latest` could be given its own digest by pushing
+a tombstone image that exits with a message; then it could be deleted on its
+own. Real machinery for a population that is probably empty. Revisit only if
+the GHCR download figures ever say otherwise.
+
+---
+
+## SHIP-2 — `backend/deploy/production.yml` pins the previous release
+
+**Status:** Open. Found 2026-09-20 during the workflow sitting.
+**Severity:** Low for hosted, medium for a self-hoster using the file directly.
+
+**What is wrong.** `backend/deploy/production.yml:51` and `:118` pin
+`ghcr.io/jc-universe87/moimio-backend:v1.0.5` and `…-frontend:v1.0.5`, after
+v1.0.6 shipped. The file's own comment (`:22-24`) says the pins match "the CE
+release this template was bundled with". The pin was last bumped in the
+`v1.0.5` release commit and is not among the markers `scripts/bump-version.py`
+sets or `scripts/check-version-markers.py` checks, so it is a per-release step
+that depends on someone remembering it. v1.0.6 forgot, and the next release
+will too.
+
+**Who it affects.** Hosted tenants: nobody. The control plane rewrites the app
+image tags at render time (`moimio-saas` `app/provisioning/docker.py:119`,
+`_retag_app_images`, called at `:627`). A self-hoster who takes
+`production.yml` as their compose file: they get v1.0.5, which predates the
+legal fixes v1.0.6 shipped (LEGAL-1, LEGAL-2).
+
+**Two jobs, not one.** Correcting the pin to `v1.0.6` makes a shipped file match
+the shipped release; whether that rides in a no-bump docs sitting is a
+version-policy call. The real fix is `bump-version.py` updating those two lines
+and `check-version-markers.py` enforcing them, so the step stops depending on
+memory. **That belongs with v1.0.7**, where the version is changing anyway.
