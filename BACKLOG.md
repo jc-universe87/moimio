@@ -372,20 +372,20 @@ first code ship.
 | Q | Decision | Rationale |
 |---|---|---|
 | **v0.1 ship boundary** | Streams 1 + 2 only (Webhook receiver + Provisioning) | Minimum testable loop: Paddle event → tenant spun up. Streams 3–5 (DB management, dashboard, self-service) become valuable later when real tenants exist. |
-| **Repo structure** | FastAPI service, same stack as CE | Familiar patterns; will scale to streams 3–5 without a migration. Roughly `app/api/webhooks.py`, `app/services/provisioning.py`, `app/services/tenants.py`, `app/db.py`. |
-| **Release pipeline** | GitHub Actions → GHCR | Hands-off after setup. Push to main → image at `ghcr.io/jc-universe87/moimio-saas:vX.Y.Z` ~5 min later. Same workflow lives in `moimio-ce` repo for its image. |
+| **Repo structure** | FastAPI service, same stack as CE | Familiar patterns; will scale to streams 3–5 without a migration. |
+| **Release pipeline** | GitHub Actions → GHCR | Hands-off after setup. Push to main → image on GHCR a few minutes later. Same workflow as CE uses for its images. |
 | **Subdomain DNS** | Wildcard `*.moimio.app` + Caddy DNS-01 | Status quo, already in place. One DNS record, one wildcard cert. No per-tenant DNS API juggling. |
 
 ### v0.0.1 first deliverable
 
 **Concrete scope** (1–2 days of focused work):
 
-1. Create `moimio-saas` private repo on GitHub
-2. FastAPI skeleton: `app/main.py`, `app/api/webhooks.py`, `app/db.py`,
+1. Create the hosted product's private repo on GitHub
+2. FastAPI skeleton,
    Dockerfile, requirements.txt
 3. SQLite event store (`events` table: id, source, event_type,
    payload_json, received_at, processed_at)
-4. One endpoint: `POST /webhooks/paddle` that:
+4. One webhook endpoint that:
    - Verifies the Paddle signature header
    - Writes the raw event to SQLite
    - Returns 200 quickly (processing happens out-of-band)
@@ -521,10 +521,10 @@ not per-tenant. First user: Mailjet credentials.
 
 ### Why it matters
 
-Today (v0.4.0 design), the SaaS provisioner reads Mailjet credentials
-from environment variables on the CX23 host and writes them into
+Today the hosted provisioner reads Mailjet credentials
+from environment variables on the host and writes them into
 each tenant's `.env` at provision time. Static — editing requires
-SSH and a service restart. Functional for v0.4.0; insufficient long-
+SSH and a service restart. Functional today; insufficient long-
 term.
 
 The category extends beyond Mailjet:
@@ -2056,7 +2056,7 @@ v1.0.4o rule about damaged lines applies unchanged.
 
 Follow-ups outside this code: a self-hosting documentation page, and the
 hosted leaving email should explain how to use the file, which is a wording
-change in `moimio-saas`. Both are settled by v1.0.4u: the page is
+change in the hosted product. Both are settled by v1.0.4u: the page is
 `docs/moving-a-workspace.md`, and the email is SAAS-4.
 
 ---
@@ -3251,7 +3251,7 @@ that restores all of it onto their own Moimio, plus a documentation page
 (`docs/moving-a-workspace.md`) that walks through it. The hosted leaving
 email still hands over the file and says nothing about either.
 
-What the email should say, once someone writes it in `moimio-saas`:
+What the email should say, once someone writes it on the hosted side:
 
 - **What the file is** and that it holds every event, archived ones
   included, plus the two reference lists.
@@ -4694,7 +4694,7 @@ version bump.
 
 ## LOG-3 — What reaches the application log at the default level, checked against the DPA
 
-**Status:** Verified 2026-09-20, no defect. Recorded so nobody re-investigates it. Raised by the SaaS SAAS-5 work.
+**Status:** Verified 2026-09-20, no defect. Recorded so nobody re-investigates it. Raised by the hosted-side check recorded in SAAS-5.
 **Severity:** None today. An optional tightening is LOG-4.
 
 **What was checked.** Every logging call in `backend/app` (0 `.debug()`, 50
@@ -4722,8 +4722,8 @@ entries may contain an email address. **The code matches that statement
 exactly.** Documented, accurate behaviour, not a defect.
 
 **The exception is DEBUG**, where SQL echo writes every bound parameter
-(OPS-1, LOG-1). That is why the hosted control plane now pins every tenant to
-`INFO` (SaaS SAAS-5, v0.8.20). A self-hoster is not told this plainly: the
+(OPS-1, LOG-1). That is why the hosted edition runs at `INFO` and does not
+offer DEBUG. A self-hoster is not told this plainly: the
 v1.0.5 notes say query logging "wrote participant names and addresses" and
 then offer `LOG_LEVEL=DEBUG` "when you need it back". That implies DEBUG
 writes participant data without saying so, and the sentence reads as an offer
@@ -4772,9 +4772,9 @@ writes participant names, addresses and dates of birth to the container log on
 every request; leave it at `INFO` on any install holding real participants and
 debug on a copy with made-up data.
 
-**Why it is worth a sentence.** The hosted product pins every tenant to `INFO`
+**Why it is worth a sentence.** The hosted edition runs at `INFO`
 because Annex 2 of its DPA promises logs free of names and dates of birth
-(SaaS SAAS-5). A self-hoster is their own processor and makes their own
+(SAAS-5). A self-hoster is their own processor and makes their own
 promises, but the guide is where they learn what the knob does, and today it
 does not tell them.
 
@@ -4849,9 +4849,9 @@ sets or `scripts/check-version-markers.py` checks, so it is a per-release step
 that depends on someone remembering it. v1.0.6 forgot, and the next release
 will too.
 
-**Who it affects.** Hosted tenants: nobody. The control plane rewrites the app
-image tags at render time (`moimio-saas` `app/provisioning/docker.py:119`,
-`_retag_app_images`, called at `:627`). A self-hoster who takes
+**Who it affects.** Hosted tenants: nobody. The image tags in this template
+are rewritten when a tenant is set up, so the pins in the file are never what
+a tenant runs. A self-hoster who takes
 `production.yml` as their compose file: they get v1.0.5, which predates the
 legal fixes v1.0.6 shipped (LEGAL-1, LEGAL-2).
 
