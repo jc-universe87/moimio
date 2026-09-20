@@ -5107,3 +5107,128 @@ Customer-facing style applies when this goes into the guide: no em or en
 dashes, bullet markers `•`, "click" not "press", no anthropomorphising verbs
 for the engine. The sentences above already comply except for the bold, which
 is for this file.
+
+---
+
+## INSTALL-1 — The install guide's port advice describes a variable the frontend does not read (item 19)
+
+**Status:** Decided 2026-09-20, **the fix is the guide, not code.** Filed 2026-09-20 from the establish sitting, Part D. Flagged in the v1.0.0l CHANGELOG entry ("`VITE_API_URL` is vestigial") and never actioned.
+
+**Established.** The frontend is **same-origin by construction**. Every request
+goes to `/api/...` on whatever address served the page: `frontend/src/services/api.js:5`
+(`const API_BASE = '/api'`) and all 16 other network calls in 11 files,
+including the two live event streams, use a relative `/api/` path. No frontend
+file reads any environment variable (`import.meta.env` appears nowhere). The
+frontend container's Caddy routes `/api/*` and `/health` to
+`http://backend:8000` over the Docker network (`frontend/Caddyfile:27-35`); the
+browser never talks to the backend directly.
+
+**`VITE_API_URL` does nothing and never has.** It is handed to the running Caddy
+container as a runtime variable (`docker-compose.yml:92`), where no Vite build
+runs; the build in `frontend/Dockerfile:36-37` takes no build arguments; nothing
+reads it. The hosted template already omits it.
+
+**Two false sentences in `docs/installation/quick-guide.md`:**
+
+- `:58` "If you change `BACKEND_PORT`, also update `VITE_API_URL` in `.env` to
+  match — the frontend bakes this URL into its build, so a port mismatch
+  produces 'Network error' at login." Nothing is baked; changing `BACKEND_PORT`
+  cannot produce that error.
+- `:229` tells a reader with "Network error" at login to set `VITE_API_URL` to
+  their public URL. It changes nothing, and they conclude the software is
+  broken.
+
+**What a self-hoster actually has to do.** A different port: `FRONTEND_PORT` in
+`.env`, one line, nothing else. `BACKEND_PORT` and `DB_PORT` only decide which
+host ports the backend and database are *also* reachable on. A reverse proxy on
+another hostname: point it at port 6120 only; there is no address to configure,
+because the backend derives its public address from each request
+(`backend/app/core/urls.py:37-55`). What the proxy must do is pass the original
+`Host` header, say the outside connection was HTTPS (see
+[PROXY-1](#proxy-1--does-the-frontends-caddy-overwrite-an-outer-proxys-x-forwarded-proto)),
+and not buffer the two live streams.
+
+**Decided.** The draft replacement text in the Part D report of 2026-09-20 (the
+"Changing the ports" section, the three production-hardening bullets, and the
+"Network error" troubleshooting entry) goes into **item 36's install-and-operate
+document verbatim**, with one exception: the `X-Forwarded-Proto` bullet is held
+until PROXY-1 is answered. The hidden selling point is recorded in
+[GUIDE-2](#guide-2--the-install-guide-hides-a-selling-point-one-port-no-hostname-to-configure).
+Code cleanup is separate: [ENV-1](#env-1--remove-vite_api_url-and-say-what-cors_origins-is-for).
+
+---
+
+## ENV-1 — Remove `VITE_API_URL`, and say what `CORS_ORIGINS` is for
+
+**Status:** Open. Code cleanup, **not urgent**; rides any later lettered release that touches those files. Filed 2026-09-20 from the establish sitting, Part D.
+
+- Remove `VITE_API_URL` from `docker-compose.yml:92` and `.env.example:19`. Dead
+  since v1.0.0 at the latest ([INSTALL-1](#install-1--the-install-guides-port-advice-describes-a-variable-the-frontend-does-not-read-item-19)).
+  The hosted `production.yml` already omits it, so this is a removal, not a new
+  variable, and the environment-variable release rule does not apply.
+- Move `CORS_ORIGINS` in `.env.example` under a comment saying it only matters
+  when calling the API from another website (the frontend's dev server on the
+  host, or an external tool). The browser calls its own origin, so cross-origin
+  rules never apply to a normal install. Its only consumer is the CORS
+  middleware (`backend/app/main.py:96-102`, `config.py:27,192`).
+- A lingering `VITE_API_URL=` line in an existing `.env` is harmless and can be
+  left; say so in the CHANGELOG entry, as was done for `APP_URL`.
+
+---
+
+## PROXY-1 — Does the frontend's Caddy overwrite an outer proxy's `X-Forwarded-Proto`?
+
+**Status:** Open. **HIGH PRIORITY.** Filed 2026-09-20 from the establish sitting, Part D. **Cannot be settled by reading code.**
+
+**The question.** `frontend/Caddyfile` declares no `trusted_proxies`. Modern
+Caddy overwrites `X-Forwarded-*` headers from an upstream it does not trust. If
+it does so here, a TLS-terminating proxy in front of port 6120 sends
+`X-Forwarded-Proto: https`, the inner Caddy replaces it with `http` (the scheme
+it received on), and the backend's `get_app_base_url`
+(`backend/app/core/urls.py:41-45`) builds every link as `http://`.
+
+**What that would mean.** Every email link from every proxied self-hosted
+install is `http://`: registration confirmation and password reset included. A
+reader clicking one lands on the proxy's HTTP port, which may redirect, may be
+closed, or may serve the app insecurely. No install has been reported doing
+this, and none has been checked.
+
+**How to settle it, one test.** A real proxied install: any TLS-terminating
+proxy in front of port 6120, register a participant, read the link in the
+confirmation email. `https://` answers no; `http://` answers yes. A second
+reading with `curl -H 'X-Forwarded-Proto: https' http://<host>:6120/api/...`
+against a request-echoing endpoint would show the header as the backend sees
+it, if one exists; the email is the truth either way.
+
+**If yes, the fix is code:** one directive in `frontend/Caddyfile` (a
+`trusted_proxies` setting, or forwarding the scheme the outer proxy sent), a
+lettered release, and a CHANGELOG line telling proxied installs their email
+links were wrong before it.
+
+**Until it is answered, the `X-Forwarded-Proto` bullet in the INSTALL-1 guide
+draft MUST NOT be published.** The other two bullets (pass `Host`; do not
+buffer the streams) do not depend on it and can go out.
+
+---
+
+## GUIDE-2 — The install guide hides a selling point: one port, no hostname to configure
+
+**Status:** Open. Filed 2026-09-20 from the establish sitting, Part D. **For the docs overhaul: item 36, install-and-operate.**
+
+Point a reverse proxy at one port, 6120, and the app serves its pages and its
+API from it and learns its public address from each request. There is no
+hostname, no base URL and no API address to configure, on any domain, on any
+port. The backend's own design note says why (`backend/app/core/urls.py:1-31`:
+"one fewer piece of configuration to get right"), and a self-hoster comparing
+products will notice it.
+
+The guide today says "put a TLS-terminating reverse proxy in front of port
+6120" (`quick-guide.md:143`) and stops. The install-and-operate document should
+say the selling point plainly, in the words of the INSTALL-1 draft: "Point the
+proxy at port 6120 only: the app serves its pages and its API from that one
+port, and there is no address to configure in `.env`. Moimio learns its public
+address from each request, so it works on whatever domain you give it."
+
+Truth over rhetorical force: the sentence is true only if
+[PROXY-1](#proxy-1--does-the-frontends-caddy-overwrite-an-outer-proxys-x-forwarded-proto)
+comes back clean, or is fixed. Publish it after that, not before.
