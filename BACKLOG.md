@@ -5151,8 +5151,15 @@ and not buffer the two live streams.
 **Decided.** The draft replacement text in the Part D report of 2026-09-20 (the
 "Changing the ports" section, the three production-hardening bullets, and the
 "Network error" troubleshooting entry) goes into **item 36's install-and-operate
-document verbatim**, with one exception: the `X-Forwarded-Proto` bullet is held
-until PROXY-1 is answered. The hidden selling point is recorded in
+document verbatim**, with one exception: the `X-Forwarded-Proto` bullet is
+**held until the Caddyfile fix ships** (PROXY-1 confirmed 2026-09-20: the
+advice does not work on the image as built). Once it ships, the bullet says
+what it says in the draft: your proxy must pass the original `Host` header
+through and must tell Moimio the connection was HTTPS via `X-Forwarded-Proto`;
+Caddy and Traefik do both by default; Nginx needs `proxy_set_header Host
+$host;` and `proxy_set_header X-Forwarded-Proto $scheme;`; if these are
+missing, the links in confirmation and password-reset emails point at the
+wrong address. The hidden selling point is recorded in
 [GUIDE-2](#guide-2--the-install-guide-hides-a-selling-point-one-port-no-hostname-to-configure).
 Code cleanup is separate: [ENV-1](#env-1--remove-vite_api_url-and-say-what-cors_origins-is-for).
 
@@ -5178,7 +5185,61 @@ Code cleanup is separate: [ENV-1](#env-1--remove-vite_api_url-and-say-what-cors_
 
 ## PROXY-1 — Does the frontend's Caddy overwrite an outer proxy's `X-Forwarded-Proto`?
 
-**Status:** Open. **HIGH PRIORITY.** Filed 2026-09-20 from the establish sitting, Part D. **Cannot be settled by reading code.**
+**Status:** ✅ **CONFIRMED 2026-09-20 on the hosted demo tenant. Yes: the link
+was `http://`.** Fix agreed, **not yet written**; see below. Filed 2026-09-20
+from the establish sitting, Part D.
+
+**The test that answered it.** The demo inbox held seven emails and none
+carried a link (the demo events do not require email confirmation, so only
+"you're all set" acknowledgements and one SMTP test had ever been sent). A
+password-reset request for the demo account produced, within seconds, a reset
+email whose link read `http://demo.moimio.app/reset-password?token=...` on a
+site served only over HTTPS. Cause as filed: the CE frontend's Caddyfile
+declares no `trusted_proxies`, so the inner Caddy overwrites the outer proxy's
+`X-Forwarded-Proto` with the scheme it received on, and `get_app_base_url`
+(`backend/app/core/urls.py:41-45`) builds the link from that.
+
+**This affects the HOSTED product, not only self-hosters.** Established
+read-only on the hosted side the same evening: the provisioner writes three
+files into a tenant's directory (the compose file, copied out of the CE image
+with its image tags rewritten; the `.env`; and, for a demo, an override that
+adds the mail catcher) and never touches the frontend's Caddyfile, which has
+no mount and no environment in that compose file. The route the control plane
+adds for a tenant is a plain `reverse_proxy` to the tenant's frontend
+container with no header directives. So a hosted tenant runs the CE Caddyfile
+exactly as built, behind exactly the arrangement this entry describes, and
+every link-bearing email any tenant has ever sent has had an `http://` link:
+password resets, and registration confirmations on any event that requires
+them.
+
+**The consequence, checked.** On the hosted product the links still work: the
+outer proxy answers port 80 with a permanent redirect (308) to the same path
+on 443, keeping the token. The cost is that the first request, the one
+carrying the reset or confirmation token, travels unencrypted before the
+redirect; a browser in HTTPS-first mode upgrades it before sending, which
+softens this and does not fix it. For a self-hoster whose proxy does not
+listen on 80, or does not redirect, the link is simply dead.
+
+**The fix, agreed 2026-09-20, NOT YET WRITTEN.**
+
+- A `trusted_proxies` directive in `frontend/Caddyfile`, with
+  `private_ranges` as the default. That covers the hosted product (the outer
+  proxy is on a Docker network) and the usual self-hosted proxy on the same
+  host or LAN, without a per-install setting. The backend already trusts the
+  `Host` header on the same reasoning (`urls.py:26-31`); the CHANGELOG says so
+  in one sentence rather than pretending the trust is new.
+- It changes the frontend image, so it is a version bump and **a release of
+  its own**, not a rider.
+- The CHANGELOG line says plainly that proxied installs, hosted included, had
+  `http://` links in their emails before it.
+- **Confirm after deploy by one more reset request on demo**, read in the demo
+  inbox; the link must read `https://`. Nothing else counts as confirmation.
+
+**The `X-Forwarded-Proto` bullet in the INSTALL-1 guide draft stays held
+until the Caddyfile fix ships**, because until then the advice it gives does
+not work. Once it ships, the bullet is true as drafted and goes out with it.
+
+*Original entry, as filed, kept for the record:*
 
 **The question.** `frontend/Caddyfile` declares no `trusted_proxies`. Modern
 Caddy overwrites `X-Forwarded-*` headers from an upstream it does not trust. If
@@ -5206,7 +5267,8 @@ lettered release, and a CHANGELOG line telling proxied installs their email
 links were wrong before it.
 
 **Until it is answered, the `X-Forwarded-Proto` bullet in the INSTALL-1 guide
-draft MUST NOT be published.** The other two bullets (pass `Host`; do not
+draft MUST NOT be published.** *(Answered above: yes. The hold now runs until
+the fix ships.)* The other two bullets (pass `Host`; do not
 buffer the streams) do not depend on it and can go out.
 
 ---
