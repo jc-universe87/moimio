@@ -2968,8 +2968,10 @@ we live with the browser's.
 
 ## DATE-3 — A time never shows its zone, because no screen asks for it
 
-**Status:** Open, **after v1.0.5.** Established in v1.0.4zf's report, filed in
-v1.0.4zg. **This is a missing feature, not a defect:** times are already shown
+**Status:** Decided 2026-09-20, **option 3: name the zone only when the event's
+zone differs from the reader's, threading and label shipped together, in a
+release of its own, not the v1.0.7 migration batch.** Established in
+v1.0.4zf's report, filed in v1.0.4zg. **This is a missing feature, not a defect:** times are already shown
 in the event's zone where one is known (DATE-1, D8). What is missing is the
 label saying so.
 
@@ -2998,6 +3000,39 @@ the rest of the time. Johannes has not ruled on this.
 time is shown with its zone, the zone is named the way you would say it", which
 is true and claims nothing about how often that is. Leave it conditional until
 this ships.
+
+### Decided 2026-09-20 (establish sitting, Part B)
+
+**Established.** The reader's zone is knowable two ways: the stored preference
+is already loaded into the formatter (`useDateFormat.jsx:24`), and the browser's
+own zone is one standard call away (`Intl.DateTimeFormat().resolvedOptions().timeZone`),
+which nothing calls yet; the formatter reaches the browser's zone only by
+omitting a zone. `zoneLabel` (`useDateFormat.jsx:126-156`) and `time.in_zone`
+remain used by nothing. Of the nine call sites, seven sit inside one event and
+have its zone to hand (`CheckInPanel.jsx:474`, `PeopleTable.jsx:1029,1032`,
+`NotesModal.jsx:86`, `MarkAssignModal.jsx:99`, `AllocationHistory.jsx:264`);
+two are not about an event and stay in the reader's zone, unlabelled: the
+webhook delivery log (`WebhooksPage.jsx:629-630`) and a backup's "exported at"
+(`RestoreModal.jsx:192`).
+
+**Decided: option 3.** Step 1 (pass the event's zone from the seven event
+screens) and step 2 (label only when it differs) ship **together**: threading
+alone changes the times a distant reader sees without saying why, and the label
+alone never fires. "Differs" means a different clock reading at that instant,
+not a different zone name: `Europe/Berlin` beside `Europe/Paris` is not
+labelled.
+
+**Not in the v1.0.7 migration batch.** Frontend only, no migration, and it
+changes what users see (a UK organiser reading a Korean event sees Korean
+times, labelled), so it gets **its own release and its own browser pass**, and
+a CHANGELOG entry that says the times moved, not only that zones are named.
+
+**Why the label ever becomes true:** D8 is implemented in the formatter and in
+none of the screens; see [DOCS-3](#docs-3--d8-is-recorded-as-decided-and-was-never-finished).
+
+**For the manual (item 36):** "Times are shown in the event's zone. If that is
+not your own zone, the time is marked with the zone's name, for example
+14:30 (KST)."
 
 ---
 
@@ -4798,3 +4833,99 @@ against the code that would do it, and either cited or removed. This is the
 same method the 2026-09-20 establish sitting used for ARCH-5, and it is what
 separates a verification from a tidy-up: a tidy-up would have left `:155-158`
 in place, nicely worded.
+
+---
+
+## TZ-1 — The zone default is `Europe/London`, and the browser's own zone is never asked (item 4)
+
+**Status:** Decided 2026-09-20, **option 3, in the v1.0.7 migration batch: the column becomes nullable, new rows arrive unset, an unset zone means the browser's, and existing rows are left alone.** Filed 2026-09-20 from the establish sitting, Part B. Previously a sentence inside [DATE-1](#date-1--dates-on-screen-ignore-the-users-date-format-setting) ("must be settled in the same work").
+
+**Established.** `UserPreferences.timezone` defaults to `Europe/London`
+(`models/user_preferences.py:32-34`, Python-side default, NOT NULL, no server
+default). The row is created on the first preferences fetch
+(`api/user_preferences.py:52-57`), which `useDateFormat.jsx:30-35` makes on every
+load, so in practice every account has one. **This is the zone every time on
+screen is shown in**: the formatter resolves event zone, then the person's, then
+the browser's (`useDateFormat.jsx:74-84`), and no screen passes an event zone
+(see DOCS-3), so the person's zone always wins. `create_event` copies it onto
+every new event (`event_service.py:33-38`, `UTC` only if no row exists); the
+create form sends the name alone (`EventsPage.jsx:170`), so the copy always
+happens. The event's zone is then read by exactly one thing, the Details card
+picker (`DetailsEditor.jsx:133-138`). The backend converts nothing by zone; it
+imports no zone library at all. Storage is timestamptz, so the stored moment is
+right regardless; this is a display question only.
+
+**What a German organiser sees today**, having never opened the panel: a
+participant checks in at 14:30 Berlin time and the list shows 13:30, unlabelled.
+Under a `UTC` default it would show 12:30. Under the browser's zone, 14:30.
+"UTC is the defensible default" was never true of this field: UTC is right for
+storing a moment, and this field chooses how to display one. Note that this
+phrase, quoted in the sitting brief, was **not found** in this file.
+
+**Decided.**
+
+- The column becomes **nullable** (one line in the v1.0.7 migration). A new
+  row arrives with the zone **unset**. The Python default `"Europe/London"` goes.
+- An unset zone means **the browser's zone**. The formatter already ends its
+  chain there (`useDateFormat.jsx:83`); the preferences panel pre-fills the
+  picker from `Intl.DateTimeFormat().resolvedOptions().timeZone` so that what the
+  user sees in the box is what is being used. `UTC` is the fallback only if the
+  browser cannot name a zone.
+- `create_event` inherits the person's zone if set; otherwise the event's zone
+  is left for the Details card to pre-fill the same way. Whether `events.timezone`
+  also becomes nullable, or keeps its `UTC` server default, is decided when the
+  migration is written.
+- **Existing rows are left alone.** Every account created so far holds
+  `Europe/London`, chosen or not, and the panel saves all three preferences
+  together (`UserPreferencesPanel.jsx:39`), so a language change re-saved the
+  zone too. Inferring intent from `created_at == updated_at` is **not** done:
+  not worth it for the population involved. The residue is fixed by
+  [PREF-2](#pref-2--the-preferences-panel-says-nothing-when-the-stored-zone-and-the-browsers-differ),
+  by telling the person.
+
+**For the manual (item 36):** "Your zone is taken from your browser unless you
+set one in your preferences."
+
+---
+
+## PREF-2 — The preferences panel says nothing when the stored zone and the browser's differ
+
+**Status:** Open, small, frontend only. Filed 2026-09-20 from the establish sitting, Part B, as the way [TZ-1](#tz-1--the-zone-default-is-europelondon-and-the-browsers-own-zone-is-never-asked-item-4)'s existing rows get corrected.
+
+When the stored zone differs from what the browser reports, the preferences
+panel says so beside the picker: "your browser says Europe/Berlin", with the
+short name the reader would recognise where one exists. One sentence, no
+button; the person changes the picker if they agree. This is how an account
+that was silently given `Europe/London` before TZ-1 finds out, and how a person
+who travels sees why a time looks wrong. Six new strings; see the locale rule.
+
+Not decided: whether the same notice belongs on the Details card for an event
+whose zone differs from the browser's. Probably not; an event's zone is the
+venue's, and the venue does not travel.
+
+---
+
+## DOCS-3 — D8 is recorded as decided, and was never finished
+
+**Status:** Open. Filed 2026-09-20 from the establish sitting, Part B. **For the docs overhaul: item 36, alongside [DOCS-2](#docs-2--data-modelmd-needs-a-verification-pass-not-a-tidy-up), the same class of problem.**
+
+**D8 (session 86, recorded under DATE-1):** "times show in the EVENT's zone,
+named on screen, with the user's as the fallback." The formatter implements it:
+`formatTime`, `formatDateTime` and `zoneLabel` in `useDateFormat.jsx` all take
+an `eventZone` and prefer it, and the hook's own comment at `:60-70` records D8
+as the decision it implements. **None of the nine screens that show a time
+passes an event zone** (`CheckInPanel.jsx:474`, `PeopleTable.jsx:1029,1032`,
+`NotesModal.jsx:86`, `MarkAssignModal.jsx:99`, `AllocationHistory.jsx:264`,
+`WebhooksPage.jsx:629-630`, `RestoreModal.jsx:192`), so the fallback is what
+always runs: every time on screen is in the user's zone, unlabelled. DATE-1's
+own text says "D8 is what finally makes them load-bearing"; what v1.0.4ze made
+load-bearing was the user's zone, not the event's.
+
+**The class of problem.** A decision written down as made, with the code
+comment to match, and the last step never taken. DOCS-2 is the same shape in
+`data-model.md`. Any statement in the manual or the engine guide that a time is
+shown in the event's zone is false until [DATE-3](#date-3--a-time-never-shows-its-zone-because-no-screen-asks-for-it)
+ships; item 36 must not copy the decision as if it were the behaviour.
+
+**Closes when** DATE-3 ships, and DATE-1's text is corrected to say what
+v1.0.4ze actually did.
