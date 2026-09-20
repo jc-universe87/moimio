@@ -4470,7 +4470,7 @@ is the one bad option.
 
 ## CI-2 — The workflow's actions target Node 20, which the runner now forces to Node 24
 
-**Status:** Open. Filed 2026-09-20 with [CI-1](#ci-1--ubuntu-latest-moves-to-ubuntu-26-on-2026-10-19-under-the-workflow-that-publishes-releases); rides with it.
+**Status:** ✅ CLOSED 2026-09-20, no release: `actions/checkout@v7`, `docker/login-action@v4`, `docker/metadata-action@v6`, `docker/setup-buildx-action@v4`, `docker/build-push-action@v7`, each the current major and each declaring `node24`; every input the workflow passes was checked present at the new major. Bumped in its own commit so a red run isolates to it. Filed 2026-09-20 with [CI-1](#ci-1--ubuntu-latest-moves-to-ubuntu-26-on-2026-10-19-under-the-workflow-that-publishes-releases); rides with it.
 **Severity:** Low. Works today; the runner is compensating.
 
 **What the warning says.** Every run prints: "Node.js 20 is deprecated. The
