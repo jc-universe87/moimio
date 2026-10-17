@@ -36,7 +36,7 @@ At the top:
 - A progress bar with *"28 of 34 checked in"*.
 - Filter pills: **All**, **Checked in**, **Not checked in**.
 - **Columns**, to choose which columns are shown.
-- **+ Create column** (admins only).
+- **+ Create column** (admins, and staff who have **Access before the event starts**).
 
 The columns shown by default are:
 
@@ -57,7 +57,7 @@ Besides the main **Check-in** tick, you can add tick columns for anything you wa
 
 To add one, click **+ Create column**, type a name such as "Payment" or "T-shirt" and click **Add**. The new column appears with an empty tick box for every participant.
 
-To delete a custom column, click the small ✕ next to its name in the column heading (admins only). A confirmation (**Delete Column**) warns you that the column and all its ticks are removed for everyone. This can't be undone.
+To delete a custom column, click the small ✕ next to its name in the column heading (admins, and staff who have **Access before the event starts**). A confirmation (**Delete Column**) warns you that the column and all its ticks are removed for everyone. This can't be undone.
 
 Worth knowing:
 

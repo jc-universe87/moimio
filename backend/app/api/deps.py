@@ -89,7 +89,8 @@ def require_role(*allowed_roles: UserRole):
 #   2. `require_writable_event` — FastAPI dependency for routes that
 #      have `event_id` directly as a path param. Plugs into Depends().
 #
-# Both return nothing on success, raise 403 on archived+non-SuperAdmin.
+# Both return nothing on success, raise 403 on any archived event (no
+# Super Admin bypass since v0.50i-1).
 
 async def ensure_event_writable(
     db: AsyncSession,

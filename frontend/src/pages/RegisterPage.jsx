@@ -7,11 +7,20 @@ import DemoNotice from '../components/DemoNotice';
 
 // v1.0.1d grouping v2: mirror the backend group-code rules so the live
 // preview matches exactly what the server will store.
-//   stemFromName    → backend _stem_from: uppercase, A-Z/0-9 only, max 8,
-//                     fallback "GROUP" (e.g. a Hangul-only surname → GROUP).
+//   stemFromName    → backend _stem_from: accents folded (Müller → MULLER),
+//                     uppercase, A-Z/0-9 only, max 8, fallback "GROUP"
+//                     (e.g. a Hangul-only surname → GROUP).
 //   isCompleteGroupCode → backend _is_complete_code: STEM-NNN shape.
+// Same table as backend _STEM_TRANSLIT.
+const STEM_TRANSLIT = {
+  'ß': 'SS', 'ẞ': 'SS', 'Æ': 'AE', 'æ': 'AE', 'Œ': 'OE', 'œ': 'OE',
+  'Ø': 'O', 'ø': 'O', 'Đ': 'D', 'đ': 'D', 'Ð': 'D', 'ð': 'D',
+  'Ł': 'L', 'ł': 'L', 'Þ': 'TH', 'þ': 'TH', 'ı': 'I',
+};
 const stemFromName = (text) => {
-  const cleaned = (text || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const folded = Array.from(text || '', (ch) => STEM_TRANSLIT[ch] ?? ch).join('')
+    .normalize('NFKD').replace(/[̀-ͯ]/g, '');
+  const cleaned = folded.toUpperCase().replace(/[^A-Z0-9]/g, '');
   return cleaned.slice(0, 8) || 'GROUP';
 };
 const isCompleteGroupCode = (code) => /^[A-Z0-9]+-\d+$/.test((code || '').trim().toUpperCase());

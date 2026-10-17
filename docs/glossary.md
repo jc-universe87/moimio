@@ -203,7 +203,7 @@ Full physical removal of a record from the database. Moimio v1.0 does not ship a
 
 ### Archive
 
-A reversible "filed away" state for events. Archived events become read-only for everyone except Super Admins, are excluded from the Active and Past tabs of the events list, and are shown in a separate Archived tab; their data stays intact and is still searchable, exportable, and restorable. Different from deletion — and reversible: a Super Admin can unarchive at any time, returning the event to whichever status it was in.
+A reversible "filed away" state for events. Archived events become read-only for everyone, Super Admins included (unarchive to make changes), are excluded from the Active and Past tabs of the events list, and are shown in a separate Archived tab; their data stays intact and is still searchable, exportable, and restorable. Different from deletion — and reversible: a Super Admin can unarchive at any time, returning the event to whichever status it was in.
 
 ### Participant number
 

@@ -48,6 +48,10 @@ export default function CheckinOverlayPage() {
     : !!_checkinPerm;
   const canViewColumns = isAdmin || (isStaff && _hasCheckinAccess);
   const canWriteCheckin = isAdmin || (isStaff && _hasCheckinAccess);
+  // "Access before the event starts" is the grant for setting up the
+  // check-in columns; the backend checks the same flag.
+  const canManageColumns = isAdmin || (isStaff && _hasCheckinAccess
+    && !!(_checkinPerm && typeof _checkinPerm === 'object' && _checkinPerm.pre_event));
 
   const [event, setEvent] = useState(null);
   const [participantList, setParticipantList] = useState([]);
@@ -151,7 +155,8 @@ export default function CheckinOverlayPage() {
             eventId={eventId}
             participantList={participantList}
             isAdmin={canWriteCheckin}
-            canCreateColumns={isAdmin}
+            isEventAdmin={isAdmin}
+            canCreateColumns={canManageColumns}
             canViewColumns={canViewColumns}
             marksPerm={isAdmin ? 'write' : (staffPerms.marks || '')}
             userId={userId}

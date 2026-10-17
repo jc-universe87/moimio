@@ -93,7 +93,7 @@ sensible defaults.
 | Variable | Default | Purpose |
 |---|---|---|
 | `LOG_LEVEL` | `INFO` | Backend log verbosity. |
-| `RATE_LIMIT_REGISTRATION` | `10` | Registrations per minute per IP. |
+| `RATE_LIMIT_REGISTRATION` | `60` | Sign-ups per minute from one address (as seen through the frontend proxy). `0` turns it off. |
 | `SMTP_PORT` | `587` | SMTP relay port. |
 | `SMTP_FROM_NAME` | `Moimio` | Display name on outbound mail. |
 | `SMTP_TLS` | `true` | STARTTLS for SMTP. |

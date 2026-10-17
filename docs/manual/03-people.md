@@ -23,7 +23,7 @@ Open **People** from the sidebar. You see a table with one row per registration.
 - **Status** — Pending / Confirmed / Cancelled (colour-coded).
 - **Registered** — date and time of the registration.
 - **Notes** — opens the notes for that participant; a small number shows how many notes there are.
-- **Actions** — per-row controls: **✉ Resend** (resend the registration email; hidden for cancelled participants), **↓ Export data** (the participant's full GDPR data export as JSON) and **Remove** (soft-delete the participant; event admins only).
+- **Actions** — per-row controls: **✉ Resend** (resend the registration email; hidden for cancelled participants), **↓ Export data** (the participant's full GDPR data export as JSON) and **Remove** (soft-delete the participant). Export data and Remove are for event admins only.
 
 Click **Columns** to show or hide more columns: **Gender**, **Date of Birth**, **Phone**, **Address**, **Country**, **Church / Organisation** and **Message** (these appear in the list once at least one participant has filled them in), **Checked In**, and every custom field from your registration form (under **Custom Fields**). You can also drag a column header (by its ⠿ handle) to change the column order.
 
@@ -152,7 +152,7 @@ The CSV format is forgiving:
 
 - Column order doesn't matter, and common header spellings are recognised ("First Name", "Surname", "E-mail", "DOB", "Mobile", "Church" and so on).
 - The People export columns `No.`, `Status`, `Checked In`, `Registered`, `Marks` and `Message` are silently ignored, so you can re-import an export.
-- Other unrecognised columns are listed in a yellow banner in the preview. When you import, each one becomes a new custom field (hidden from the public registration form), and its column is switched on in the People table straight away. Note that the export's **Excluded From** column is treated this way too — delete that column before re-importing an export.
+- Other unrecognised columns are listed in a yellow banner in the preview. When you import, each one becomes a new custom field (hidden from the public registration form), and its column is switched on in the People table straight away. Columns that only exist in Moimio's own export (**No.**, **Status**, **Checked In**, **Marks**, **Registered**, **Message**, **Excluded From**) are skipped quietly, so you can re-import an export as it is.
 - Missing optional columns default to empty.
 - **Mark assignments and exclusions are not imported.** Assign marks after import in the People table or on the Organise board.
 

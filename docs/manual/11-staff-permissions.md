@@ -107,7 +107,7 @@ Running the allocation, committing it, changing group type settings and keeping 
 
 The primary checkbox lets the Staff member view the check-in list and tick people in once the event begins.
 
-When it's ticked, a second option appears: **Access before the event starts**. With this, they can open check-in during the Registration phase, before the event starts, and tick people in early, for example to record who has already paid. Adding, renaming or deleting check-in columns stays with Event Admins and Super Admins, even though the hint under the checkbox suggests otherwise.
+When it's ticked, a second option appears: **Access before the event starts**. With this, they can open check-in during the Registration phase and add or delete check-in columns ahead of arrivals. Useful when a designated coordinator, not always an Event Admin, prepares check-in. Without it, check-in staff can tick boxes but not change the columns.
 
 There's no read-only check-in: ticking people in is the whole point. The extra option controls *when* they get access, not how much.
 

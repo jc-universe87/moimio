@@ -8,6 +8,52 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
+## [Unreleased]
+Fixes found while bringing the manual up to date with the app.
+
+### Added
+
+- **The registration form is rate limited.** `RATE_LIMIT_REGISTRATION` was
+  documented as sign-ups per minute per address but nothing enforced it. It
+  now does, with a default of 60 a minute. Each extra family member on the
+  form counts as one sign-up. Somebody over the limit is asked, in their own
+  language, to wait a minute and try again. Set `0` to turn it off.
+
+### Changed
+
+- **Staff with "Access before the event starts" can set up the check-in
+  columns.** The permission promised it, but adding or deleting a column was
+  limited to event admins. Other check-in staff still tick boxes only.
+
+### Fixed
+
+- **Group codes keep accented letters as plain ones.** Müller now gets
+  `MULLER-…` instead of `MLLER-…`, García `GARCIA-…`.
+- **Re-importing a people export no longer creates an "Excluded From"
+  custom field.** The importer skips that column, like the export's other
+  Moimio-only columns.
+- **"Export data" is only offered to people who can use it.** Staff with
+  write access to People saw the button and got an error; it is now shown
+  to event admins only, in the People table and in the profile panel during
+  check-in.
+- **The archive confirmation says what archiving does.** It claimed Super
+  Admins could still edit an archived event; nobody can until it is
+  unarchived. Corrected in all six languages.
+
+### For self-hosters
+
+- **`upgrade.sh` no longer reports every upgrade as failed.** The backend
+  now has a healthcheck in `docker-compose.yml`, so the script can see it
+  come up healthy.
+- **The registration limit uses the visitor's real address.** The
+  frontend's Caddy now trusts proxies on private and loopback addresses
+  and passes the visitor's address on. Behind your own reverse proxy or a
+  Cloudflare Tunnel this works without changes. If your `.env` still says
+  `RATE_LIMIT_REGISTRATION=10` (the old example value), that limit now
+  applies; raise it if many people register over one Wi-Fi at once.
+- **`VITE_API_URL` is gone** from `.env.example` and `docker-compose.yml`.
+  Nothing read it. You can delete the line from your `.env`.
+
 ## [1.0.6] — 2026-09-19
 A link to your own privacy notice on the registration form, and a legal notice
 that points to the documents that apply.

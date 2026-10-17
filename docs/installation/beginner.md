@@ -438,7 +438,7 @@ The script shows you what's about to change and asks **Proceed with upgrade? [y/
 
 It may ask for your password, because it uses `sudo`. To move to one particular version instead of the newest, give its name, for example `./upgrade.sh v1.0.6` (the version names are listed in the changelog). To see what it would do without changing anything, run `./upgrade.sh --dry-run`.
 
-At the end the script waits up to 90 seconds for Moimio to report that it's healthy. On the standard setup this check can time out and print "backend did not become healthy" even though the update worked. Before you follow its rollback instructions, open Moimio in your browser: if it loads and you can sign in, all is well.
+At the end the script waits up to 90 seconds for Moimio to report that it's healthy. If it prints "backend did not become healthy", open Moimio in your browser before you follow its rollback instructions: if it loads and you can sign in, the update most likely just needed longer to start.
 
 Updates typically take 3–5 minutes. The site is unavailable for part of that time while Moimio rebuilds and restarts. If you have an event in progress, do this outside event hours.
 

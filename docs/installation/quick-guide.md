@@ -69,7 +69,7 @@ DB_PORT=127.0.0.1:6122
 FRONTEND_PORT=127.0.0.1:6120
 ```
 
-The browser talks to the backend through the frontend's `/api` proxy, so changing `BACKEND_PORT` needs nothing else. (`VITE_API_URL` in `.env` is a leftover; the current frontend does not read it.)
+The browser talks to the backend through the frontend's `/api` proxy, so changing `BACKEND_PORT` needs nothing else. (Older `.env` files may still contain `VITE_API_URL`; nothing reads it, so you can delete the line.)
 
 ---
 
@@ -177,7 +177,7 @@ From the repo root of your git clone:
 
 The script checks first (`.env` present, clean working tree, `db` container running), shows the commits it will apply, backs up `.env` to `.env.pre-upgrade-<timestamp>.bak` and the database to `../pgdata-pre-upgrade-<timestamp>.sql.gz`, then checks out the target and runs `docker compose down`, `build --no-cache` and `up -d`. It prints the exact rollback commands at the end. Keep the backups until you're happy with the new version. Checking out a tag leaves the clone on a detached HEAD, so once you've pinned a version, name the next one explicitly too (`./upgrade.sh v1.0.7`) rather than running it bare.
 
-After restarting, the script waits up to 90 seconds for the backend container to report "healthy". The root `docker-compose.yml` defines no healthcheck for the backend, so this wait can end in a "did not become healthy" warning even when the upgrade worked. Check `curl http://localhost:6121/health` and the backend log before rolling back.
+After restarting, the script waits up to 90 seconds for the backend container to report "healthy". The backend's healthcheck in `docker-compose.yml` calls `/health` every 10 seconds after a 30-second start period. If the wait ends in a "did not become healthy" warning (for example a long migration), check `curl http://localhost:6121/health` and the backend log before rolling back.
 
 The manual equivalent, if you prefer:
 
@@ -271,6 +271,7 @@ All of these are read from `.env` and passed through by `docker-compose.yml`. Re
 | Variable | Default | What it does |
 |---|---|---|
 | `LOG_LEVEL` | `INFO` | `DEBUG` logs every database query with its values, i.e. participant data. |
+| `RATE_LIMIT_REGISTRATION` | `60` | Sign-ups per minute from one address. Each extra family member on the form counts. Raise it if a whole congregation registers over one Wi-Fi at once; `0` turns it off. Behind your own reverse proxy or Cloudflare Tunnel the real visitor address is used, as long as that proxy reaches Moimio from a private or loopback address and sends `X-Forwarded-For`. |
 | `FEATURE_ALLOCATION` | `true` | `false` turns off the allocation engine for a registration-only install. |
 | `FEATURE_OUTBOUND_WEBHOOKS` | `true` | `false` hides the Webhooks page and disables delivery. See [webhooks](../webhooks.md). |
 | `WEBHOOK_ALLOW_PRIVATE_TARGETS` | `false` | Webhook URLs on private, loopback or link-local addresses (`10.x`, `192.168.x`, `localhost`…) are refused unless this is `true`. Set it only if your receiver lives on your own network. Not in `.env.example`; add the line yourself. |

@@ -107,7 +107,7 @@ Every form has a **Coming with family or friends?** section. Registrants choose 
 
 Everyone who shares a group code forms a group the allocation engine tries to keep together. See [section 5](05-group-types-and-units.md) for the full mechanics.
 
-Group codes look like `STEM-NNN`: up to eight letters from the surname (or a name the registrant chooses), a dash, and a number. Even someone who registers on their own gets a code, normally with a three-digit number (longer only if many people in the event share that surname). When registering several people at once, each extra person can share the first person's code (recommended for families), have none, or use a different one.
+Group codes look like `STEM-NNN`: up to eight letters from the surname (or a name the registrant chooses), a dash, and a number. Accents are dropped, so Müller becomes `MULLER` and García becomes `GARCIA`; a surname with no Latin letters (for example 김) gets `GROUP`. Even someone who registers on their own gets a code, normally with a three-digit number (longer only if many people in the event share that surname). When registering several people at once, each extra person can share the first person's code (recommended for families), have none, or use a different one.
 
 ---
 

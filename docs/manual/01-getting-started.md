@@ -113,7 +113,7 @@ The status itself only changes when you act:
 - **Closed → open** is possible at any time with **Re-open registration** on the **Registration is closed** banner at the top of **Organise**.
 - There is **no** way back to draft once registration has opened.
 
-**Archiving is separate from status.** Events are never archived automatically. A Super Admin archives an event from the **⋯** menu on the events list, or from **More ▸ Event details ▸ Danger zone ▸ Archive** (in Setup phase the same **Danger zone** sits at the bottom of the Setup hub). An archived event is read-only for everyone except Super Admins, takes no new registrations, and moves to the **Archived** tab. It's reversible: **Unarchive** from the same places.
+**Archiving is separate from status.** Events are never archived automatically. A Super Admin archives an event from the **⋯** menu on the events list, or from **More ▸ Event details ▸ Danger zone ▸ Archive** (in Setup phase the same **Danger zone** sits at the bottom of the Setup hub). An archived event is read-only for everyone, Super Admins included, takes no new registrations, and moves to the **Archived** tab. It's reversible: **Unarchive** from the same places.
 
 ---
 
