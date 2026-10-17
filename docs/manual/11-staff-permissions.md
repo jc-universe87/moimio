@@ -1,156 +1,181 @@
 # 11 — Staff & permissions
 
-Moimio has two global roles and per-event assignments. This section covers both: who's a Super Admin, who's Staff, and how to grant Staff access to specific events with the right permissions.
+Moimio has two kinds of user account and a team for each event. This section covers both: who's a Super Admin, who's Staff, and how to give people access to a specific event with the right permissions.
 
-<!-- TODO: screenshot at docs/assets/staff-permissions.png — Staff & permissions assignment form showing User picker, Role dropdown, and the five permission surfaces -->
-
----
-
-## Two global roles, plus per-event assignments
-
-### Super Admin (global)
-
-A user account with `role: super_admin`. Created at first install via the on-screen wizard, and addable via Users management thereafter. Super Admins:
-
-- Have full access to every event in the instance.
-- Can create new events.
-- Can manage users (create, edit, deactivate).
-- Can archive / unarchive any event.
-- Are the only role allowed in the **Danger zone** of Event details.
-
-There's no per-event configuration for Super Admin — the global role grants global access.
-
-### Staff (global)
-
-A user account with `role: staff`. By itself, **a Staff account has no access to anything.** Each event needs an explicit assignment with a per-event role and permission set. A Staff user with no assignments sees a "waiting for your first assignment" placeholder when they log in.
-
-This separation matters: a Staff account is just a login. The actual access is decided per-event by the Super Admin or that event's admins.
+<p align="center">
+  <img src="../assets/staff-permissions.png" alt="The Assign user to event form showing the User picker, the Role dropdown, Copy permissions from, and the five permission settings" width="560">
+  <br>
+  <em>Adding someone to an event's team</em>
+</p>
 
 ---
 
-## Per-event assignments
+## User accounts
 
-For every event, there's a list of assigned users. Each assignment has:
+Accounts are managed at Sidebar ▸ **Users** (under **Manage**), on the **User Management** page.
 
-- **A role within this event:** `event_admin` or `staff`.
-- **A permissions object** (only relevant when the role is `staff`).
+### Super Admin
 
-You manage assignments from the **Setup hub → Staff card** during Setup phase, or **More → Staff & permissions** during later phases. Both reach the same component.
+The first Super Admin is created during first-time setup. More can be added from **User Management** — only a Super Admin can make someone else a Super Admin. Super Admins:
+
+- Have full access to every event.
+- Can create events, and manage users.
+- Are the only ones who can archive, unarchive, delete or pin events, and restore backups.
+- Are the only ones who see **Backup**, **Workspace** and **Webhooks** in the sidebar.
+
+Super Admins don't need to be added to an event's team — they already have access everywhere.
+
+### Staff
+
+A **Staff** account is just a login. **On its own, a Staff account has no access to any event.** Access comes from being added to an event's team, with a role and permissions for that event. A Staff user who isn't on any team yet sees a **Waiting for your first assignment** screen when they sign in.
+
+Two extra capabilities can be ticked for any Staff user:
+
+- **Allow this admin to manage users** — they can open **User Management** and create, edit, deactivate and delete Staff accounts (but not Super Admins).
+- **Can create new events** — they get the **+ New Event** button. Whoever creates an event automatically becomes its Event Admin.
+
+### Adding, editing and removing accounts
+
+- **+ New User** opens the form: **Full name**, **Email**, **Password**, **Role**, and the two capabilities. Click **Create User**.
+- In the list, the grey pen edits a user's name, role and capabilities.
+- **Deactivate** stops someone signing in without deleting anything. **Reactivate** lets them back in.
+- The red trash icon deletes the account for good (**Delete permanently**). You can't delete yourself.
+
+**Deleting a user always works, whatever they did in Moimio.** Their places on event teams go with them, and so do their unpublished (draft) notes. Notes they published stay, and are shown as written by **[removed user]**. Their entries in the allocation history stay too, also shown as **[removed user]**.
+
+Deactivate is the gentler choice if you're unsure — it can be undone; deleting can't.
+
+---
+
+## Each event's team
+
+Every event has its own list of team members. Each has:
+
+- **A role for this event:** **Event Admin** or **Staff**.
+- **Permissions** (only used when the role is Staff).
+
+Manage the team from the **Setup hub ▸ Staff** card during the Setup phase, or **More ▸ Staff & permissions** once registration has opened. Both open the same **Staff & permissions** panel.
+
+To add people you need to be a Super Admin, or have **Allow this admin to manage users** — the list of people to choose from comes from User Management. Someone must have an account before they can be added.
 
 ### Event Admin role
 
-An assignment with role `event_admin` grants the user full access to *this specific event*, equivalent to a Super Admin's view of that one event. They can:
+**Event Admin** gives full access to *this one event*. They can:
 
-- Edit event details and configuration.
+- Edit event details, the registration form and group types.
 - Open and close registration.
-- Manage allocations.
-- Run the engine, commit allocations.
-- Access check-in.
-- Create / edit / delete marks.
-- Export reports and data.
-- Assign other Staff to this event.
+- Run the allocation, commit results and keep people out of a group type.
+- Use check-in, including setting it up before the event.
+- Create, edit and delete marks.
+- Download reports and exports, including a participant's personal data export.
+- Remove participants.
+- Manage the event's team (with the user-management capability, see above).
 
-The permissions object is **ignored** for event_admins — full access is implicit.
+Archiving, deleting and restoring events stay with Super Admins. For Event Admins the permission settings are ignored — full access is implied.
 
 ### Staff role
 
-An assignment with role `staff` grants only the views explicitly listed in the permissions object. The five permission surfaces are described below.
+**Staff** on an event can do only what their permissions allow. The five permission settings are described below.
 
 ---
 
-## The five permission surfaces
+## The five permission settings
 
-Each surface is independent of the others. A Staff user can have any combination — read access to People + write access to Marks, for example, or only Reports access.
+Each setting is independent. A Staff member can have any combination — for example, read-only People plus Marks, or only Reports.
 
-### People (read / write / none)
+### People access (No access / Read only / Read & write)
 
-The People table, the registration data, and per-row participant exports.
+The People table and registration details.
 
-- **Read** — sees the participant list, can search, filter, view details.
-- **Write** — can edit fields, change registration status, soft-delete participants.
-- **None** — sidebar item hidden.
+- **Read only** — sees the participant list; can search, filter and view details.
+- **Read & write** — can also edit details, change status and group codes, register people, and assign marks.
+- **No access** — the People item is hidden.
 
-### Organise (read / write / none)
+Removing participants and personal data exports are for Event Admins only.
 
-The AllocationBoard and engine settings.
+### Organise access (No access / Read only / Read & write)
 
-- **Read** — sees allocations across all categories.
-- **Write** — can drag-and-drop, run the engine, commit allocations, edit category settings.
-- **None** — sidebar item hidden.
+The allocation board.
 
-### Check-in (checkbox + optional sub-toggle)
+- **Read only** — sees who is in which group, in every group type.
+- **Read & write** — can drag people between groups, and add, edit or remove groups.
+- **No access** — the Organise item is hidden.
 
-The Check-in panel. The primary checkbox grants the Staff member access to view the check-in list and tick people in once the event begins.
+Running the allocation, committing it, changing group type settings and keeping people out of a group type are for Event Admins.
 
-When the primary checkbox is ticked, a sub-toggle appears: **Access before the event starts**. When this is also ticked, the Staff member gets access to the Check-in panel during the Registration phase (via the **→ Set up the check-in panel** link on the Registration overview page) and can add or edit check-in columns ahead of arrivals. Useful for events where a designated coordinator — not always an event admin — handles check-in setup.
+### Check-in access (checkbox + optional extra)
 
-Read-only access isn't separately offered. Checking people in is the whole point of the surface; the sub-toggle gates the timing of access, not the level.
+The primary checkbox lets the Staff member view the check-in list and tick people in once the event begins.
 
-Admins (Super Admin and event-admin role on the assignment) always have full check-in access including the pre-event capability — they don't see the sub-toggle because it's implicit.
+When it's ticked, a second option appears: **Access before the event starts**. With this, they can open check-in during the Registration phase, before the event starts, and tick people in early, for example to record who has already paid. Adding, renaming or deleting check-in columns stays with Event Admins and Super Admins, even though the hint under the checkbox suggests otherwise.
 
-### Reports (checkbox)
+There's no read-only check-in: ticking people in is the whole point. The extra option controls *when* they get access, not how much.
 
-The Reports page (dashboard tiles + roster downloads).
+Super Admins and Event Admins always have full check-in access, including before the event.
 
-- **Checked** — sees the dashboard, can download Compact and Sign-in PDFs.
-- **Unchecked** — sidebar item hidden.
+### Reports access (checkbox)
 
-The **Detailed** PDF format requires `people: read` because it includes PII; reports access alone is not sufficient for it.
+The Reports page.
 
-### Marks (checkbox)
+- **Ticked** — sees the reports and can download the Compact and Sign-in roster PDFs.
+- **Unticked** — the Reports item is hidden.
 
-Whether the Staff member can create marks, edit/delete marks they created, and assign marks to participants.
+The **Detailed** roster and the participant spreadsheet contain personal details, so they also need **People access** — Reports access alone isn't enough.
 
-- **Checked** — sees a Marks item in the sidebar; can create new marks; can edit/delete marks they personally created (not marks created by others); can assign/unassign marks on participants in the InsightPanel.
-- **Unchecked** — no Marks sidebar item.
+### Marks access (checkbox)
 
-**Read access to marks is implicit with event access.** Anyone who can see participants in any view also sees the marks already assigned to them — they can click a mark dot to see what it means. The marks permission specifically gates *write* (creation + assignment) operations.
+- **Ticked** — sees a Marks item in the sidebar; can create marks, edit or delete marks *they* created (not other people's), and assign marks to participants.
+- **Unticked** — no Marks item.
+
+**Everyone with access to the event can see marks.** Anyone who can see participants can click a mark to see what it means. Marks access is about creating and assigning them. (People **Read & write** also allows assigning marks.)
 
 ---
 
-## Assigning a Staff member to an event
+## Adding someone to an event
 
-From the Setup hub or More menu's Staff card:
+From the **Staff** card or **Staff & permissions**:
 
 1. Click **+ Assign user**.
-2. Pick a user from the dropdown (only users with role `staff` appear; Super Admins manage their own access globally).
-3. Pick a role: `event_admin` or `staff`.
-4. If `staff`: configure the five permission surfaces.
+2. Under **User**, choose someone (**Pick a user**). The list shows active accounts that aren't already on this event.
+3. Choose a **Role**: **Staff** or **Event Admin**.
+4. For Staff, set the five permissions.
 5. Click **Assign user**.
 
-### Copy permissions from existing
+### Copy permissions from
 
-When you have an event with several Staff assignments, the **Copy permissions from** dropdown speeds up adding new staff with the same access pattern. Pick an existing assignment; the new form pre-fills with that pattern's permissions. You can then adjust before saving.
+When the event already has Staff members, **Copy permissions from** lets you fill the form with someone else's settings (**Select a staff member**). Adjust anything before saving.
 
----
-
-## Editing or removing an assignment
-
-In the Staff card list, each assignment row has Edit / Remove buttons.
-
-- **Edit** — same form as Assign, populated with the current values. Save updates the role / permissions.
-- **Remove** — confirmation prompt, then the assignment is deleted. The user account isn't touched — they just lose access to this specific event.
-
-If a Staff user is currently looking at the event when their assignment is removed, their next page interaction will fall through to a "no access" placeholder.
+Tip: when creating next year's event, you can copy the whole team across — see [§10](10-multi-event-and-archive.md#starting-a-new-event-from-a-past-one).
 
 ---
 
-## Deactivating a user vs removing an assignment
+## Editing or removing someone from an event
+
+Each team member's row has a grey pen and a red trash icon.
+
+- **Edit** (pen) — same form, filled in with their current role and permissions. Click **Save**.
+- **Remove** (trash) — confirm in **Remove user from event?** Their access to this event ends. Their account isn't touched — they keep any other events.
+
+If someone is looking at the event when they're removed, their next click shows a "no access" screen.
+
+---
+
+## Deactivating a user vs removing them from an event
 
 Two different scopes:
 
-- **Remove an assignment** → revokes access to *one* event. The user keeps their login and their other assignments.
-- **Deactivate a user** (Super Admin only, in Users management) → disables the login entirely. They can't sign in. All their assignments become moot.
+- **Remove from an event** → ends access to *one* event. They keep their login and their other events.
+- **Deactivate a user** (in User Management) → they can't sign in at all. Their team places stay on record but can't be used.
 
-Deactivation is the right path for a Staff user leaving the organisation. Assignment removal is the right path for "she's done with this event but still on next year's team."
+Deactivate when someone leaves the organisation. Remove from an event when "she's done with this event but still on next year's team."
 
 ---
 
-## Audit trail
+## Keeping track
 
-Every assignment change (create, edit, remove) emits a structured log entry. Every Staff action that mutates data (drag a participant, tick a check-in, create a mark) emits its own audit log entry tagged with the actor's user_id. Available in `docker compose logs backend`.
+The history in each participant's profile panel (the **ⓘ View profile** icon) shows who placed or moved them, and when. Key admin actions — creating, archiving and deleting events, removing participants, personal data exports — are also written to the server log (`docker compose logs backend` on a self-hosted install).
 
-For per-participant exports specifically, the audit history visible in the export does **not** include the actor's user_id (see [§09](09-data-export-gdpr.md) — that's a deliberate Article 15 scoping decision). Internal admin logs do retain the actor identity.
+A participant's own data export leaves out which team member made each move (see [§09](09-data-export-gdpr.md)).
 
 ---
 
@@ -161,4 +186,5 @@ That's the end of the user manual. For more:
 - [Glossary](../glossary.md) — Moimio-specific terms.
 - [FAQ](../faq.md) — common questions.
 - [GDPR compliance](../gdpr-compliance.md) — privacy posture and architectural details.
+- [Moving a workspace to your own Moimio](../moving-a-workspace.md) — moving every event to a server you run.
 - [Data model](../data-model.md) — schema reference for developers and integrators.

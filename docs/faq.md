@@ -12,7 +12,7 @@ A practical FAQ for organisers, sysadmins, and curious visitors. For terminology
 
 Moimio is for the moment when registrations have closed and you're staring at a spreadsheet trying to work out who sleeps where, who's on which team, and who's in which workshop — for a church retreat, a mission conference, a youth weekend, or anything similar.
 
-It takes the registrations and proposes an allocation: rooms, groups, teams. You can accept it, override it, or re-run with different settings. Then you check people in on the day and export rosters as PDFs.
+It takes the registrations and proposes an allocation: rooms, small groups, teams, tables. You can accept it, change it by hand, or re-run with different settings. Then you check people in on the day and print rosters as PDFs.
 
 ### Who is Moimio for?
 
@@ -70,9 +70,15 @@ If you're running a 1000+ person event today, Moimio will technically function, 
 
 ### What if I lose my server?
 
-Moimio includes a full-event backup feature: a single archive containing every record for an event (participants, allocations, custom fields, marks, notes, check-in state). Download it before any major operation; restore it on a fresh deployment if you need to.
+Admins have a **Backup** page that downloads one file per event holding everything about it: participants and their answers, group types and groups, marks, placements and exclusions, the settings you chose, notes, check-in columns and ticks, and the event's history. Download one before any big change. **Restore from backup** on the same page brings an event back, on this server or a new one. The one thing a backup doesn't carry is your team's accounts; you invite them again.
 
-You're also welcome to back up the underlying PostgreSQL volume with whatever tooling you already use — Moimio's data lives in standard tables and is portable.
+To move every event at once, for example to a new server, see [Moving a workspace to your own Moimio](moving-a-workspace.md).
+
+You're also welcome to back up the whole database with whatever tooling you already use; the installation guides show a one-line database backup. The upgrade script (`./upgrade.sh`) also takes one automatically before every upgrade.
+
+### How do I update to a new version?
+
+On a server installed with `git clone`, run `./upgrade.sh` from the Moimio folder. It backs up your settings and database first, then fetches and starts the new version. See [Updating Moimio](installation/beginner.md#updating-moimio) in the beginner guide.
 
 ---
 
@@ -85,14 +91,15 @@ Moimio is built for European organisers, with GDPR as a first-class design conce
 - **No third-party processors.** Self-hosted means your data never leaves your deployment.
 - **Data export.** A single click exports everything Moimio holds about a participant in a structured JSON file — exactly what GDPR Article 20 requires.
 - **Right to erasure.** Soft delete is the standard, one-click action — the participant disappears from the People table, the engine, reports, and rosters. For the rare case where regulatory context demands full physical removal of the underlying record, that's currently a manual database operation (a first-class UI is on the post-1.0 backlog).
-- **Minimal PII in logs.** Logs avoid rich personal data; email addresses appear in a small number of operational lines (failed-login attempts, SMTP send/skip events) where they're load-bearing for diagnostics, but not names, addresses, or other registration data.
+- **Minimal personal data in logs.** At the default log level (`LOG_LEVEL=INFO`), email addresses appear in a small number of operational lines (failed-login attempts, SMTP send/skip events) where they're needed for diagnostics, but not names, addresses, or other registration data. The `DEBUG` level does log participant data, so keep it for troubleshooting with invented data.
 - **Consent-by-design.** Every registration form requires a GDPR consent tick.
+- **Your own privacy notice.** A Super Admin can enter your organisation's privacy notice address under **Workspace**; the registration form then links to it right after the consent sentence.
 
 Full details in [GDPR Compliance](gdpr-compliance.md).
 
 ### Where does the data go?
 
-Nowhere. There is no Moimio cloud server. There is no analytics. There are no calls to external APIs during registration or allocation. Your participants' data sits in a PostgreSQL database on your server, full stop.
+Nowhere. There is no Moimio cloud server. There is no analytics. There are no calls to external APIs during registration or allocation. Your participants' data sits in a PostgreSQL database on your server. The only things that leave it are the emails you send through your own SMTP provider and any webhooks you choose to set up.
 
 If you self-host on a third-party VPS (Hetzner, Contabo, etc.), then that VPS provider is technically a sub-processor and you should sign a Data Processing Agreement with them — but Moimio itself does not transmit data anywhere.
 
@@ -108,54 +115,59 @@ If you don't configure SMTP, Moimio simply doesn't send email — the app contin
 
 ### How does the allocation engine work?
 
-It runs five passes over your participants:
+It works through one group type at a time (for example Room Allocation), in a fixed order:
 
-1. **Group-code clusters** — keeps families and friend groups together.
-2. **Mark "together" clusters** — keeps people sharing a tag together (e.g. all leaders in one room).
-3. **Mark "split-evenly" pre-distribution** — spreads people sharing a tag evenly (e.g. one leader per room).
-4. **Drain gender-restricted units, then round-robin the rest.**
-5. **Classify anyone unplaced** with a clear reason.
+1. **Group codes** — people who share a group code (families, friend groups) are placed together.
+2. **Marks, in the order you set** — each mark does what you chose for it: **Keep together** (e.g. all leaders in one room) or **Spread evenly** (e.g. one leader per room).
+3. **Restricted groups** — groups limited to one gender (or to one mark) are filled with the people who fit them.
+4. **Everyone else** — placed one by one across the remaining groups, keeping the same gender together if you leave that setting on.
+5. **Tidy-up** — group sizes are evened out (optional, never breaking the rules above), leftover seats are filled, and anyone who still couldn't be placed is listed with a plain reason.
+
+People you've **excluded** from a group type are left out of it entirely. The engine settings panel lists the switches in the same order the engine applies them.
 
 Full detail (with the by-design imbalance trade-offs) is in [Manual section 6: Allocation Engine](manual/06-allocation-engine.md).
 
 ### What if I disagree with the engine's allocation?
 
-Three paths, in increasing order of intervention:
+A few options, roughly in increasing order of intervention:
 
-- **Adjust settings, then re-run.** Tweak mark priorities, mark behaviours, gender restrictions, or unit capacities, then click Auto-Allocate again. The engine is deterministic — same inputs produce same outputs. By default the re-run uses "Reallocate everyone from scratch", which gives you a fresh proposal that incorporates the changed settings.
-- **Drag the specific participants you want to fix, then re-run with "Allocate new participants only".** Manually drop the people whose placement you care about into the right unit — those manual placements lock — then click Auto-Allocate with the **Allocate new participants only** mode. The engine fills around your manual fixes without disturbing them. This is the most surgical path when you want most of the engine's proposal but with a few specific exceptions.
-- **Manual override only.** Drag participants between units in the AllocationBoard and skip re-running entirely. The engine doesn't lock you out; it proposes, you decide.
+- **Adjust settings, then re-run.** Change the engine settings (mark order, what each mark does, whether group codes are kept together, and so on) or a group's capacity or gender setting, then click **Auto-Allocate** again. The engine is deterministic — same inputs produce same outputs. **Reallocate everyone from scratch** gives you a fresh proposal that reflects the changed settings. Nothing is saved until you click **Commit allocation**.
+- **Place a few people yourself, then fill in the rest.** Drag the people whose placement you care about into the right group, then click Auto-Allocate with **Allocate new participants only**. That mode keeps every existing assignment and only places people who aren't allocated yet. To protect a whole group from future runs, mark it **Keep as-is**.
+- **Keep someone out.** **Exclude** a person from one group type (say, the room draw) and they stay in every other group type.
+- **Manual changes only.** Drag participants between groups on the board and skip re-running entirely. The engine proposes; you decide.
 
 ### Can I run Moimio without using the engine at all?
 
-Yes. Skip the engine and place every participant manually. The category-and-unit system works fine without the algorithm — the engine is an accelerator, not a requirement.
+Yes. Skip the engine and place every participant by hand. Group types and groups work fine without it — the engine is an accelerator, not a requirement. If you don't need allocation at all (registration only), a self-hoster can switch it off with `FEATURE_ALLOCATION=false` in `.env`.
 
 ### How does the family / friend group feature work?
 
-When registering, a person can enter a **group code** — typically a surname plus a number (e.g. `SMITH-742`). Anyone else registering with the same group code is part of that cluster, and the engine will try to keep them in the same room (or the same small group, depending on category).
+When registering, a person can enter a **group code** — typically a surname plus a number (e.g. `SMITH-742`). Everyone registering with the same group code is kept together by the engine, in every group type where **Keep group codes together** is switched on (it is by default). People added on the same form can simply tick that they share the main registrant's code.
 
 If a registrant doesn't enter a group code, Moimio auto-generates one (`STEM-NNN` — a stem derived from the surname, plus a unique three-digit suffix, e.g. `SMITH-742`) and includes it in the registration confirmation email so the registrant can share it with anyone else who'd like to be grouped with them. The suffix is unique within the event — two unrelated families both auto-generated as `SMITH-...` get different suffixes and don't accidentally cluster together.
 
 ### What's a "mark"?
 
-A coloured badge that staff can attach to participants — "leader", "first-timer", "needs ground floor", "vegetarian", anything you find useful. Each mark can influence allocation: you can tell the engine to **keep marked people together** (e.g. cluster all leaders in one room), or to **spread them evenly** (e.g. one leader per room), or to **ignore the mark for allocation** (it's just a visual tag).
+A coloured label that staff can attach to participants — "leader", "first-timer", "needs ground floor", "vegetarian", anything you find useful. Each mark can influence allocation, separately in each group type: **Keep together** (e.g. all leaders in one room), **Spread evenly** (e.g. one leader per room), or **No effect** (it's just a visual label). A group can also be reserved for people with one mark.
 
-Marks are staff-internal — participants never see them.
+Marks are for your team only — participants never see them.
 
 ### Can I integrate Moimio with Slack, Zapier, or my own systems?
 
-Yes. From v1.0.0g, Moimio CE can fire signed HTTP webhooks to URLs you configure, the moment a system event happens. Configure endpoints in the admin UI under **Webhooks** (Super Admin only). Each webhook is signed with HMAC-SHA256 using a per-endpoint secret you receive on creation, so your receiver can verify the request really came from Moimio.
+Yes, through webhooks. Moimio CE can send a signed HTTP message to addresses you configure when certain things happen. Today those are: an event is created, an event is deleted, and an allocation is committed. Configure endpoints under **Webhooks** in the sidebar (Super Admin only). Each message is signed with HMAC-SHA256 using a per-endpoint secret you receive on creation, so your receiver can check it really came from Moimio.
 
 Common use cases:
 
-- A Slack channel that fires every time a new event is created
-- A Zapier or n8n flow that syncs registrations to a spreadsheet
-- A custom script on your network that updates your accounting system
+- A Slack channel message whenever a new event is created
+- A Zapier or n8n flow that kicks off when an allocation is committed
+- A custom script that keeps another system in step with your events
 - Anything else that accepts inbound HTTP webhooks
+
+There is no webhook for individual registrations yet.
 
 Full integration guide with code samples: [docs/webhooks.md](webhooks.md).
 
-The subsystem is optional. If you never configure an endpoint, Moimio behaves identically to v1.0.0f. To hide the feature entirely (admin UI included), set `FEATURE_OUTBOUND_WEBHOOKS=false` in `.env`.
+The feature is optional; nothing is sent until you add an endpoint. For safety, addresses on private networks (`192.168.x.x`, `10.x.x.x`, `localhost` and similar) are refused; if your receiver really is on your own network, set `WEBHOOK_ALLOW_PRIVATE_TARGETS=true` in `.env`. To hide the feature entirely, set `FEATURE_OUTBOUND_WEBHOOKS=false`.
 
 ---
 
@@ -169,14 +181,14 @@ The user interface is fully translated into 6 languages with key parity:
 - German (Deutsch)
 - Korean (한국어)
 - Spanish (Español)
-- Brazilian Portuguese (Português Brasil)
+- Brazilian Portuguese (Português (Brasil))
 - French (Français)
 
-Participants and staff each pick their own preferred language; the admin language and the registration form language are independent.
+Participants and staff each pick their own preferred language; the admin language and the registration form language are independent. The two built-in group types (Room Allocation and Small Groups) follow each reader's language until you rename them. Printed rosters have their own language choice, so you can print an English roster from a German screen.
 
 ### Can I add my own language?
 
-Yes. The translation system is fully external (JSON files, no compilation step). See [TRANSLATION_RULE.md](../TRANSLATION_RULE.md) for the contributor workflow. Open an issue first to confirm the locale code we'll add.
+Yes. Each language is one JSON file of interface text, plus a line in the app's list of languages; the app is then rebuilt. See [TRANSLATION_RULE.md](../TRANSLATION_RULE.md) for the contributor workflow. Open an issue first to confirm the locale code we'll add.
 
 The user manual itself is currently English-only; community translations are welcome but not pre-built.
 

@@ -11,7 +11,8 @@ Time required: **30–60 minutes** from a fresh server to a logged-in admin. Mos
 - A Linux host (any modern distro — Ubuntu 22.04+, Debian 12+, Fedora, anything systemd).
 - **Docker Engine 24+** and **Docker Compose v2** (the `docker compose` subcommand, not the legacy `docker-compose` standalone).
 - **Git** (for cloning) — or just download and unpack the source tarball.
-- **Open ports:** `6120` (frontend) at minimum. Optionally `6121` (backend, for direct API access during debugging) and `6122` (PostgreSQL, only if you want to connect from outside the host — usually you don't). All three are configurable — see "Changing the ports" below.
+- **Ports:** `6120` (frontend; it also proxies `/api` and `/health` to the backend, so browsers only ever need this one). Compose also publishes `6121` (backend, for direct API access during debugging) and `6122` (PostgreSQL). Neither needs to be public; see "Changing the ports" below for binding them to localhost.
+- `sudo` rights for `upgrade.sh`, which calls `sudo docker compose`.
 - Roughly **2 GB RAM** and **5 GB disk** for a small church-scale deployment.
 
 To check Docker is ready:
@@ -33,13 +34,17 @@ cd moimio
 cp .env.example .env
 ```
 
-Open `.env` and edit at minimum these three things:
+Open `.env` and edit at minimum the first two of these:
 
 | Variable | What to set |
 |---|---|
 | `SECRET_KEY` | A random string of **at least 64 characters**. Generate one with `python3 -c "import secrets; print(secrets.token_urlsafe(64))"` or `openssl rand -hex 64`. **Do not leave the `change-me-...` placeholder in production.** |
 | `POSTGRES_PASSWORD` | A random password for the database user. Same generation method. |
-| `DATABASE_URL` | Update the password segment to match `POSTGRES_PASSWORD` (the URL inlines it). The string is `postgresql+asyncpg://moimio:<NEW_PASSWORD>@db:5432/moimio`. |
+| `DATABASE_URL` | Optional. `docker-compose.yml` builds the backend's `DATABASE_URL` from `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB`, so the line in `.env` is not what the container uses. Update its password segment anyway if you like the file to be consistent. |
+
+Set `POSTGRES_PASSWORD` **before the first start.** Postgres only applies it when the `pgdata` volume is first created; changing it later produces `password authentication failed` until you change it inside the database too.
+
+Leave `LOG_LEVEL=INFO` (the default). See "Production hardening" for why.
 
 If you want email out of the box, also set the SMTP block — see the SMTP table at the bottom of this guide. Skipping SMTP is fine; the app runs without it (registration confirmation emails just don't get sent, and admins can confirm registrations by hand).
 
@@ -55,7 +60,16 @@ DB_PORT=7122
 
 `docker-compose.yml` reads these via `${FRONTEND_PORT:-6120}` etc., so the env values flow through without further edits. You'd then open `http://localhost:7120` instead.
 
-If you change `BACKEND_PORT`, also update `VITE_API_URL` in `.env` to match — the frontend bakes this URL into its build, so a port mismatch produces "Network error" at login.
+The values are dropped straight into Compose's `ports:` mapping, so you can also give an address. This binds the port to the host's loopback interface only:
+
+```
+BACKEND_PORT=127.0.0.1:6121
+DB_PORT=127.0.0.1:6122
+# Only when your reverse proxy or tunnel runs on this same host:
+FRONTEND_PORT=127.0.0.1:6120
+```
+
+The browser talks to the backend through the frontend's `/api` proxy, so changing `BACKEND_PORT` needs nothing else. (`VITE_API_URL` in `.env` is a leftover; the current frontend does not read it.)
 
 ---
 
@@ -78,17 +92,17 @@ docker compose logs -f backend
 You're looking for two log lines, in order:
 
 ```
-INFO  [alembic.runtime.migration] Running upgrade ... → <latest migration>
+INFO  [alembic.runtime.migration] Running upgrade ... -> <latest migration>
 INFO  Application startup complete.
 ```
 
 The first means the database schema was created/migrated successfully. The second means uvicorn is serving the API. If you see the second without the first, migrations were already up to date — also fine. **Press Ctrl-C to stop following the log; the containers keep running.**
 
-Smoke-test the API:
+Smoke-test the API (the same endpoint is also reachable through the frontend at `http://localhost:6120/health`):
 
 ```bash
 curl http://localhost:6121/health
-# → {"status":"ok"}
+# → {"status":"ok","database":"healthy","version":"1.0.6"}
 ```
 
 ### About those Alembic migrations
@@ -100,7 +114,7 @@ Two things worth knowing:
 - **Migrations run automatically every time the backend container starts.** The Dockerfile's CMD is `alembic upgrade head && uvicorn ...` — Alembic checks the database's current revision and applies any newer migrations it finds, then hands off to uvicorn.
 - **Migrations don't wipe your data.** Each migration is incremental: "add this column", "create this table", "rename this index". They never recreate the database from scratch. As long as you don't run `docker compose down -v` (the `-v` flag deletes named volumes including `moimio_pgdata`), your participant data, events, and allocations are preserved across upgrades.
 
-If you ever do need to reset the database, that's `docker compose down -v` followed by `docker volume rm moimio_pgdata`. Do this only on a deployment with no real data.
+If you ever do need to reset the database, that's `docker compose down -v` (it removes the `pgdata` volume, named `<project>_pgdata`, e.g. `moimio_pgdata`). Do this only on a deployment with no real data.
 
 ---
 
@@ -112,11 +126,11 @@ Moimio doesn't ship with a default admin. Open `http://localhost:6120` (or whate
 
 Fill in:
 
-- **Email** — your login.
 - **Full name** — display name in the admin UI.
-- **Password** — minimum 8 characters. Use a real password manager.
+- **Email** — your login.
+- **Password** and **Confirm password** — minimum 8 characters. Use a real password manager.
 
-Submit. Your account is created with the **Super Admin** role and you're logged in.
+The screen also has a language picker and a light/dark toggle. Click **Create Super Admin**. The account is created with the **Super Admin** role, and you're taken to the sign-in page to log in with it. The setup screen never appears again once any user exists.
 
 **Alternative — CLI bootstrap.** For headless deployments or scripted provisioning, the same operation is available from the command line:
 
@@ -124,15 +138,17 @@ Submit. Your account is created with the **Super Admin** role and you're logged 
 docker compose exec backend python -m app.cli.create_admin
 ```
 
-It prompts for the same fields. Either path lands you in the same place; on-screen is the recommended default for self-hosters.
+It prompts for email, full name and password, and creates a Super Admin. On-screen is the recommended default for self-hosters. The CLI is also the way back in if you lose the only Super Admin password and have no SMTP for a reset: create a second Super Admin with a different email.
 
 ---
 
 ## 4. Log in (after setup)
 
-You're already logged in from the setup screen. If you've signed out and want to come back later, the login URL is `http://localhost:6120/login`.
+Sign in at `http://localhost:6120/login` with the account you just created.
 
-You should land on the events list — empty for now. Create your first event from the **+ New event** button.
+With no events yet you land on the **Welcome to Moimio** screen; click **Create your first event**. Once events exist, the events list has a **+ New Event** button.
+
+As Super Admin, also open **Workspace** in the sidebar and set your **Privacy notice URL**. The public registration form links to it right after the consent sentence; leave it empty and no link is shown.
 
 ---
 
@@ -142,7 +158,7 @@ Before exposing Moimio to the public internet:
 
 - Put a TLS-terminating reverse proxy in front of port 6120. Caddy, Traefik, or a Cloudflare Tunnel on the host all work well; Nginx + Let's Encrypt is the classic option.
 - HTTPS is also what makes the in-app features work. Browsers register the service worker only on HTTPS or on `localhost`, so an install opened on a plain-HTTP LAN address such as `http://192.168.1.20:6120` gets no offline caching, no "new version available" prompt and nothing for the "Clear cache and reload" button to clear, and no error anywhere says why.
-- Restrict the backend port (6121) and the database port (6122) to localhost in your firewall — they don't need to be public.
+- Keep the backend port (6121) and the database port (6122) off the public internet. Bind them to localhost in `.env` (see "Changing the ports"). A host firewall rule alone is not enough: ports Docker publishes are opened in iptables by Docker itself and bypass `ufw`/`firewalld` rules.
 - Read [`SECURITY.md`](../../SECURITY.md) — the "Hardening recommendations for self-hosters" section covers the rest (strong SECRET_KEY, DB password rotation, Docker host patching, SMTP credential discipline).
 - Leave `LOG_LEVEL=INFO` on any install that holds real participants. `LOG_LEVEL=DEBUG` writes participant names, addresses and dates of birth to the container log on every request; debug on a copy with invented data instead.
 
@@ -150,18 +166,36 @@ Before exposing Moimio to the public internet:
 
 ## 6. Updating
 
-To pull a new version:
+From the repo root of your git clone:
 
 ```bash
-cd moimio
-git pull
+./upgrade.sh                # latest commit on your current branch
+./upgrade.sh v1.0.6         # a specific release tag (see CHANGELOG.md)
+./upgrade.sh v1.0.6 --yes   # skip the confirmation prompt
+./upgrade.sh --dry-run      # show what would happen, change nothing
+```
+
+The script checks first (`.env` present, clean working tree, `db` container running), shows the commits it will apply, backs up `.env` to `.env.pre-upgrade-<timestamp>.bak` and the database to `../pgdata-pre-upgrade-<timestamp>.sql.gz`, then checks out the target and runs `docker compose down`, `build --no-cache` and `up -d`. It prints the exact rollback commands at the end. Keep the backups until you're happy with the new version. Checking out a tag leaves the clone on a detached HEAD, so once you've pinned a version, name the next one explicitly too (`./upgrade.sh v1.0.7`) rather than running it bare.
+
+After restarting, the script waits up to 90 seconds for the backend container to report "healthy". The root `docker-compose.yml` defines no healthcheck for the backend, so this wait can end in a "did not become healthy" warning even when the upgrade worked. Check `curl http://localhost:6121/health` and the backend log before rolling back.
+
+The manual equivalent, if you prefer:
+
+```bash
+git pull            # or: git fetch --tags && git checkout v1.0.6
 docker compose build --no-cache
 docker compose up -d --force-recreate
 ```
 
 `--no-cache` matters when the Dockerfile changes (new dependencies, font installs, etc.). If you skip it, you may end up running new code against an old image layer and hit confusing failures.
 
-Migrations run automatically on backend startup — no manual `alembic upgrade head` step needed. Your data is preserved across upgrades (the `moimio_pgdata` volume is not touched).
+Migrations run automatically on backend startup — no manual `alembic upgrade head` step needed. Your data is preserved across upgrades (the `pgdata` volume is not touched). Take a backup first anyway, as with any upgrade.
+
+`deploy.sh` in the repo root is a different tool: it replaces the install from a packaged `../moimio-ce-<tag>.zip` and is meant for installs that were not made with `git clone`. If you cloned the repo, use `upgrade.sh`.
+
+### Container images
+
+This guide builds the images from source. Each release is also published as `ghcr.io/jc-universe87/moimio-backend:<tag>` and `ghcr.io/jc-universe87/moimio-frontend:<tag>` (for example `v1.0.6`). If you use them, always pin a version tag: `:latest` is frozen at v1.0.6, no longer moves, and is not supported. `backend/deploy/production.yml` is the hosted service's template, not a self-hosting compose file; use the root `docker-compose.yml`.
 
 ---
 
@@ -173,9 +207,23 @@ The simplest backup is a Postgres `pg_dump`:
 docker compose exec -T db pg_dump -U moimio moimio | gzip > moimio-backup-$(date +%F).sql.gz
 ```
 
-Run this on a cron schedule. Store the dumps somewhere off the host. Restore by piping the gunzipped dump into `psql`.
+Run this on a cron schedule. Store the dumps somewhere off the host.
 
-The product also ships an in-app event-level backup (download a single archive of one event's data, restore it on another deployment) — see [`docs/manual/09-data-export-gdpr.md`](../manual/09-data-export-gdpr.md) in the user manual.
+To restore, load the dump into an empty database (a plain dump piped into a populated database fails on existing tables and rows):
+
+```bash
+docker compose stop backend
+docker compose exec -T db dropdb -U moimio moimio
+docker compose exec -T db createdb -U moimio moimio
+gunzip -c moimio-backup-2026-10-01.sql.gz | docker compose exec -T db psql -U moimio moimio
+docker compose start backend
+```
+
+(Substitute your `POSTGRES_USER` / `POSTGRES_DB` if you changed them.)
+
+The product also ships an in-app event-level backup: the **Backup** page in the sidebar downloads one ZIP per event (full, or structure only with no personal data), and **Restore from backup** brings one back as a new draft event, on this or another deployment. Team members and their roles are not carried in a backup; invite the team again on the receiving server. See [`docs/manual/09-data-export-gdpr.md`](../manual/09-data-export-gdpr.md) in the user manual.
+
+For a whole-workspace archive from the command line: `docker compose exec backend python -m app.cli.export_all --out /tmp/moimio-export.zip`.
 
 To bring a whole workspace onto this server, every event in one go, see [Moving a workspace to your own Moimio](../moving-a-workspace.md).
 
@@ -196,6 +244,8 @@ SMTP_TLS=true
 SMTP_SSL=false
 ```
 
+`SMTP_TLS=true` is STARTTLS (port 587). For implicit TLS on port 465, set `SMTP_PORT=465`, `SMTP_SSL=true` and `SMTP_TLS=false`. Email is switched on only when both `SMTP_HOST` and `SMTP_USER` are set. Restart the backend after changing any of these (`docker compose up -d backend`).
+
 Common providers and their typical settings (verify against the provider's current documentation — these change occasionally):
 
 | Provider | Typical host | Typical port | Notes |
@@ -208,9 +258,25 @@ Common providers and their typical settings (verify against the provider's curre
 
 **Always check your provider's own current SMTP documentation** before configuring — settings, port numbers, and authentication requirements change. A provider's status page is the source of truth, not this table.
 
-Test from the UI after creating an event: **More ▸ Registration form ▸ Email confirmation ▸ Send Test Email**. The test response shows which `From`, `Reply-To`, and SMTP server were actually used — most useful for diagnosing "the email never arrived" cases.
+Test from the UI after creating an event: open the event's registration form settings (**Setup ▸ Registration** while the event is in setup, **More ▸ Registration form** once registration is open), then **Email confirmation ▸ Send Test Email**. The test email goes to your own login address and states which `From` name, `Reply-To`, and SMTP server were used — most useful for diagnosing "the email never arrived" cases.
 
 If SMTP is left empty, the app skips sending and logs `email_skipped` for each would-be send. Useful for development.
+
+---
+
+## Optional settings reference
+
+All of these are read from `.env` and passed through by `docker-compose.yml`. Restart with `docker compose up -d` after changing them.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `LOG_LEVEL` | `INFO` | `DEBUG` logs every database query with its values, i.e. participant data. |
+| `FEATURE_ALLOCATION` | `true` | `false` turns off the allocation engine for a registration-only install. |
+| `FEATURE_OUTBOUND_WEBHOOKS` | `true` | `false` hides the Webhooks page and disables delivery. See [webhooks](../webhooks.md). |
+| `WEBHOOK_ALLOW_PRIVATE_TARGETS` | `false` | Webhook URLs on private, loopback or link-local addresses (`10.x`, `192.168.x`, `localhost`…) are refused unless this is `true`. Set it only if your receiver lives on your own network. Not in `.env.example`; add the line yourself. |
+| `WEBHOOK_DELIVERY_RETENTION_DAYS` | `30` | How long webhook delivery history is kept. |
+
+The remaining variables in `.env.example` and `docker-compose.yml` (`FEATURE_CREATE_EVENT_CONFIRMATION`, `EVENT_CHARGE_*`, `BILLING_CARD_LAST4`, `FEATURE_ACCOUNT_PORTAL`, `ACCOUNT_URL`, `FEATURE_DEMO_NOTICE`, `MOIMIO_DEMO_MAIL_URL`, `MOIMIO_TENANT_ID`, `MOIMIO_WEBHOOK_URL`, `MOIMIO_WEBHOOK_SECRET`) exist for the hosted service and its demo workspaces. Leave them at their defaults on a normal self-hosted install. `APP_URL` is no longer used: email links take their address from the request.
 
 ---
 
@@ -225,11 +291,11 @@ The backend started before Postgres was ready. The `depends_on: condition: servi
 **Backend logs show `relation "users" does not exist`.**
 Alembic migrations didn't run. Check `docker compose logs backend` for an Alembic error earlier in the log. The fix is usually `docker compose down && docker compose up -d --force-recreate`.
 
-**Frontend serves but I can't log in — `Network error`.**
-The browser can't reach the API. Either Caddy isn't routing `/api/*` properly (check `docker compose logs frontend`), or `VITE_API_URL` in `.env` points somewhere wrong for your deployment. For a single-host install, `VITE_API_URL=http://localhost:6121` works locally but breaks for remote browsers — set it to the public URL or scheme-relative path you actually serve from.
+**The page says "Cannot reach the server", or login fails with a network error.**
+The frontend container serves the page and proxies `/api/*` to the backend container. Check that the backend is up (`docker compose ps`, then `docker compose logs backend`) and that `curl http://localhost:6120/health` answers. If you put your own reverse proxy in front, make sure it forwards every path to port 6120, not just `/`.
 
-**`bcrypt` errors on the first admin creation.**
-Rare but recurs on certain Alpine-based hosts. Inside the backend container, `pip install --force-reinstall bcrypt` then re-load the page (or re-run the CLI).
+**Backend logs show `password authentication failed for user "moimio"`.**
+`POSTGRES_PASSWORD` was changed after the database volume was first created; Postgres keeps the original. Put the old password back in `.env`, or change it inside the database (`docker compose exec db psql -U moimio -c "ALTER USER moimio PASSWORD '<new>'"`) and restart.
 
 **Anything else.**
 Open a [bug report](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md) with the relevant logs (mask any participant data first).

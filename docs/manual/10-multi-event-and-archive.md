@@ -1,35 +1,39 @@
 # 10 — Multi-event & archive
 
-Moimio is built around the assumption that an organisation runs more than one event. Once you've configured a registration form, allocation categories, and a staff team, you'll often want to reuse that setup. This section covers how to run multiple events from one Moimio instance, how archiving works, and how to duplicate an event configuration.
+Moimio is built around the assumption that an organisation runs more than one event. Once you've configured a registration form, group types and a team, you'll often want to reuse that setup. This section covers running several events from one Moimio, how archiving works, and how to start a new event from a past one.
+
+<p align="center">
+  <img src="../assets/events-list.png" alt="The events list with the Active, Past and Archived tabs, event cards with phase badges, and the + New Event and From backup buttons" width="720">
+  <br>
+  <em>The events list</em>
+</p>
 
 ---
 
 ## The events list
 
-Sidebar → **All Events** → the list view at `/admin`.
+Sidebar ▸ **Events**. When you're inside an event, use **All Events** at the top of the sidebar to get back here.
 
-Three tabs at the top:
+A search box sits at the top, then three tabs, each showing a count:
 
-- **Active** — events with status `open` (registration is collecting) or `closed` (registration done; running or upcoming).
-- **Past** — events whose end_date is in the past.
-- **Archived** — events explicitly archived (covered below).
+- **Active** — events that aren't archived and haven't ended yet (including events with no dates set). Pinned events appear first.
+- **Past** — events whose end date has passed.
+- **Archived** — events that have been archived (covered below). Super Admins always see this tab; others see it only when it has something in it.
 
-Each row: event name, status badge, dates, participant count, and a **⋯** menu on the right with per-row actions (duplicate, archive, etc.).
+Each card shows the event name, a badge for where it is (**Setup**, **Registration**, **Event**, **Past** or **Archived**), its dates and location, and a headline number such as how many are registered. Super Admins also get a **⋯** menu on each card with **Pin to top** / **Unpin**, **Archive** / **Unarchive**, and **Delete event**.
 
-The **+ New Event** button at the top creates a fresh event. **↑ From backup** restores an event from a backup zip (see [§09](09-data-export-gdpr.md#backups-and-event-level-export)).
+The **+ New Event** button creates a fresh event. **↑ From backup** takes you to the Backup page to restore an event from a backup file (see [§09](09-data-export-gdpr.md#backups)). Both buttons are shown to Super Admins and to team members who have been given **Can create new events**.
 
 ---
 
-## Status vs archive — orthogonal concepts
+## Closing registration vs archiving
 
-A common point of confusion. There are two independent dimensions:
+Two different things, often confused:
 
-- **Status:** `draft` → `open` → `closed`. Lifecycle of an event: configuring → registration is live → registration is done. This is the natural progression of a single event.
-- **`is_archived`:** boolean flag, defaults false. Whether the event is "filed away" — read-only, hidden from active views, but its data is still there.
+- **Closing registration** is part of an event's normal life: Setup → Registration → Event. Closing stops new sign-ups and moves the event on to the Event phase, where you allocate and check people in. See [§02](02-events-and-registration.md).
+- **Archiving** files an event away. It becomes read-only and moves to the **Archived** tab, but all its data is kept.
 
-**An event can be in any status AND archived simultaneously.** A draft event you abandoned can be archived. A live event can be archived (which freezes it). A closed event can be archived (the typical case — you ran the event, it's done, you want it tucked away).
-
-Archive is **reversible**. Unarchive at any time and the event returns to whichever status it was in.
+An event can be archived at any point — a draft you abandoned, or (the usual case) an event that's over and you want tucked away. Archiving is **reversible**.
 
 ---
 
@@ -37,74 +41,74 @@ Archive is **reversible**. Unarchive at any time and the event returns to whiche
 
 ### Where the button is
 
-**Setup hub → Danger zone → Archive this event** (admin only) OR **Event details → Danger zone → Archive this event** (Super Admin only).
+Archiving is for **Super Admins**. Any of these work:
 
-The Danger zone section is collapsed by default to reduce accidental clicks; click the burgundy header to expand.
+- Events list ▸ **⋯** on the event's card ▸ **Archive**
+- **Setup hub ▸ Danger zone ▸ Archive** (while the event is still in Setup)
+- **Event details ▸ Danger zone ▸ Archive**
+
+The Danger zone is collapsed by default to avoid accidental clicks — click its header to open it. Confirm with **Archive** in the **Archive this event?** dialog.
 
 ### What happens when you archive
 
 - The event moves to the **Archived** tab in the events list.
-- The event becomes **read-only for everyone, including Super Admins**. (To edit, you must unarchive first.)
-- The public registration form returns an "event is archived" error if anyone tries to register.
+- The event becomes **read-only for everyone, including Super Admins**. To change anything, unarchive it first.
+- The public registration form refuses new sign-ups.
 - Existing data — participants, allocations, check-ins, notes — stays intact.
-- An archived banner appears at the top of every page within the event.
-
-### Who can archive
-
-By default, **Super Admin** only via the Event details Danger zone. Per-event admins can archive too via the Setup hub Danger zone (depending on the event's phase). Staff users cannot.
+- An **Archived** banner appears at the top of the event's pages.
 
 ### Unarchiving
 
-Same path: **Danger zone → Unarchive this event**. The event returns to its previous status. Registration accepts new entries again (if status is `open`); check-ins resume; the event reappears in Active or Past.
+Same places: **⋯ ▸ Unarchive** on the card, or **Danger zone ▸ Unarchive**. The event becomes editable again and reappears in **Active** or **Past**, depending on its dates. Registration and check-in carry on where they left off.
 
 ---
 
-## Duplicating an event
+## Starting a new event from a past one
 
-When you're running a recurring event — same registration form, similar group types, returning staff — duplicating an existing event saves an enormous amount of setup.
+When you run a recurring event — same registration form, similar rooms, the same team — copying the setup from last time saves a lot of work.
 
 ### How to do it
 
-Events list → ⋯ menu on the source event row → **Duplicate**. A modal opens.
+1. Events list ▸ **+ New Event**.
+2. Type the new event's name.
+3. Tick **Transfer settings from another event** and choose the event to copy from.
+4. Under **What to copy**, untick anything you don't want. All five are ticked to start with:
+   - **Marks** — the mark definitions (name, colour and so on), not who carried them.
+   - **Registration form** — which standard fields are shown and required.
+   - **Custom fields** — your own questions.
+   - **Group types** — every group type with its groups, capacities and gender settings. Groups restricted to a mark are linked to the new event's copy of that mark; if you don't copy marks, those restrictions are dropped.
+   - **Team members** — everyone on the old event's team, with the same role and permissions.
+5. Click **Create event**.
 
-### What gets copied (configuration only)
+The new event starts in Setup, ready for you to add dates and open registration. **No participant data is ever copied** — no participants, allocations, check-ins or notes.
 
-- **Event name** — pre-filled with `{original} (copy)`. Editable.
-- **Registration form** — every field (built-in + custom).
-- **Group types** — every allocation category and its units (capacity, gender restriction, etc.).
-- **Marks** — every mark definition (name, colour, visibility settings).
-- **Staff admins** — every per-event admin assignment.
+You can only copy from events you have access to.
 
-### What does NOT get copied
+### Copying between installations
 
-- **Participants** — registration data is per-event by design.
-- **Allocations** — depend on participants.
-- **Check-ins** — depend on participants and time.
-- **Notes** — typically operational, not template-able.
-
-The copy lands as a fresh draft event, ready to open registration when you're ready.
+To carry setup to a different Moimio, or to an event that already exists, export pieces as files: **Export group types** / **Import group types** on the allocation side (see [§05](05-group-types-and-units.md)) and **Export form** / **Import form** for the registration form (see [§02](02-events-and-registration.md)). These files hold configuration only, never personal data.
 
 ### What about backups
 
-Backups (covered in [§09](09-data-export-gdpr.md#backups-and-event-level-export)) are the alternative path — they preserve everything including participants. **Use Duplicate when starting a new run; use Backup when migrating between deployments or making a snapshot of an in-progress event.** Backups also offer a "structure-only" mode that's effectively a duplicate.
+Backups (see [§09](09-data-export-gdpr.md#backups)) are the other route — a full backup keeps everything, including participants. **Copy settings when starting a new run; use a backup as a safety copy or to move an event to another Moimio.** A **Structure only (GDPR-safe)** backup is a shareable template with no personal data.
 
 ---
 
 ## Running multiple events in parallel
 
-Nothing in Moimio prevents this. Each event is its own world: its own participants, its own allocation categories, its own staff assignments. Cross-event participant overlap (the same person registering for two events) is treated as two independent registrations — one per event — because the registration form per event differs.
+Nothing in Moimio prevents this. Each event is its own world: its own participants, its own group types, its own team. The same person registering for two events is treated as two separate registrations — one per event.
 
 Practical things to know:
 
-- **Sidebar context.** When you're inside an event, the sidebar shows that event's controls. Switch via the **Events** link at the top of the sidebar (visible to all roles since v0.81).
-- **Staff assignments are per-event.** A staff member assigned to Event A doesn't automatically have access to Event B. Re-assign for each event.
-- **Custom fields are per-event.** Event A's "T-shirt size" custom field is a different DB row from Event B's "T-shirt size", even if the labels match.
-- **Allocation categories are per-event.** The "Rooms" category in Event A has nothing to do with the "Rooms" in Event B.
+- **Switching events.** Use **All Events** at the top of the sidebar, then pick another event. Every role sees this link.
+- **Team access is per event.** A team member on Event A doesn't automatically get access to Event B. Add them to each event (or copy **Team members** when creating the new one).
+- **Custom fields are per event.** Event A's "T-shirt size" question is separate from Event B's, even if the wording matches.
+- **Group types are per event.** "Room Allocation" in Event A has nothing to do with "Room Allocation" in Event B.
 
-This isolation is intentional. It means you can confidently run a women's retreat and a men's conference from the same Moimio without any data crossing.
+This separation is intentional. You can run a women's retreat and a men's conference from the same Moimio without any data crossing.
 
 ---
 
 ## What's next
 
-[Section 11 — Staff & permissions](11-staff-permissions.md) covers the staff role model, per-event assignments, and the granular permissions for People, Organise, Check-in, Reports, and Marks.
+[Section 11 — Staff & permissions](11-staff-permissions.md) covers user accounts, each event's team, and the permissions for People, Organise, Check-in, Reports and Marks.

@@ -5,11 +5,11 @@ when things happen inside the platform. This page is the integration
 guide for self-hosters wiring Moimio into Slack, Zapier, n8n, custom
 scripts, or any other service that accepts inbound webhooks.
 
-> v1.0.0g ships the webhook subsystem itself with a single emittable
-> event type (`test.ping`) for verification. Real event types — event
-> lifecycle, allocation milestones — arrive in subsequent releases.
-> The signing scheme, retry policy, and admin UI documented below are
-> stable.
+> The subsystem arrived in v1.0.0g with only `test.ping`. Event
+> lifecycle and allocation types followed in v1.0.0h and v1.0.0y; see
+> [Available event types](#available-event-types) for the current list.
+> The signing scheme, retry policy and admin UI documented below are
+> unchanged since v1.0.0g.
 
 ---
 
@@ -23,12 +23,15 @@ the moment a system event happens. Common uses:
   (sync to a Google Sheet, fire an email, trigger a Notion page)
 - **Custom scripts** — your own receiver running on the same network
 - **Accounting / CRM integrations** — your finance system finds out
-  when a paid event is published
+  when an event is created or deleted
 
 Webhooks are an **optional** capability. If you don't configure any
-endpoints, Moimio behaves identically to v1.0.0f. The feature can be
-disabled entirely by setting `FEATURE_OUTBOUND_WEBHOOKS=false` in
-`.env`.
+endpoints, nothing is sent anywhere. The feature can be disabled
+entirely by setting `FEATURE_OUTBOUND_WEBHOOKS=false` in `.env`.
+
+Payloads are deliberately minimal: ids, timestamps and (for
+`event.over_cap`) a rounded headcount. No participant names, emails or
+other participant data are ever put in a webhook.
 
 ---
 
@@ -45,15 +48,22 @@ lists your configured endpoints and shows their delivery history.
    - **URL** — the receiver URL on the other side. Use HTTPS in
      production; HTTP is accepted but inadvisable. URL fragments
      (`#...`) are stripped automatically since servers never see them.
-     The URL must point at a public internet address: targets on
-     private networks (10.x, 172.16-31.x, 192.168.x), `localhost`,
-     link-local and similar addresses are refused, and the check is
-     repeated before every delivery in case the hostname is
-     re-pointed later. Self-hosters who need to deliver to a receiver
-     on their own network can set `WEBHOOK_ALLOW_PRIVATE_TARGETS=true`
+     Only `http` and `https` are accepted, and the URL must point at a
+     public internet address: targets on private networks (10.x,
+     172.16-31.x, 192.168.x), `localhost`, loopback, link-local
+     (including `169.254.169.254`), carrier-grade NAT (100.64.0.0/10)
+     and similar addresses are refused with an error on create or
+     edit. If the hostname resolves to several addresses, all of them
+     must be public. A hostname that does not resolve yet is accepted
+     (its deliveries simply fail until DNS is live). The check is
+     repeated before every delivery in case the hostname is re-pointed
+     later; a refused delivery is recorded as a failed attempt with
+     error `url_not_allowed`. Self-hosters who need to deliver to a
+     receiver on their own network can set
+     `WEBHOOK_ALLOW_PRIVATE_TARGETS=true`
    - **Event types** — comma-separated list of event types this
-     endpoint wants, or `*` for everything. For v1.0.0g, only
-     `test.ping` is emittable; future releases will add more
+     endpoint wants, or `*` for everything (an empty field means `*`).
+     See [Available event types](#available-event-types)
 3. Click **Create endpoint**
 4. **Copy the signing secret immediately.** It is shown once, in a
    modal that refuses to close until you tick "I have saved this
@@ -74,9 +84,9 @@ Each endpoint card shows the following actions:
 | Action | What it does |
 |---|---|
 | **Send test** | Fires a `test.ping` event right now. Useful for verifying the receiver is reachable and signature-validating |
-| **Show deliveries** | Expands the delivery log for this endpoint — the last 50 attempts with response codes, timings, and any errors |
-| **Pause** / **Resume** | Temporarily stops the endpoint receiving new events without deleting it |
-| **Re-enable** | Resets the state from `degraded` or `disabled` back to `active`. See [Endpoint states](#endpoint-states) |
+| **Show deliveries** | Expands the delivery log for this endpoint — the 50 most recent deliveries, newest first. Each row is one event sent to this endpoint and shows its latest attempt number, status, response code, timing and any error |
+| **Pause** / **Resume** | Temporarily stops the endpoint receiving new events without deleting it. Events raised while paused are not queued for it, and any retries still waiting when it is paused are given up (marked `exhausted`) |
+| **Re-enable** | Resets the state from `degraded` or `disabled` back to `active` and the failure counter to zero. See [Endpoint states](#endpoint-states) |
 | **Rotate secret** | Generates a fresh signing secret. The old one is invalidated immediately. You must update your receiver with the new secret before deliveries succeed again |
 | **Delete** | Permanently removes the endpoint and its delivery history |
 
@@ -90,9 +100,9 @@ endpoint card tells you what's going on.
 | State | Meaning |
 |---|---|
 | **active** | Healthy. Receiving events normally |
-| **degraded** | Five consecutive failed deliveries have occurred. Still receiving new events — Moimio keeps trying — but the UI flags it as a warning. Often a transient issue resolves itself; sometimes it's a sign your receiver is misconfigured |
-| **disabled** | Twenty consecutive failures with no success in between. Moimio has stopped firing new events to this endpoint to avoid generating retry traffic that looks like an attack to the receiver. You must investigate and click **Re-enable** to start firing again |
-| **paused** | You manually paused it via the **Pause** action. No automatic transitions |
+| **degraded** | Five consecutive failed delivery attempts (retries count) have occurred. Still receiving new events — Moimio keeps trying — but the UI flags it as a warning. Often a transient issue resolves itself; sometimes it's a sign your receiver is misconfigured |
+| **disabled** | Twenty consecutive failed attempts with no success in between. Moimio has stopped firing new events to this endpoint, and gives up any retries still waiting for it, to avoid generating retry traffic that looks like an attack to the receiver. You must investigate and click **Re-enable** to start firing again |
+| **paused** | You manually paused it via the **Pause** action. No automatic transitions. (Stored as a separate on/off flag, not as a health state, so an endpoint keeps its health state while paused.) |
 
 Endpoints recover from `degraded` to `active` automatically on the
 first successful delivery. Recovering from `disabled` requires the
@@ -120,10 +130,11 @@ Every webhook Moimio sends has the same envelope shape:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `event_id` | UUID string | Unique per event. Use it for receiver-side idempotency — the same `event_id` may arrive multiple times if Moimio retries a delivery your receiver acknowledged but couldn't store |
-| `event_type` | string | Dot-separated namespace, e.g. `event.created`, `participant.registered`. v1.0.0g only emits `test.ping` |
-| `timestamp` | ISO 8601 string | When Moimio generated the event |
+| `event_id` | UUID string | Unique per message. Use it for receiver-side idempotency — the same `event_id` may arrive multiple times if Moimio retries a delivery your receiver acknowledged but couldn't store. This is **not** the id of a Moimio event (retreat); that one travels as `data.event_id` |
+| `event_type` | string | Dot-separated namespace, e.g. `event.created`, `event.allocated`. See [Available event types](#available-event-types) |
+| `timestamp` | ISO 8601 string | When Moimio queued the event (unchanged across retries) |
 | `data` | object | Event-type-specific payload. Shape depends on the event |
+| `tenant_id` | string, optional | Present only when the instance sets `MOIMIO_TENANT_ID`; omitted entirely otherwise. Lets one receiver tell several instances apart |
 
 The body is JSON-serialised with sorted keys and no whitespace, so
 the same logical payload always produces the same bytes — and
@@ -155,9 +166,11 @@ receiver side without parsing JSON.
 
 The signature header has the form `ts=<unix>;h1=<hex>` where:
 
-- `ts` is the Unix timestamp at which Moimio signed the request
+- `ts` is the Unix timestamp at which Moimio signed the request.
+  Every attempt, retries included, is signed afresh, so `ts` is
+  always close to the moment the request was sent
 - `h1` is `HMAC-SHA256(secret, f"{ts}:{raw_body}")` as a lowercase
-  hex digest
+  hex digest, keyed with the secret string exactly as shown to you
 
 On the receiver side, with the secret you copied at endpoint
 creation:
@@ -247,7 +260,8 @@ app.post('/webhook', (req, res) => {
 
 If your receiver doesn't return a `2xx` response (or doesn't respond
 at all within 15 seconds), Moimio retries the delivery on the
-following schedule:
+following schedule. Redirects are not followed, so a `3xx` counts as
+a failure: register the final URL.
 
 | Attempt | Delay after previous attempt |
 |---|---|
@@ -259,14 +273,18 @@ following schedule:
 | 6 | 6 hours |
 
 After the sixth attempt fails, the delivery is marked **exhausted**
-and Moimio gives up on it. The same `event_id` is used across all
-retries — your receiver should deduplicate by `event_id` to handle
-the case where it successfully stored the event but failed to
-respond `2xx` in time.
+and Moimio gives up on it. The same `event_id` and the same body are
+used across all retries — your receiver should deduplicate by
+`event_id` to handle the case where it successfully stored the event
+but failed to respond `2xx` in time.
 
-Total retry window: roughly **7.5 hours**. After that, the delivery
-is permanently failed (but the row remains in the delivery log for
-the retention period, default 30 days).
+Retries are picked up by a background job that runs every 30 seconds,
+so each delay can stretch by up to half a minute. Total retry window:
+roughly **7 hours 15 minutes** (30 s + 2 min + 10 min + 1 h + 6 h).
+After that, the delivery is permanently failed. The delivery row
+(one per event per endpoint, updated in place on each attempt)
+remains in the delivery log until it is older than the retention
+period, default 30 days.
 
 The retention period is configurable via the
 `WEBHOOK_DELIVERY_RETENTION_DAYS` environment variable.
@@ -294,13 +312,22 @@ losing it is fine).
 
 ## Available event types
 
-The following event types are emittable. The list will grow.
+These are all the event types Moimio currently emits. Events are
+queued in the same database transaction as the change they report,
+so a receiver never hears about a change that was rolled back.
 
-| Event type | Emitted when | Available since |
-|---|---|---|
-| `test.ping` | Admin clicks "Send test" on an endpoint | v1.0.0g |
+| Event type | Emitted when | `data` | Since |
+|---|---|---|---|
+| `test.ping` | A super admin clicks **Send test** on an endpoint (sent to that endpoint only) | `message`, `endpoint_id`, `endpoint_name` | v1.0.0g |
+| `event.created` | An event is created | `event_id`, `created_at` | v1.0.0h |
+| `event.deleted` | An event is deleted (it replaced `event.cancelled`, which is no longer emitted) | `event_id`, `deleted_at` | v1.0.0h-1 |
+| `event.allocated` | An allocation proposal is committed for one group type. Fires again on every re-run, and once per group type; manual drag-and-drop does not fire it | `event_id` | v1.0.0y |
+| `event.over_cap` | Once per event, the first time its active roster (confirmed + pending, removed people excluded) exceeds `MOIMIO_PARTICIPANT_CAP`. Never fires when that variable is unset, which is the default | `event_id`, `participant_estimate` (rounded **up** to the next 50, never the exact count), `cap` | v1.0.0y |
+| `workspace.delete_requested` | A super admin confirms workspace deletion in the Danger Zone (shown on hosted workspaces only). Moimio itself deletes nothing when this fires; it is a signal for a hosting control plane | `confirmed_by_user_id`, `confirmed_by_email`, `confirmed_at` | v1.0.0t |
 
-(Future event types will be documented here when added.)
+An endpoint subscribed to `*` receives every type above, including
+`workspace.delete_requested`, whose payload carries the requesting
+admin's email address.
 
 ---
 
@@ -314,14 +341,27 @@ The webhook subsystem is controlled by these environment variables
 | `FEATURE_OUTBOUND_WEBHOOKS` | `true` | Disable the entire subsystem when set to `false` — admin UI hidden, router not registered, scheduler jobs not started |
 | `WEBHOOK_ALLOW_PRIVATE_TARGETS` | `false` | Allow webhook endpoints on private, loopback and link-local addresses. Off by default so the server cannot be used to reach into its own network. Switch on only if your receiver is on your own network and you understand the exposure |
 | `WEBHOOK_DELIVERY_RETENTION_DAYS` | `30` | How many days of delivery history to keep before the daily prune job deletes them |
-| `MOIMIO_WEBHOOK_URL` | (empty) | When set together with `MOIMIO_WEBHOOK_SECRET`, Moimio auto-creates a webhook endpoint at first boot subscribing to all events. Intended for deployment automation — most self-hosters leave this empty |
+| `MOIMIO_WEBHOOK_URL` | (empty) | When set together with `MOIMIO_WEBHOOK_SECRET`, Moimio creates a webhook endpoint at startup subscribing to all events (`*`). Checked on every boot: if the URL or secret has changed, the existing endpoint is updated. Intended for deployment automation — most self-hosters leave this empty |
 | `MOIMIO_WEBHOOK_SECRET` | (empty) | The signing secret for the auto-registered endpoint above. Required only when `MOIMIO_WEBHOOK_URL` is set |
+| `MOIMIO_TENANT_ID` | (empty) | When set, every payload carries it as a top-level `tenant_id` field |
 
 Auto-registered endpoints have `managed_by="saas"` in the database
-and are hidden from the admin UI. They cannot be edited or deleted
-through the UI — they are platform infrastructure, not user objects.
-Self-hosters who manage their endpoints manually through the admin
-UI should leave the two `MOIMIO_WEBHOOK_*` variables empty.
+and are hidden from the admin UI and the webhook API. They cannot be
+edited or deleted there — they are platform infrastructure, not user
+objects — and they are exempt from the private-address check, since a
+hosting control plane's receiver sits on its private network by
+design. Self-hosters who manage their endpoints manually through the
+admin UI should leave the two `MOIMIO_WEBHOOK_*` variables empty.
+
+### Hosted workspaces
+
+On a hosted (managed) workspace, signalled by `FEATURE_ACCOUNT_PORTAL=true`,
+the Webhooks page is hidden and the webhook API is read-only: creating,
+editing, deleting, rotating the secret of, re-enabling or test-firing
+an endpoint is refused with a "managed by Moimio" error (HTTP 403);
+listing still works. Delivery keeps running, because the hosting
+platform's own endpoint depends on it. Self-hosted instances are
+unaffected.
 
 ---
 
@@ -345,15 +385,18 @@ Three common causes:
 2. **The wrong secret.** Rotate the secret in the admin UI, update
    your receiver, send a test. If that works, the original secret
    on the receiver side was wrong
-3. **Clock skew.** Moimio rejects signatures older than 5 minutes.
-   If your receiver's clock is far off real time, signatures from
-   Moimio will appear stale. Use NTP
+3. **Clock skew.** The verification examples above reject signatures
+   more than 5 minutes old. If your receiver's clock (or Moimio's
+   server clock) is far off real time, signatures will appear stale.
+   Use NTP on both
 
 ### "My endpoint went into the disabled state"
 
-That means twenty consecutive deliveries failed. Likely causes:
+That means twenty consecutive delivery attempts failed. Likely causes:
 
-- The receiver URL is wrong (typo, fragment, wrong path)
+- The receiver URL is wrong (typo, wrong path) or redirects
+- The receiver resolves to a private address and
+  `WEBHOOK_ALLOW_PRIVATE_TARGETS` is off (error `url_not_allowed`)
 - The receiver is consistently returning a 4xx or 5xx
 - The receiver is unreachable from Moimio's container (firewall,
   DNS, certificate issue)
@@ -365,7 +408,7 @@ click **Re-enable** to start firing events again.
 ### "Sending a test event 'does nothing'"
 
 Click **Show deliveries** for the endpoint, then **Refresh**. The
-test event is queued as a `PENDING` delivery and fires within
+test event is queued as a `pending` delivery and fires within
 ~1 second (the test endpoint triggers an immediate worker tick).
 You should see the delivery row with a final status, response code,
 and duration. If you don't see a row after 5 seconds, check the
