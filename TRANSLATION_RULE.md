@@ -236,5 +236,6 @@ python3 scripts/docs-i18n.py check   # every sibling exists, every link and #anc
 
 ## Current Status
 
-**1,041 keys × 6 languages = 6,246 translations.** All aligned. Zero
-missing. Validator clean.
+**1,227 keys × 6 languages = 7,362 translations.** All aligned. Zero
+missing keys. The 18 October 2026 native-polish pass updated 95 UI strings;
+future UI changes still require translation review in all six locales.
