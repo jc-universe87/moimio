@@ -1,3 +1,5 @@
+🌐 **English** · [Deutsch](06-allocation-engine.de.md) · [한국어](06-allocation-engine.ko.md) · [Español](06-allocation-engine.es.md) · [Português (Brasil)](06-allocation-engine.pt-BR.md) · [Français](06-allocation-engine.fr.md)
+
 # 06 — Allocation Engine
 
 The allocation engine is what makes Moimio different from a spreadsheet. Once registrations come in, the engine proposes a complete allocation in one click, respecting group codes, marks, gender and mark restrictions, exclusions and group capacities. You review the proposal, then commit it or throw it away.

@@ -1,3 +1,5 @@
+🌐 **English** · [Deutsch](quick-guide.de.md) · [한국어](quick-guide.ko.md) · [Español](quick-guide.es.md) · [Português (Brasil)](quick-guide.pt-BR.md) · [Français](quick-guide.fr.md)
+
 # Quick Guide
 
 This is the speed-run version of the manual. One event, beginning to end. Skip the detail, get to the PDF.
@@ -94,7 +96,7 @@ The **Registration** page shows live counts, a sign-up chart and the most recent
 - **Pending** — only when email confirmation is on: registered but hasn't clicked the email link yet.
 - **Cancelled** — cancelled, by them or by you.
 
-By default the allocation engine only places **confirmed** people (there's an **Include unconfirmed people** setting if you need it). On the People page you can:
+By default the allocation engine places **pending** people too, alongside confirmed ones (turn off **Include unconfirmed people** if you'd rather wait for confirmations). On the People page you can:
 
 - Click a cell (name, email, group code, phone, etc.) to edit it in place.
 - Change someone's status from the status pill on their row — useful when an email never arrived and you want to confirm them by hand. **Resend** sends their registration email again.
@@ -115,7 +117,7 @@ Organise shows one card per group type. Open a group type, add its rooms or grou
 
 The engine then works through its settings in this order (you'll find them under **Engine settings**):
 
-1. **Include unconfirmed people** — off by default.
+1. **Include unconfirmed people** — on by default.
 2. **Keep group codes together** — people sharing a group code are placed together (with **Split group codes if needed** for codes too big for any one group, and **A group code takes a whole group to itself** for family rooms).
 3. **Apply marks in this order** — each mark keeps its holders together or spreads them evenly, as you set it.
 4. **Keep the same gender together**.

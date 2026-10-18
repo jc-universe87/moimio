@@ -1,3 +1,5 @@
+🌐 **English** · [Deutsch](01-getting-started.de.md) · [한국어](01-getting-started.ko.md) · [Español](01-getting-started.es.md) · [Português (Brasil)](01-getting-started.pt-BR.md) · [Français](01-getting-started.fr.md)
+
 # 01 — Getting Started
 
 This section covers the parts of Moimio you'll touch in the first session: the first-time setup, the admin layout, the events list, the phase model that drives everything else, and the basics of user management.

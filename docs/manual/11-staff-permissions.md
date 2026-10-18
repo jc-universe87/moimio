@@ -1,3 +1,5 @@
+🌐 **English** · [Deutsch](11-staff-permissions.de.md) · [한국어](11-staff-permissions.ko.md) · [Español](11-staff-permissions.es.md) · [Português (Brasil)](11-staff-permissions.pt-BR.md) · [Français](11-staff-permissions.fr.md)
+
 # 11 — Staff & permissions
 
 Moimio has two kinds of user account and a team for each event. This section covers both: who's a Super Admin, who's Staff, and how to give people access to a specific event with the right permissions.

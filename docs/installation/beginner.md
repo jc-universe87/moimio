@@ -1,3 +1,5 @@
+🌐 **English** · [Deutsch](beginner.de.md) · [한국어](beginner.ko.md) · [Español](beginner.es.md) · [Português (Brasil)](beginner.pt-BR.md) · [Français](beginner.fr.md)
+
 # Beginner Install Guide
 
 This guide is for someone who's never opened a terminal but needs Moimio running for a real event. We'll go slowly.

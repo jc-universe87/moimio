@@ -1,3 +1,5 @@
+🌐 **English** · [Deutsch](05-group-types-and-units.de.md) · [한국어](05-group-types-and-units.ko.md) · [Español](05-group-types-and-units.es.md) · [Português (Brasil)](05-group-types-and-units.pt-BR.md) · [Français](05-group-types-and-units.fr.md)
+
 # 05 — Group Types and Units
 
 The allocation engine places participants into **units** — the individual rooms, groups, tables or workshops — which are organised into **group types**. This section explains both: what they are, how to set them up, and the choices that drive behaviour later.

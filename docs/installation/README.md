@@ -1,3 +1,5 @@
+🌐 **English** · [Deutsch](README.de.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Português (Brasil)](README.pt-BR.md) · [Français](README.fr.md)
+
 # Installation
 
 This guide covers installing **Moimio CE (Community Edition)**, the open-source self-hostable build. (For the managed hosted product, sign up at [moimio.app](https://moimio.app) — no installation required.)
