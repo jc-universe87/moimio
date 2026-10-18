@@ -715,7 +715,7 @@
   "organise.exclude.drop_hint": "Déposez ici pour exclure",
   "organise.exclude.header": "Exclus ({n})",
   "organise.exclude.header_one": "Exclu (1)",
-  "organise.exclude.left_locked_place": "{name} a été retiré de {unit}, qui est verrouillé. La place restera libre jusqu'à ce que vous déverrouilliez ce groupe.",
+  "organise.exclude.left_locked_place": "Après le retrait de {name}, la place dans le groupe {unit} reste vide jusqu'à ce que vous le déverrouilliez.",
   "organise.exclude.override_body": "{name} est exclu de {category}. L'attribuer ici lèvera cette exclusion.",
   "organise.exclude.override_confirm": "Attribuer quand même",
   "organise.exclude.override_title": "Ce participant est exclu",
