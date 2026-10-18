@@ -2,7 +2,7 @@
 
 This guide covers installing **Moimio CE (Community Edition)**, the open-source self-hostable build. (For the managed hosted product, sign up at [moimio.app](https://moimio.app) — no installation required.)
 
-Moimio CE runs as three Docker containers (a backend, a frontend, a database) orchestrated by Docker Compose. Installation is mostly: clone, configure, `docker compose up`, create the first admin via the on-screen wizard.
+Moimio CE runs as three Docker containers (a backend, a frontend, a database) orchestrated by Docker Compose. Installation is mostly: clone, configure, `docker compose up --build` (which builds the Moimio images from source on your machine), then create the first admin via the on-screen setup screen.
 
 There are two guides in this folder, depending on your background. Pick one.
 
@@ -56,8 +56,8 @@ Moimio's footprint is small. Indicative numbers:
 
 - **CPU:** Any modern x86_64 or ARM64 processor. Two cores is enough.
 - **RAM:** **2 GB minimum**, 4 GB comfortable. Memory usage scales gently with concurrent registration traffic.
-- **Disk:** **5 GB** for the application and database; growth is dominated by file uploads if you collect them, otherwise minimal.
-- **Network:** A public IP (or a tunnel like Cloudflare Tunnel) is needed for participants to reach the registration form. Inbound port 80/443 (or 6120 if you skip TLS for testing).
+- **Disk:** **5 GB** for the application images and database; the database itself grows slowly (Moimio stores no file uploads).
+- **Network:** A public IP (or a tunnel like Cloudflare Tunnel) is needed for participants to reach the registration form. Inbound port 80/443 (or 6120 if you skip TLS for testing). For real events, plan on HTTPS: some in-app features (offline caching, the "new version available" prompt) only work over HTTPS or on `localhost`.
 
 To verify the host you're considering meets these:
 
@@ -82,7 +82,14 @@ Anywhere Docker runs:
 
 ## After installation
 
-Once Moimio is running, your browser will land on the **first-time setup screen** automatically — fill in email, name, password, and you're logged in as the Super Admin.
+Once Moimio is running, your browser will land on the **First-time setup** screen automatically. Fill in your full name, email and a password (twice), click **Create Super Admin**, then sign in with the account you just made. With no events yet, you'll see a **Welcome to Moimio** screen with a **Create your first event** button.
+
+Two things worth doing early:
+
+- **Set your privacy notice link.** As Super Admin, open **Workspace** in the sidebar and enter the web address of your organisation's privacy notice. The public registration form then links to it right after the consent sentence.
+- **Plan upgrades and backups.** Both guides have a short section on each. In short: `./upgrade.sh` upgrades a git install and takes a database backup first; the in-app **Backup** page downloads per-event backups.
+
+Moving from the hosted service or another server? See [Moving a workspace to your own Moimio](../moving-a-workspace.md).
 
 From there, the [User Manual](../manual/README.md) walks through actually running an event: creating events, configuring registration, running the allocation engine, doing check-in, exporting rosters.
 

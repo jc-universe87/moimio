@@ -1,162 +1,211 @@
 # 06 — Allocation Engine
 
-The allocation engine is what makes Moimio different from a spreadsheet. Once registrations come in, the engine proposes a complete allocation in one click — respecting group-code clusters, mark behaviours, gender restrictions, and unit capacities. You then review, adjust, and commit.
+The allocation engine is what makes Moimio different from a spreadsheet. Once registrations come in, the engine proposes a complete allocation in one click, respecting group codes, marks, gender and mark restrictions, exclusions and group capacities. You review the proposal, then commit it or throw it away.
 
 This section covers how to run it, what it does, how to tune it, and what to do when the proposal isn't quite right.
 
 <p align="center">
-  <img src="../assets/allocation-board.png" alt="The AllocationBoard for one category mid-allocation" width="560">
+  <img src="../assets/allocation-board.png" alt="The allocation board for one group type mid-allocation" width="560">
   <br>
-  <em>The AllocationBoard for one category, mid-allocation</em>
+  <em>The allocation board for one group type, mid-allocation</em>
 </p>
 
 ---
 
 ## Where to find it
 
-**Organise → pick a category → AllocationBoard**.
+**Organise** in the sidebar ▸ click a group type card (for example **Room Allocation** or **Small Groups**). This opens the allocation board for that group type. **← Back** returns to the list of group types.
 
-The AllocationBoard shows three things side-by-side:
+The board has three parts:
 
-- **Top toolbar** — the **Auto-Allocate** button with a gear ⚙ for engine settings, and a **Manage [units]** link to add/edit/delete units.
-- **Left column — the participant pool** — everyone confirmed (and optionally pending), filterable by gender or mark, with a search box.
-- **Right grid — the units** — one card per unit with its capacity, gender restriction (if any), and the participants currently assigned to it.
+- **Top toolbar**: the **✦ Auto-Allocate** button with a **⚙** (engine settings) next to it, a **+ Add [item]** link to create a new group (for example **+ Add Room**), and a **⋯** menu (notes, **↗ Open overview**, PDF downloads, **Clear all allocations**).
+- **Left panel, Unassigned**: everyone not yet in a group, with a search box and **All / ♂ Male / ♀ Female** filter pills. People who haven't confirmed their email carry a **Pending** pill. Below the list sits the **Excluded** block (see [Keeping someone out of a group type](#keeping-someone-out-of-a-group-type)). The panel can be popped out into a floating window and back with the small icon at its top.
+- **Right grid, the groups**: one card per group with its occupancy (for example `5/8`), its gender restriction if any (for example **female only**), a coloured mark dot if the group is reserved for holders of one mark, and the people in it.
 
-Drag a participant from the left into a unit card to assign manually. Click ✓ on a unit row to remove that participant from the unit. The engine and manual edits coexist freely — drag overrides whatever the engine proposed, and re-running the engine in **top-up** mode preserves your manual placements.
+**Placing people by hand.** On a computer, drag a person from the left panel onto a group card, or from one group to another. On a phone or tablet, tap people to select them, then tap a group card (or use **Assign to →** in the bar at the bottom of the screen). To take someone out of a group, hover over their name and click the red ✕ (**Unassign**), or drag them back to the left panel.
+
+Manual moves are saved straight away. If a drop would take a group over its capacity, Moimio asks first (**Overbook**). A group's gender restriction can't be overridden by hand.
 
 ---
 
 ## How to run it
 
-Click **Auto-Allocate**. A small mode picker opens with two choices:
+Click **✦ Auto-Allocate**. A small **Allocation mode** menu opens with two choices:
 
-- **Allocate new participants only** *(top-up)* — keeps every existing assignment in this category and only places people who aren't yet allocated. Use this when you've already manually placed some people and want the engine to fill in around them.
-- **Reallocate everyone from scratch** *(replace)* — clears all current assignments in this category and runs a full reallocation. Use this when you've changed engine settings or marks and want a fresh proposal.
+- **Allocate new participants only**: keeps every existing assignment in this group type and only places people who aren't in a group yet. Use this when you've already placed some people by hand and want the engine to fill in around them.
+- **Reallocate everyone from scratch**: ignores the current assignments and works out a fresh allocation for everyone. Use this when you've changed engine settings or marks and want a clean proposal.
 
-After the run, the unit cards populate with the proposal. The board switches into **Review** mode — assignments are in memory but **not yet committed**. You'll see two banner buttons at the top:
+Either way, groups you've locked with **Keep as-is** are left exactly as they are (see [Locking a group](#locking-a-group-keep-as-is)).
 
-- **Commit allocation** — saves the proposal to the database. Stats freeze, the AllocationBoard exits Review mode, and the assignments are now part of the event.
-- **Discard / Re-run** — throws the proposal away. Existing committed allocations (if any) stay untouched.
+### Reviewing the proposal
 
-You can drag participants between units while in Review — the proposal is just a starting point. Drag-edits update the in-memory state; you still need to click Commit to persist.
+After a moment the board is replaced by the **Proposed allocation** screen. Nothing has been saved yet, and other organisers can't see your proposal.
+
+<p align="center">
+  <img src="../assets/allocation-review.png" alt="The Proposed allocation screen with Was and Will be columns for each group" width="560">
+  <br>
+  <em>Reviewing a proposal before committing it</em>
+</p>
+
+- A summary line at the top, for example *"31 of 34 participants assigned · 3 groups kept together · 2 groups split · 2 mark groups formed"*.
+- **N could not be placed**: anyone the engine couldn't find a place for.
+- For each group, a **Was** column (who is in it now) and a **Will be** column (who the engine proposes), with people marked **new** or **leaving** and a change count such as **+2** or **no change**.
+
+**Why is this person here?** Hover over any name (or tap it on a phone) to see the engine's reason, for example *"placed with group code SMITH (4 people)"*, *"would be spread out, because this mark is set to spread evenly"* or *"would be moved to even out group sizes"*. For people who could not be placed, the reason explains what blocked them.
+
+Then choose:
+
+- **Commit allocation**: saves the proposal. The board comes back showing the new assignments.
+- **Discard**: throws the proposal away after a confirmation (*"Discard the proposal? The engine's suggestions will be lost."*). Your existing assignments stay untouched. The board's **← Back** button asks the same question while a proposal is open.
+
+You can't drag people around on the review screen. If the proposal is nearly right, commit it and then make your adjustments on the board.
 
 ---
 
 ## What the engine does, in plain language
 
-Five passes, in order (Pass 4 runs in sub-steps a, b, and c). Each pass tries to honour the soft preferences; every pass always respects the hard constraints (gender restriction, capacity), which are never violated.
+The engine works through these steps in order. They match the order of the switches in the engine settings, so reading down the settings panel is reading the allocation.
 
-**Pass 1 — Group-code clusters.** Sorts clusters by size, biggest first. For each cluster of two or more, finds the smallest single unit that fits the whole cluster. If no single unit can hold them, finds the smallest set of units whose combined remaining capacity covers the cluster, then splits the cluster evenly across that set (only if **Split large groups across units** is on). Singletons (groups of one) skip this pass — there's nothing to keep together.
+**Before anything else: who takes part.** Cancelled people are never included. Unconfirmed (pending) people are included unless you switch off **Include unconfirmed people**. Anyone you've **excluded** from this group type is left out entirely. People in locked (**Keep as-is**) groups stay where they are, and nobody new is added to those groups.
 
-**Pass 2 — "Keep together" marks.** For each mark in the priority list with `Keep together` behaviour, gathers everyone with that mark and tries to put them in the same unit (or fewest units possible). Same packing logic as Pass 1, just driven by marks instead of group codes.
+**Step 1: group codes.** People who share a group code (families, friends who registered together) are placed together, biggest groups first. Each one goes into the smallest group that can hold all of them. If no single group is big enough, they are split as evenly as possible across the fewest groups that can hold them, as long as **Split group codes if needed** is on. If **A group code takes a whole group to itself** is on, nobody else is put in a group that a group code lands in. A "group code" used by only one person has nothing to keep together, so that person is treated like everyone else.
 
-**Pass 3 — "Spread evenly" marks.** For each mark with `Spread evenly` behaviour, distributes people with that mark across eligible units one-by-one, so no single unit has a clump of them. Useful for "one native speaker per group" or "two leaders per dorm".
+**Step 2: marks, in your order.** The engine goes down your mark list from the top. For each mark:
 
-**Pass 4a — Drain gender-restricted units.** Walks through each unit that has a gender restriction (smallest first) and pulls eligible participants from the remaining pool until it fills up.
+- **Keep together**: people with that mark are put in the same group. If they don't all fit, the engine fills one group completely before starting the next, so at most one group ends up mixed.
+- **Spread evenly**: people with that mark are dealt out one by one across the groups, so no group gets a clump of them. Useful for "one leader per small group".
+- **No effect**: the mark is ignored here.
 
-**Pass 4b — Round-robin remaining.** Everyone left in the pool gets distributed across the remaining unrestricted units in a balanced round-robin: one cursor walks the units in order of how many slots they have left.
+Someone placed by their group code in step 1 isn't moved by their marks. Someone with several marks is handled by the highest one in the list.
 
-**Pass 4c — Equalising sweep.** After the rule-based placement is done, the engine makes a final pass to even out how full the units are. It moves *whole* groups (and lone individuals who were placed only to fill capacity) from fuller units into emptier ones, so unit sizes end up roughly proportional to their capacities. This pass is conservative on purpose: it never touches a group that was split across units, never touches participants placed by a "spread evenly" mark, and never moves anyone out of a gender-restricted unit it was drained into — moving those would undo earlier decisions. It also never breaks a group apart or violates gender/capacity rules. Controlled by the **Even out unit sizes after allocating** setting (on by default); turn it off if you'd rather the engine pack units tightly in order.
+**Step 3: restricted groups.** Groups restricted to one gender, or to holders of one mark (for example a room reserved for leaders), are filled with people who meet the restriction.
 
-**Pass 5 — Classify unplaced.** Anyone the engine couldn't place is tagged with a reason: cluster too big to split, gender unknown for restricted units, no eligible unit at all, no capacity, etc. These show up in the **Needs allocation** banner above the unit grid.
+**Step 4: everyone else.** The people still waiting are dealt out across the remaining unrestricted groups in turn. With **Keep the same gender together** on, gender is taken into account here; with it off, gender is ignored except in restricted groups.
 
-The output is **a proposal**, not a commit. Nothing changes in the database until you press **Commit allocation**.
+**Step 5: evening out.** With **Even out group sizes** on (the default), the engine then moves whole group codes, whole "keep together" mark groups and individuals between groups so every group ends up about equally full for its size. It never breaks a group code apart to do this, and it leaves alone people who were split across groups, spread by a mark, or placed in a restricted group. A group with no capacity limit is treated as an average-sized group.
+
+**Step 6: filling gaps.** Anyone still unplaced is put into whichever suitable group has the most space left.
+
+**Step 7: explaining the rest.** Anyone who still has no place gets a reason, shown on the review screen (see [When something goes wrong](#when-something-goes-wrong)).
+
+**What the engine never breaks:** a group's capacity, its gender restriction, its mark restriction, an exclusion, or a locked group. Everything else (keeping group codes and marks together, even sizes) is done as well as those rules allow.
+
+The engine is predictable: the same people with the same settings always give the same proposal.
 
 ---
 
 ## ⚙ Engine settings
 
 <p align="center">
-  <img src="../assets/engine-settings.png" alt="The per-category engine settings popover, opened from the gear icon next to Auto-Allocate" width="480">
+  <img src="../assets/engine-settings.png" alt="The engine settings panel, opened from the gear icon next to Auto-Allocate" width="480">
   <br>
-  <em>The engine settings popover, opened from the gear icon next to Auto-Allocate</em>
+  <em>The engine settings panel, opened from the gear icon next to Auto-Allocate</em>
 </p>
 
-Click the gear icon next to Auto-Allocate to open the settings popover. Settings are **per category** — Rooms can have one set, Small Groups another.
+Click the **⚙** next to **✦ Auto-Allocate**. Settings are saved as soon as you change them, and they are **per group type**: Room Allocation can work one way, Small Groups another. They are listed in the order the engine applies them:
 
-| Setting | What it does |
-|---|---|
-| **Respect group codes** | When on (default), Pass 1 runs and group-code clusters are kept together. Off = group_code is ignored, everyone treated as individuals. |
-| **Group remaining participants by gender** | When placing the remaining uncoded participants in Pass 4b, alternates genders so each unit ends up with a balanced mix rather than clumping one gender together. Off = participants are placed in their natural order, so gender clumps may form by chance. |
-| **Split large groups across units** | When on (default), an oversized cluster gets split across the smallest set of units that can hold it. Off = an oversized cluster goes to "Needs allocation" with reason `cluster_oversized_split_disabled`. |
-| **Also allocate unconfirmed participants** | When on (default), pending registrations are placed alongside confirmed ones. Off = wait until they confirm before they enter the engine. |
-| **Group codes claim units exclusively** | When on, a group-code cluster fills its unit fully — no other participants placed there even if leftover capacity remains. Useful for dorms or family rooms where mixing isn't appropriate. Off (default) = clusters share units with others. Note: this lives **per-category** in engine settings, not on the group-type definition itself. |
-| **Even out unit sizes after allocating** | When on (default), runs the Pass 4c equalising sweep described above — moves whole groups between units so occupancies are roughly even, without breaking groups or overriding gender/capacity rules. Off = the engine fills units tightly in order and accepts whatever imbalance results. |
+| Setting | Default | What it does |
+|---|---|---|
+| **Include unconfirmed people** | On | People who haven't confirmed their email are allocated alongside everyone else. Off: they are left out until they confirm. |
+| **Keep group codes together** | On | People who share a group code are placed together wherever there's room for all of them. Off: group codes are ignored and everyone is placed individually. |
+| **Split group codes if needed** | On | When no group has room for everyone sharing a code, they are spread across several groups. Off: they are left unallocated instead, so you can place them yourself. Applies to group codes only, never to marks. **Greyed out while Keep group codes together is off**, because it has no effect then; your choice is kept for when you switch group codes back on. |
+| **A group code takes a whole group to itself** | Off | When on, nobody else is placed alongside a group code, even if seats are left over. Useful for dorms and family rooms. Off suits tables and small groups. |
+| **Apply marks in this order** | (empty) | Your mark list (see below). |
+| **Keep the same gender together** | On | Applies to everyone still unallocated after group codes and marks. Off: gender is ignored, except where a group is restricted to one gender. |
+| **Even out group sizes** | On | A final pass evens out how full each group is, without breaking group codes, marks or gender restrictions. Off: groups are left as the earlier steps filled them. |
 
-**Prioritise grouping by marks.** Below the toggles, an ordered list of marks. Drag marks in or out, reorder by drag-and-drop, and pick the per-mark behaviour:
+**Apply marks in this order.** Marks you've added to the list are shown numbered, top first. Drag them (or use ↑ ↓) to change the order, click ✕ to take one off the list, and click **+ Add** next to any mark below the list to bring it in. Each mark has its own dropdown: **No effect**, **Keep together** or **Spread evenly**.
 
-- **None** — informational only; engine ignores this mark.
-- **Keep together** — Pass 2 tries to group everyone with this mark in the same unit.
-- **Spread evenly** — Pass 3 distributes them across units.
-
-The same mark can have different behaviours in different categories — e.g. "Leader" set to *Keep together* for Rooms but *Spread evenly* for Small Groups. Behaviour is configured here in engine settings, not on the mark definition (where it would be one-global-value).
-
-Marks higher in the priority list win when a participant has multiple marks.
+The same mark can do different things in different group types. For example "Leader" can be **Keep together** for Room Allocation and **Spread evenly** for Small Groups.
 
 ---
 
-## Re-running and overriding
+## Locking a group (Keep as-is)
 
-The engine is deterministic — same inputs produce the same proposal every time. So if a result looks wrong, three paths to a better proposal:
+When a group is exactly right (the speakers' room, say), click the small padlock on its card. The padlock closes and the toast says *"Kept. Auto-Allocate will leave it untouched."* From then on, neither allocation mode adds anyone to that group or moves anyone out of it. Click the padlock again to release it.
 
-1. **Adjust settings, re-run from scratch.** Tweak mark priorities, behaviours, the group-by-gender toggle, or the exclusive-group-codes flag, then click **Auto-Allocate → Reallocate everyone from scratch**. Fresh proposal honouring the new settings.
+**Clear all allocations** in the **⋯** menu still empties locked groups too.
 
-2. **Drag specific people manually, re-run with top-up.** Move the participants whose placement matters to the right unit by hand. Their manual placements are now in memory. Click **Auto-Allocate → Allocate new participants only**. The engine fills around your manual placements without disturbing them. Most surgical option.
+---
 
-3. **Manual override only.** Drag participants between units in the AllocationBoard and skip Auto-Allocate entirely. The engine doesn't lock you out — it proposes, you decide.
+## Keeping someone out of a group type
 
-To re-run from scratch (clearing all current placements first), use the **Reallocate everyone from scratch** option in the engine settings panel. The engine will discard the current allocation and propose fresh. Useful when settings have changed materially and the existing placements no longer reflect your intent.
+Sometimes a person belongs to the event but not to one group type: the cook who doesn't need a small group, or a day visitor who needs no room. **Exclude** them from that group type and they stay in every other one.
+
+- Hover over a name (in the left panel or in a group) and click the barred-circle icon (**Exclude from allocation**), or drag the person onto the **Excluded** block under the left panel. On a phone, select people and tap **Exclude** in the bar at the bottom.
+- Excluding someone also takes them out of any group they held in this group type. If that group was locked, Moimio tells you the place stays empty and offers **Unlock it**.
+- Excluded people are listed in the **Excluded (N)** block under the left panel, and the board's counts show *"N excluded"* so the figures still add up.
+- The engine never places an excluded person.
+- To undo, click the undo icon next to their name in the Excluded block (**Include in allocation**), or select several and tap **Include**. If you drag an excluded person into a group, Moimio asks first, and **Assign anyway** lifts the exclusion.
+
+Exclusions also show up in the full People CSV (an **Excluded From** column) and on the roster PDFs (see [Section 08](08-reports-and-pdf-exports.md)).
+
+---
+
+## Re-running and adjusting
+
+If a result isn't what you want, there are three ways to a better one:
+
+1. **Change settings, re-run from scratch.** Adjust the mark order, behaviours or switches, then **✦ Auto-Allocate ▸ Reallocate everyone from scratch**.
+2. **Place the important people by hand, then top up.** Drag the people whose placement matters into the right groups (these moves are saved straight away), lock any group you want left alone, then **✦ Auto-Allocate ▸ Allocate new participants only**. The engine fills in around them.
+3. **Do it by hand.** Drag people between groups and skip the engine entirely. The engine proposes; you decide.
+
+In **Allocate new participants only**, someone who no longer meets their group's gender or mark restriction (because you added the restriction after placing them) is taken out and placed again.
+
+---
+
+## History and reasons
+
+Click the **ⓘ** next to a person's name to open their **Participant profile**. For admins it ends with a **History** section listing every change for that person: *"Assigned to Room 3"*, *"Moved from Room 1 to Room 2"*, *"Excluded from Small Groups"*, and so on, with who did it, *"(engine)"* when it came from a committed proposal. Engine placements keep their reason underneath, for example *"placed with 3 of 6 from group code KIM"* or *"moved to even out group sizes"*.
 
 ---
 
 ## Working alongside other admins
 
-The AllocationBoard syncs live across devices. When another admin commits an allocation, drags a participant, runs the engine, or changes engine settings, your view updates within a second or two without a manual refresh. Useful when two organisers are working on different categories of the same event in parallel.
+The board updates live across devices. When another admin moves someone, commits a proposal or changes a group, your view refreshes within a second or two, without reloading the page. A proposal you're reviewing is private to you until you commit it.
 
-There's no locking — if two people drag the same participant at the same moment, last-write-wins (and you'll both see the final state). For events with multiple admins, the recommendation is the obvious one: agree informally on who's working on which category and don't both touch the same one at once.
+If two people move the same participant at the same moment, the last move wins and both screens show the result. For events with several admins, agree informally on who works on which group type.
 
 ---
 
-## Confirming an allocation
+## Confirming a group type
 
-When you're happy with what's on screen:
+Committing a proposal saves the assignments. Separately, you can **confirm** a group type to tell everyone it's finished:
 
-1. Click **Commit allocation**.
-2. Confirmation modal: "Commit X assignments to [category]?"
-3. Click Confirm.
-4. The allocation persists. The Confirm/Discard banner clears. The category is marked as *committed* — visible in the events list and Reports.
+- When everyone is assigned, the board shows **Ready to confirm** with a **Confirm this group type →** button.
+- On the **Organise** page, a group type that is in progress shows a **Confirm group type** button on its card.
 
-You can re-open a committed category later (the Edit button on the category card) to make further adjustments. Re-running the engine on a committed category clears the committed flag.
+A confirmed group type shows **Confirmed** on its card and a banner on its board. Any later change (a manual move, a committed proposal, **Clear all allocations**) reopens it automatically, or click **Reopen for editing** on the banner. When every group type is confirmed, the banner offers **Check-in is ready →**.
 
 ---
 
 ## When something goes wrong
 
-**"My cluster ended up split across units even though I asked to keep it together."**
+**"A family ended up split across groups even though group codes are on."**
 
-The cluster was bigger than your largest unit. The engine's first attempt is the smallest single unit; if no single unit has enough capacity, it falls back to the smallest set of units that can hold the cluster (governed by **Split large groups across units**). To force a single-unit placement, increase a unit's capacity, or turn off split-group fallback (the cluster will then go to Needs allocation, where you can place it manually).
+Their group was bigger than any one group's free space, so **Split group codes if needed** spread them over the fewest groups that could hold them. To keep them whole, raise a group's capacity, or switch splitting off: they'll then be left unplaced so you can place them yourself.
 
-**"Some participants ended up in 'Needs allocation'."**
+**"Some people could not be placed."**
 
-Click into Review mode — each unplaced participant carries a reason tag. Common reasons:
+On the review screen, hover over (or tap) each name under **N could not be placed** to see why. The reasons you'll see:
 
-- `cluster_oversized_split_disabled` — cluster is bigger than every unit AND split is off.
-- `cluster_no_eligible_unit` — a group can't fit in any unit at all, typically a mixed-gender family when every remaining unit is gender-restricted. The reason line names the group code so you can find it in People.
-- `gender_unknown_no_mixed_unit_available` — every remaining unit has a gender restriction and the participant's gender isn't set.
-- `no_capacity_remaining` — every eligible unit is at full capacity.
+- *"every group is full"*: there's no room left in any group they're allowed into.
+- *"too many people share this code to fit anywhere, and splitting is switched off"*: the group code is bigger than every group and **Split group codes if needed** is off.
+- *"People with group code … could not be placed. They need a group that is not restricted to one gender."*: typically a mixed family when every group is male only or female only (shown when splitting is off).
+- *"no gender on record, and every group is restricted to one gender"*: set their gender in People, or add a mixed group.
 
-Fix the underlying constraint (add a unit, raise a capacity, set the participant's gender) and re-run, OR drag the unplaced participant manually into a unit.
+Fix the cause (add a group, raise a capacity, set the person's gender) and run the engine again, or commit and place them by hand.
 
-**"The engine produced an imbalanced allocation."**
+**"The allocation looks uneven."**
 
-By default the engine runs the Pass 4c equalising sweep, so most allocations come out reasonably even. Visible imbalance that survives the sweep usually means one of three things: a single group-code cluster is large enough that keeping it whole forces an uneven unit; the only movable people are ones the sweep deliberately leaves alone (split clusters, "spread evenly" marks, gender-drained placements); or you've turned the **Even out unit sizes after allocating** setting off. The engine always keeps a group code together ahead of evening out sizes — group codes mean *"definitely keep together."* If you want a particular tag *distributed* rather than kept together, use a **mark with "Spread evenly"** behaviour instead of a group code. And if the sweep is off and you want it back, re-enable it in engine settings and re-run.
+With **Even out group sizes** on, most allocations come out fairly even. Unevenness that remains usually means a large group code had to stay together, the only people who could move are ones the evening-out step leaves alone (split groups, spread-evenly marks, restricted groups), or the setting is off. The engine always keeps a group code together before evening out sizes: a group code means "definitely keep together". If you want people *spread out* instead, use a mark set to **Spread evenly** rather than a group code.
 
 **"I committed and now I want to undo."**
 
-Re-open the category, drag participants around, re-run the engine, or commit a fresh allocation. There's no single "undo" button, but the allocation is just data — it's editable.
+There's no single undo button, but nothing is final: move people by hand, run the engine again, or use **⋯ ▸ Clear all allocations** and start over.
 
 ---
 
 ## What's next
 
-[Section 07 — Check-in](07-check-in.md) covers what happens on the day of the event: the immersive check-in panel, custom check-in columns, ticking arrivals, working alongside other staff at the door.
+[Section 07 — Check-in](07-check-in.md) covers what happens on the day of the event: the full-screen check-in mode, custom check-in columns, ticking arrivals and working alongside other staff at the door.

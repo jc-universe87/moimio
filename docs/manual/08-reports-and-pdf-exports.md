@@ -1,120 +1,127 @@
 # 08 — Reports & PDF exports
 
-The Reports section is the at-a-glance overview of an event's progress and the place to download printable rosters. Three dashboard tiles plus per-category PDF downloads.
+The **Reports** page gives you the headline numbers for your event at a glance and is where you download printable rosters: a few summary tiles at the top, and roster PDFs for each group type below.
 
 <p align="center">
-  <img src="../assets/reports.png" alt="Reports page with the three dashboard tiles plus per-category roster downloads" width="560">
+  <img src="../assets/reports.png" alt="Reports page with the summary tiles, PDF language selector and roster downloads" width="560">
   <br>
-  <em>Reports page: dashboard tiles and per-category roster downloads</em>
+  <em>Reports page: summary tiles and roster downloads</em>
 </p>
 
 ---
 
 ## Where to find Reports
 
-**Reports** in the sidebar — visible to admins, super admins, and staff with `reports: read` permission.
+**Reports** in the sidebar, during the Registration and Event phases. Admins and Super Admins always see it; staff see it if their permissions include reports.
 
-The page splits into two halves:
+The page has two parts:
 
-- **Top: dashboard tiles** — three cards summarising registration, allocation progress, and check-in (the check-in tile only appears in Event phase).
-- **Bottom: roster downloads** — one card per allocation category, each with **Compact** and **Sign-in** PDF buttons.
+- **Top: summary tiles**, for registration, allocation and (during the Event phase) check-in.
+- **Bottom: Roster downloads**, one row per group type with **Compact** and **Sign-in** buttons.
 
 ---
 
-## The dashboard tiles
+## The summary tiles
 
-### Registration tile
+### Registration
 
-- **Headline:** total registrations (active = confirmed + pending; cancelled excluded).
-- **Subtitle:** breakdown — `26 confirmed · 5 pending · 2 cancelled`.
+- **Headline:** the number of active registrations (confirmed plus pending; cancelled ones aren't counted).
+- **Below it:** the breakdown, for example `26 confirmed · 5 pending · 2 cancelled`.
 
-What it tells you at a glance: are people signing up? Have all the pendings confirmed?
+At a glance: are people signing up, and are the pending ones confirming?
 
-### Allocation tile
+### Allocation
 
-- **Headline:** percentage of registered participants placed in at least one group — e.g. `87%`.
-- **Subtitle:** `27 of 31 participants placed in groups`.
+- **Headline:** the share of active participants who are in at least one group, for example `87%`.
+- **Below it:** `27 of 31 participants placed in groups`.
 
-The percentage is *participant coverage*, not unit-capacity occupancy. 100% means every active registered participant is placed in at least one of your allocation categories. This is the "are we done allocating?" metric. A participant counts once even if they're placed in multiple categories (rooms AND small groups).
+This counts people, not seats. 100% means every active participant is in at least one of your group types. Someone in both a room and a small group still counts once.
 
-### Check-in tile *(Event phase only)*
+### Check-in *(Event phase only)*
 
-- **Headline:** percentage of registered participants who have arrived — e.g. `82%`.
-- **Subtitle:** `28 of 34 checked in`.
+- **Headline:** the share of active participants who have been ticked in, for example `82%`.
+- **Below it:** `28 of 34 checked in`.
 
-Hidden during Setup and Registration phases — there's no check-in to report on yet.
+This tile only appears in the Event phase; before then there's nothing to check in.
 
 ---
 
 ## Roster downloads
 
-For each allocation category, two PDF formats are available:
+Above the list of group types are two options that apply to every download on the page:
 
-- **Compact** — names + minimal context (gender short, group code), two-column layout per unit, optimised for clipboard / door pinning. Portrait A4.
-- **Sign-in** — landscape A4 with a tick column, name, group code, phone, signature line, and a notes column. Designed for check-in staff to print and use at the door.
+- **PDF language**: the language the PDF is printed in, whatever language you're using Moimio in. Choose from English, Deutsch, 한국어, Español, Português (BR) and Français. It starts out matching your interface language, so a German organiser can still print an English roster for an international team.
+- **Include cover page**: adds a first page with the event name, dates, location and allocation numbers. Off by default to save paper; useful when handing a roster to a coordinator or keeping one for the records.
 
-A **Detailed** format also exists (full PII — name, gender, DOB, phone, email, group code) but is currently surfaced via a separate URL parameter; it requires `people: read` permission since it contains PII.
+Each group type row shows its name and a summary such as `5 groups · 87% of participants`, with two buttons:
 
-Above the roster cards:
+- **Compact**: names grouped by group, for clipboards and doors. Portrait A4.
+- **Sign-in**: a sheet with a tick box, signature line and notes column for each person, for check-in staff. Landscape A4.
 
-- **PDF language** — pick the language for the rendered PDF. Independent of the interface language. Available: English, German, Korean, Spanish, Brazilian Portuguese, French.
-- **Include cover page** — toggle on to add a hero first page with the event name, dates, location, and allocation stats summary. Useful when you're printing the roster as a packet for a coordinator.
+### The Detailed roster
 
-Each per-category card shows: category name, units count, and percent of participants allocated in that category — `5 units · 87% of participants`. Compact and Sign-in download buttons live on the right.
+A third format, the **Detailed** roster, lists full contact details (name, gender, date of birth, phone, email, group code). Because it contains personal data it isn't on the Reports page. Download it from the allocation board instead: **Organise ▸** open a group type **▸ ⋯ ▸ Detailed roster (PII)**, or **Detailed + cover page**. The **PDF** language picker just above those two entries sets the language. Admins can always download it; staff need permission to see People.
 
 ---
 
-## What's in each PDF format
+## What's in each PDF
 
-All formats include a header (event name + category + format label) and a footer (page numbers).
+Every page has a header with the event name, the group type and the format, plus a coloured strip so loose pages are easy to sort. The footer shows the event name and dates and *"Page 2 of 5"*.
 
 ### Compact
 
-For each unit:
+For each group:
 
-- Unit banner (name, capacity / allocated, gender restriction if any).
-- Bullet-pointed member list. Each line: name, mark dots if any, gender short ("M" or "F"), group code.
-- Two-column flow when the unit has more than 6 members; single-column otherwise.
-
-If anyone's unallocated in this category, a **Needs allocation** block appears above the unit list.
+- A header bar with the group's name, how many people are in it compared with its capacity (with a small fill bar), and its gender restriction if it has one.
+- A bulleted list of members, sorted by surname. Each line shows the name, any mark dots, a gender initial and the group code.
+- Groups with more than 6 people are printed in two columns to save paper.
 
 ### Sign-in
 
-Landscape A4. For each unit:
+Landscape A4, with blank **DOOR STAFF** and **DATE** lines at the top. For each group, a header bar and then one row per person: a tick box, the name (with mark dots), group code, phone, a signature line and a notes space. Made to be printed, handed to someone with a clipboard and ticked by hand as people arrive.
 
-- Unit banner.
-- Tabular rows: tick checkbox, name (with mark dots if any), group code, phone, signature line, notes.
+### Detailed
 
-Designed to be printed, handed to a staff member with a clipboard, and ticked manually at arrival.
+Landscape A4. For each group, a header bar and a table with name (with mark dots), gender, date of birth, phone, email and group code. Use it when someone needs full contact details, for example a group leader or an external partner.
 
-### Detailed *(when surfaced)*
+### The "Not allocated" page
 
-Landscape A4. For each unit:
+If anyone in this group type isn't in a group, every format (Compact, Sign-in and Detailed) ends with a **NOT ALLOCATED** page listing them with their phone and email, in two blocks:
 
-- Unit banner.
-- Full tabular rows: name, gender, DOB, phone, email, group code.
+- **EXCLUDED**: people you deliberately kept out of this group type (see [Section 06](06-allocation-engine.md#keeping-someone-out-of-a-group-type)).
+- **NOT PLACED**: people who simply haven't been put in a group yet.
 
-Includes PII so requires `people: read` permission. Use case: handing a list of attendees to an external partner who needs full contact details.
+A block is left out when it would be empty, and the page is left out entirely when everyone is placed. Cancelled registrations never appear.
+
+### Cover page
+
+When **Include cover page** is ticked, the PDF starts with a cover showing the event name, dates and location, the group type and format, three figures (**TOTAL**, **ALLOCATED** and **UNALLOCATED**, the last highlighted when it isn't zero), and when and by whom it was generated.
 
 ---
 
 ## Marks in PDFs
 
-If participants have marks visible in the **Organise** view, those marks render as small coloured bullets immediately after the participant's name in all three formats. A **Marks** legend at the bottom of each PDF shows the colour-to-name mapping for marks that actually appear on the roster (marks not used on this category's roster aren't listed).
+Marks that are visible in **Organise** appear as small coloured dots right after each person's name, in all three formats. A **Marks** legend at the end of the roster shows which colour means which mark, listing only marks that actually appear in that PDF.
 
-If a participant has more marks than fit inline (Compact / Detailed: max 4 dots; Sign-in: max 3), the extras are silently truncated. Marks ordered alphabetically by name for stable rendering across runs.
+If someone has more marks than fit (4 dots in Compact and Detailed, 3 on the Sign-in sheet), the extra ones are left off. Marks are shown in alphabetical order so every printout looks the same.
+
+---
+
+## A quick printable view
+
+On the allocation board, **⋯ ▸ ↗ Open overview** opens a read-only view of the group type in a new tab, with a **🖨 Print** button. Handy for a quick printout of the current state without downloading a PDF.
 
 ---
 
 ## What about CSV?
 
-CSV export is on the **People** page, not Reports. From People, click **↓ Export ▾** to get the full participant list (or names + emails only). The People CSV doesn't include allocations — that's by design; allocations are reported per-category, and the format that fits is the per-category PDF.
+Spreadsheet exports live on the **People** page, not Reports. Click **↓ Export ▾** and choose **Full participant list** (every field, including **Status**, **Checked In**, **Marks** and **Excluded From** columns) or **Names + emails only** (for a mailing-list tool). The People CSV doesn't list who is in which group; for that, use the roster PDFs or a backup.
 
 ---
 
 ## When the page is empty
 
-If you've just created an event and registration hasn't opened yet, the dashboard tiles read zero across the board and the roster section says "No group types yet." Reports populate as registrations and allocations accumulate.
+If there are no registrations and no group types yet, the page just says *"Open registration to start collecting data. Reports populate from there."* If there are no group types, the roster section says *"No group types yet."* Everything fills in as registrations and allocations come in.
 
 ---
 

@@ -56,7 +56,7 @@ services:
       SECRET_KEY:   ${SECRET_KEY:?SECRET_KEY must be set}
       LOG_LEVEL:    ${LOG_LEVEL:-INFO}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
-      RATE_LIMIT_REGISTRATION: ${RATE_LIMIT_REGISTRATION:-10}
+      RATE_LIMIT_REGISTRATION: ${RATE_LIMIT_REGISTRATION:-60}
       # SMTP — the SaaS provisioner injects Scaleway TEM credentials
       # (send.moimio.app) by default. Self-hoster overrides via
       # tenant-specific .env are supported once admin-UI per-tenant

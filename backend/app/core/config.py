@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # ─── App ───
     log_level: str = "INFO"
     cors_origins: str = "http://localhost:6120"
-    rate_limit_registration: int = 10
+    rate_limit_registration: int = 60  # sign-ups per minute per address; 0 = off
 
     # ─── Capability flags (v1.0.0g) ───
     #

@@ -321,7 +321,7 @@ if [[ "$DRY_RUN" != "true" ]]; then
   HEALTHY="false"
   for i in $(seq 1 18); do
     STATUS=$(sudo docker compose ps --format "table {{.Service}}\t{{.Status}}" 2>/dev/null | grep '^backend' || true)
-    if echo "$STATUS" | grep -q "healthy"; then
+    if echo "$STATUS" | grep -q "(healthy)"; then
       HEALTHY="true"
       break
     fi

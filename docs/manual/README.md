@@ -25,17 +25,17 @@ Read the numbered sections in order. Each focuses on one feature area. About 30 
 | # | Section | What's in it |
 |---|---|---|
 | | [Quick Guide](quick-guide.md) | One event, beginning to end, in ten minutes of reading. |
-| 01 | [Getting Started](01-getting-started.md) | The admin interface, the three event phases, your first session. |
-| 02 | [Events and Registration](02-events-and-registration.md) | Creating events. Configuring the registration form. Custom fields. Opening for registration. Confirmation emails. |
-| 03 | [People](03-people.md) | The People table. Status (pending / confirmed / cancelled). Editing, confirming, deleting participants. Group codes. Bulk import. |
-| 04 | [Marks](04-marks.md) | Colour-coded badges for staff-visible tagging. Mark editor. How marks influence allocation. Priority order. |
-| 05 | [Group Types and Units](05-group-types-and-units.md) | Allocation categories (Rooms, Small Groups, plus any you add). Units inside them. Capacity, gender restriction, exclusive vs overlapping rules. |
-| 06 | [Allocation Engine](06-allocation-engine.md) | The five passes. What it guarantees and what it tries to achieve. The imbalance-by-design principle. Re-running, overriding, manual placement. |
-| 07 | [Check-in](07-check-in.md) | Custom check-in fields. The on-arrival workflow. Tablet / phone use. |
-| 08 | [Reports and PDF Exports](08-reports-and-pdf-exports.md) | Compact roster, detailed roster, sign-in sheet. CSV exports. What's printable. |
-| 09 | [Data Export and GDPR](09-data-export-gdpr.md) | Per-participant Article 20 export. Soft delete and full erasure rationale. Backup and restore. |
-| 10 | [Multi-event and Archive](10-multi-event-and-archive.md) | Running several events in parallel. Closing and archiving. Re-using a past event as a template. |
-| 11 | [Staff and Permissions](11-staff-permissions.md) | Global roles (Super Admin, Staff). Per-event role (Event Admin, Staff). Per-event assignments. The five permission surfaces. |
+| 01 | [Getting Started](01-getting-started.md) | First-time setup and signing in. The admin layout, the three event phases (Setup, Registration, Event), user accounts, the events list, your first session. |
+| 02 | [Events and Registration](02-events-and-registration.md) | Creating events. The Setup hub. Configuring the registration form, custom fields and group codes. Opening and closing registration. Confirmation emails. |
+| 03 | [People](03-people.md) | The People table. Status (pending / confirmed / cancelled). Editing in the table, group codes, notes, CSV import, exports. |
+| 04 | [Marks](04-marks.md) | Colour-coded badges for tagging participants. The mark editor. Mark priorities per group type. Reserving a group for a mark. |
+| 05 | [Group Types and Units](05-group-types-and-units.md) | Group types (Room Allocation, Small Groups, plus any you add) and the groups inside them. Capacity, gender, mark restrictions. Keeping someone out of a group type. Exporting and importing a layout. |
+| 06 | [Allocation Engine](06-allocation-engine.md) | What the engine does, in plain language. Engine settings. Reviewing a proposal, locking groups, re-running, manual adjustments, history and reasons. |
+| 07 | [Check-in](07-check-in.md) | The check-in list. Custom check-in columns. Real-time sync across tablets and phones. |
+| 08 | [Reports and PDF Exports](08-reports-and-pdf-exports.md) | Dashboard tiles. Compact, Sign-in and Detailed roster PDFs. Marks in PDFs. CSV exports. |
+| 09 | [Data Export and GDPR](09-data-export-gdpr.md) | A participant's personal data export. Editing, removing and erasing. Privacy notice link. Full and structure-only backups, restoring, moving a workspace. |
+| 10 | [Multi-event and Archive](10-multi-event-and-archive.md) | The events list. Archiving and unarchiving. Starting a new event from a past one's settings. Running several events in parallel. |
+| 11 | [Staff and Permissions](11-staff-permissions.md) | User accounts (Super Admin, Staff) and deleting users. Each event's team: Event Admin or Staff. The five permission settings. |
 
 ---
 
@@ -43,7 +43,7 @@ Read the numbered sections in order. Each focuses on one feature area. About 30 
 
 - **Bold** text refers to a UI element you can click — a button, a tab, a menu item.
 - `Monospace` text refers to a value, a setting key, or a technical concept.
-- ▸ markers indicate a sequence of clicks, e.g. **Setup ▸ Group types ▸ + Add New Group Type**.
+- ▸ markers indicate a sequence of clicks, e.g. **Users ▸ + New User ▸ Create User**.
 - Screenshots are included where they help orient you to the UI; some sections lean more on prose where the layout is straightforward or evolves quickly. Screenshots may drift slightly from the current build over time.
 
 ---

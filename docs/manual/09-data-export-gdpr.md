@@ -1,69 +1,64 @@
 # 09 — Data export & GDPR
 
-Moimio is built so that an organiser running an event can fulfil their GDPR obligations as a data controller without leaving the app. The relevant pieces are: per-participant data export (Article 15 / Article 20), in-place editing (Article 16), explicit deletion (Article 17), event-level backup, and clear handling of cancelled participants.
+Moimio is built so that an organiser running an event can fulfil their GDPR obligations as a data controller without leaving the app. The relevant pieces are: per-participant data export (Article 15 / Article 20), in-place editing (Article 16), removal (Article 17), event-level backup, and clear handling of cancelled participants.
 
 This section is operational — what to do when. For the architectural and legal posture, see [GDPR compliance](../gdpr-compliance.md).
 
 <p align="center">
-  <img src="../assets/insight-panel-export.png" alt="The InsightPanel slide-in showing a participant's details with the Export data button at the top" width="560">
+  <img src="../assets/insight-panel-export.png" alt="The profile panel showing a participant's details with the Export data button at the top" width="560">
   <br>
-  <em>The InsightPanel, with the Export data button at the top</em>
+  <em>The profile panel, with the Export data button at the top</em>
 </p>
 
 ---
 
 ## Per-participant export — when a participant asks for their data
 
-Article 15 (right of access) and Article 20 (data portability) both come up: a participant emails you saying "send me everything you have on me." Two paths in v1.0:
+Article 15 (right of access) and Article 20 (data portability) both come up: a participant emails you saying "send me everything you have on me."
 
 ### How to do it
 
-There are two paths to download a participant's data:
+Personal data exports are for **Event Admins** of that event and **Super Admins**. There are two places to start:
 
-- **From the People table.** Find their row, click **↓ Export data** in the Actions column. Browser downloads `participant-export-{participant_number}-{date}.json`. (Recommended for routine GDPR requests — fastest path.)
-- **From the InsightPanel.** Open the AllocationBoard or Check-in panel, click the **(i)** icon next to the participant's name to open the InsightPanel, then click **↓ Export data** at the top. Same file, same content. Useful when you're already looking at the participant in context (e.g. during allocation review) and a request comes in.
+- **From the People table.** Find their row and click **↓ Export data** in the Actions column. (Recommended for routine requests — fastest path.)
+- **From the profile panel.** On the allocation board or in Check-in, click the small **ⓘ** icon (**View profile**) next to the participant's name, then click **↓ Export data** at the top of the panel. Same file, same content. Handy when you're already looking at the person and a request comes in.
 
 Either way:
 
-1. Browser downloads a single file: `participant-export-{participant_number}-{date}.json`.
+1. Your browser downloads a single file: `participant-export-{participant number}-{date}.json`.
 2. Send the file to the participant via whatever channel they used to ask for it.
+
+Cancelled participants can be exported the same way — they stay in the People table, greyed out.
 
 ### What's in the file
 
-A single JSON document with these top-level keys:
+A single JSON document (a standard, machine-readable format) with these sections:
 
-- **`export_metadata`** — schema version, generation timestamp, free-text notes about scope.
-- **`event`** — the event the participant registered for (id, name, description, location, timezone, dates). Only the seven identifying fields, nothing about other participants or unrelated event configuration.
-- **`participant`** — every column from the participants table for this person: name, email, gender, date of birth, phone, address, country, church/organisation, message, group code, status, GDPR consent flag, check-in state, language preference, created/updated/deleted timestamps.
-- **`custom_fields`** — every custom-field response with the field's label and the participant's value.
-- **`marks`** — every mark currently assigned to the participant, with name + colour + visibility settings.
-- **`preference_requests`** — every "I want to be grouped with..." preference the participant submitted at registration.
-- **`allocations`** — current allocation across every category, with category name + unit name.
-- **`allocation_history`** — chronological list of assign/move/unassign events that affected this participant. Internal actor identities (which admin moved them) are deliberately omitted.
-- **`notes`** — only published notes addressed to this participant. Internal staff drafts about the participant are excluded by design.
-- **`checkin_values`** — every tick on every custom check-in column.
+- **`export_metadata`** — format version, when the file was made, and a short note about what's left out.
+- **`event`** — the event they registered for: name, description, location, time zone and dates. Nothing about other participants or the rest of your setup.
+- **`participant`** — their registration record: name, email, gender, date of birth, phone, address, country, church/organisation, message, group code, status, consent, check-in state, language, and when the record was created, changed or removed.
+- **`custom_fields`** — every answer to your custom questions, with the question's label.
+- **`marks`** — every mark they carry, with its name, colour and when it was given.
+- **`preference_requests`** — "I want to be grouped with…" requests they made, and requests other people made naming them.
+- **`allocations`** — which group they're in, in every group type.
+- **`exclusions`** — any group type you've kept them out of.
+- **`allocation_history`** — the history of moves into, between and out of groups.
+- **`notes`** — only published notes written about this participant.
+- **`checkin_values`** — every tick in your check-in columns.
 
 ### What's excluded — and why
 
-- **Internal admin draft notes** about the participant. Drafts are not published correspondence.
-- **The identity of admins who performed allocation moves.** GDPR's data-subject scope is the data subject's data, not the controller's organisational structure.
-- **Other participants' data**, even when they're in the same group code or same allocation. Each subject gets only their own slice.
+- **Unpublished (draft) notes.** Drafts are a team member's working notes, not published correspondence.
+- **Who on your team moved them.** The history says what happened and when, not which team member did it.
+- **Other participants' data**, even people in the same group code or the same room. Each person gets only their own data.
 
-### Audit log
-
-Every per-participant export emits a structured log entry: `participant_data_exported event_id=... participant_id=... by=...`. Available in `docker compose logs backend` or wherever your log drain points.
+Every export is also recorded in the server log (`data_export_generated`), with the event, the participant and who downloaded it.
 
 ---
 
 ## Article 16 — rectification (the participant says "fix this")
 
-If the participant tells you a value is wrong:
-
-- Open the People table.
-- Click the field directly to edit it inline (name, email, group code, status are inline-editable in v1.0).
-- For other fields, see §03 — full inline editing of every field is on the implementation list for an early post-1.0 release.
-
-The save is logged to the audit history with a generic "admin update" action.
+If the participant tells you a value is wrong, open **People** and click the value to edit it in place. Name, email, gender, date of birth, phone, address, country, church/organisation, group code, status and custom-field answers can all be edited this way — see [§03](03-people.md). The participant's own message to you is read-only, so it's never overwritten by mistake.
 
 ---
 
@@ -71,63 +66,76 @@ The save is logged to the audit history with a generic "admin update" action.
 
 Two operations, two different intents:
 
-### Soft delete (the everyday case)
+### Remove (the everyday case)
 
-From the People table, click **Remove** in the participant's Actions column. Confirmation prompt; reversible by setting `deleted_at` back to null in the database.
+In the People table, click **Remove** in the participant's Actions column, then **Remove Participant** to confirm. Only Event Admins and Super Admins see this button.
 
-The participant disappears from regular queries — they don't appear in People, AllocationBoard, Check-in, exports, or the engine. The row is still in the database, recoverable.
+The participant disappears from everyday use — People, the allocation board, Check-in, reports, exports and the allocation. They're also left out of any backup made afterwards. The record itself is kept in the database for record-keeping. There's no button to bring someone back; whoever runs your server can restore them in the database if needed.
 
-This is the right path for *"I changed my mind, I'm not coming"* — the participant's data is hidden from operational use but the audit trail stays intact.
+This is the right path for *"I changed my mind, I'm not coming"* or *"please take me off your lists."*
 
-### Hard erasure (the rare case)
+### Permanent erasure (the rare case)
 
-True erasure — physically removing the row and all dependent rows from the database — is not a UI action in v1.0. It's available via direct SQL or via a future admin-only endpoint:
+There's no button that permanently wipes a single person in this version — an irreversible "delete forever" is too easy to click by accident. Your options:
 
-```sql
-DELETE FROM participants WHERE id = 'uuid' AND event_id = 'uuid';
-```
-
-(SQLAlchemy cascades will clean up custom_field_values, mark_assignments, allocations, notes, etc.)
-
-We've kept this out of the UI deliberately — accidental clicks on a "delete forever" button are a real risk and the operation is irreversible. For most practical purposes, soft delete is sufficient. If you receive a formal Article 17 request requiring hard erasure, the SQL path above is unambiguous.
+- **Delete the whole event** (Super Admin: **Danger zone ▸ Delete event**, on the Setup hub or the Event details page) once it's over and you no longer need it. That permanently erases everyone registered for it. Download a backup first if you might need the records.
+- **For one person**, ask whoever runs your Moimio server to remove the record from the database. See [GDPR compliance](../gdpr-compliance.md) for the background.
 
 ---
 
-## Backups and event-level export
+## Privacy notice link on the registration form
 
-Beyond per-participant exports, Moimio offers full event backups.
+If your organisation has its own privacy notice, put its web address in **Workspace ▸ Privacy notice ▸ Privacy notice URL** (Super Admin) and click **Save**. The public registration form then shows a **Privacy notice** link right after the consent sentence. Leave it empty and no link is shown.
+
+---
+
+## Backups
+
+Beyond per-participant exports, Moimio can back up whole events.
 
 ### Where to find it
 
-Sidebar → **Backup** (Super Admin only).
+Sidebar ▸ **Backup** (under **Manage**, Super Admin only). The page is headed **Export**.
 
-### Two backup modes
+### Making a backup
 
-- **Full backup** — every table for the event: participants, registrations, allocations, marks, custom fields, notes, history. Use this for migration to another deployment or as a snapshot before a major change.
-- **Structure-only backup** — event configuration without participant data. Use this to template a recurring event and share the structure (registration form, custom fields, allocation categories, marks) without exposing past attendees.
+1. Tick one or more events under **Download event backups** (or **Select all**).
+2. Under **Backup contents**, choose:
+   - **Full backup** — every part of the event: participants, their answers, groups and allocations, exclusions, marks, preferences, notes, check-in columns and ticks, history, your settings and rules, and the original dates. Use this as a safety copy, before a big change, or to move an event to another Moimio.
+   - **Structure only (GDPR-safe)** — the event's shape without any personal data: registration form, custom questions, group types and their groups, marks, check-in columns and settings. No participants, no notes, and not your email sender details. Safe to share with another organisation as a template.
+3. Click **Download {n} backup(s)**. Each event downloads as its own `.zip` file (structure-only files have `-structure` in the name).
 
-The Structure-only mode is the GDPR-safe template-sharing path.
+A few things worth knowing:
+
+- **Notes:** a full backup holds every published note, plus *your own* draft notes. Other team members' drafts are never in it.
+- **Removed participants** are not in backups.
+- **Team members and their roles are never part of a backup.** Invite your team again after restoring.
 
 ### Restoring
 
-The Backup page has an **↑ From backup** button at the top of the events list. Upload the zip; a new event is created from it. The original isn't touched.
+On the Backup page, click **↑ Restore from backup** (the **↑ From backup** button on the events list takes you to the same place). Upload the `.zip`; Moimio shows a preview — event name, when it was exported, how many participants and allocations — then click **Restore event**.
 
-Backups are versioned — restoring across major schema changes may require manual fixup. The backup zip includes the schema version it was generated against.
+- A **new** event is created, named `{original name} (Restored)` and placed back in the Setup phase. The original isn't touched.
+- It keeps its original dates, so it sits in the events list where the original did. Click **Open the restored event** to go straight to it.
+- If part of the file is damaged, Moimio leaves out only the lines it can't read and carries on. The result tells you how many lines were left out, how many entries had to be shortened, and how many values fell back to the standard setting.
+- Older backup files still restore.
+
+Restoring is Super Admin only.
 
 ### Moving a whole workspace
 
-The Backup page handles one event at a time. To move every event at once, to a Moimio you run yourself, there is a whole-workspace export and a single command that restores it. See [Moving a workspace to your own Moimio](../moving-a-workspace.md).
+The Backup page handles one event at a time. To move every event at once, to a Moimio you run yourself, there is a whole-workspace export and a single command that restores it (with a trial run that changes nothing). See [Moving a workspace to your own Moimio](../moving-a-workspace.md).
 
 ---
 
 ## Cancelled participants
 
-Cancellation isn't deletion — it's a status change. Moimio keeps cancelled participants visible to admins (in the People table, filtered out by default) so the audit trail stays clean. Their data is still in the database; per-participant export still works on them. To actually remove them, use the soft-delete or hard-erasure paths above.
+Cancellation isn't deletion — it's a status change. Cancelled participants stay in the People table, greyed out, so you keep a clear record. Their data is still there and the per-participant export still works for them. To take them off your lists, use **Remove** (above).
 
-For Article 18 (restriction of processing), the cancelled status acts as a soft restriction: cancelled participants are excluded from the engine, from check-in, from rosters, and from most reports. Their data isn't being processed for the event; it's just retained.
+For Article 18 (restriction of processing), the cancelled status acts as a soft restriction: cancelled participants are left out of the allocation, Check-in, rosters and most reports. Their data isn't being used for the event; it's just kept.
 
 ---
 
 ## What's next
 
-[Section 10 — Multi-event & archive](10-multi-event-and-archive.md) covers running multiple events from the same Moimio instance, archiving past events without deleting them, and what changes when an event is archived.
+[Section 10 — Multi-event & archive](10-multi-event-and-archive.md) covers running multiple events from the same Moimio instance, archiving past events without deleting them, what changes when an event is archived, and reusing a past event's setup.

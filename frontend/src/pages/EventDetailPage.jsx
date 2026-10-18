@@ -951,7 +951,8 @@ export default function EventDetailPage() {
               eventId={eventId}
               participantList={participantList}
               isAdmin={canWrite('checkin')}
-              canCreateColumns={isAdmin}
+              isEventAdmin={isAdmin}
+              canCreateColumns={isAdmin || hasPreEvent}
               canViewColumns={hasAnyCheckin()}
               marksPerm={isAdmin ? 'write' : (staffPerms.marks || '')}
               userId={userId}

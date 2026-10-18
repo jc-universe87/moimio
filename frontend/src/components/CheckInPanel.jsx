@@ -35,7 +35,7 @@ const REG_DISPLAY_COLS = [
   { id: 'reg_checkin_at', label: 'checkin.col.checkin_time', field: null, render: (p, fmt) => p.checked_in_at ? fmt(p.checked_in_at) : '—' },
 ];
 
-export default function CheckInPanel({ eventId, userId, participantList, isAdmin, canCreateColumns, canViewColumns, marksPerm, noteCounts, onOpenNotes }) {
+export default function CheckInPanel({ eventId, userId, participantList, isAdmin, isEventAdmin = false, canCreateColumns, canViewColumns, marksPerm, noteCounts, onOpenNotes }) {
   // v0.50f-1: mark modal opens for everyone (read is implicit — clicking a
   // mark dot shows what marks mean). Only canAssign is gated by marksPerm.
   // isAdmin bypasses.
@@ -1063,7 +1063,9 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
         participant={insightParticipant}
         eventId={eventId}
         marksForPerson={insightParticipant ? getParticipantMarks(insightParticipant.id, 'checkin') : []}
-        isAdmin={isAdmin}
+        // isAdmin here means "can tick check-in"; the panel's history and
+        // data export are event-admin only on the server.
+        isAdmin={isEventAdmin}
         participants={participantList}
         onClose={() => setInsightParticipant(null)}
       />

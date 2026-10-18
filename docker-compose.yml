@@ -38,7 +38,7 @@ services:
       # every query with its values, which writes personal data to the log.
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:6120}
-      RATE_LIMIT_REGISTRATION: ${RATE_LIMIT_REGISTRATION:-10}
+      RATE_LIMIT_REGISTRATION: ${RATE_LIMIT_REGISTRATION:-60}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
@@ -79,6 +79,17 @@ services:
       - "${BACKEND_PORT:-6121}:8000"
     volumes:
       - ./backend/app:/app/app
+    # upgrade.sh waits for this to report "healthy" before declaring an
+    # upgrade good. Without it, `docker compose ps` never shows a health
+    # state for the backend and every upgrade looked like a failure.
+    # Same check as backend/deploy/production.yml; the slim image has no
+    # curl, so Python makes the request.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     depends_on:
       db:
         condition: service_healthy
@@ -88,8 +99,6 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     restart: unless-stopped
-    environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:6121}
     ports:
       - "${FRONTEND_PORT:-6120}:5173"
     # The frontend container runs a multistage production build:

@@ -1331,15 +1331,20 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
                           {resendingIds.has(p.id) ? <span className="animate-spin inline-block">⟳</span> : '✉'} {t('people.resend.cta')}
                         </button>
                       )}
-                      <button
-                        onClick={() => handleExportParticipant(p)}
-                        disabled={exportingIds.has(p.id)}
-                        title={t('people.export.cta.hint')}
-                        aria-label={t('people.export.cta')}
-                        className="text-xs font-semibold hover:underline disabled:opacity-50 mr-3"
-                        style={{ color: 'var(--text-muted)' }}>
-                        {exportingIds.has(p.id) ? <span className="animate-spin inline-block">⟳</span> : '↓'} {t('people.export.cta')}
-                      </button>
+                      {/* Personal data export is event-admin only on the
+                          server, so gate on canDelete (real admin), not
+                          isAdmin (people:write). */}
+                      {canDelete && (
+                        <button
+                          onClick={() => handleExportParticipant(p)}
+                          disabled={exportingIds.has(p.id)}
+                          title={t('people.export.cta.hint')}
+                          aria-label={t('people.export.cta')}
+                          className="text-xs font-semibold hover:underline disabled:opacity-50 mr-3"
+                          style={{ color: 'var(--text-muted)' }}>
+                          {exportingIds.has(p.id) ? <span className="animate-spin inline-block">⟳</span> : '↓'} {t('people.export.cta')}
+                        </button>
+                      )}
                       {canDelete && (
                         <button onClick={() => onDelete && onDelete(p.id, `${p.first_name} ${p.last_name}`)}
                           className="text-xs font-semibold hover:underline"
@@ -1616,8 +1621,8 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
                         makes the destructive intent clear.
                         v0.70d-3c-10: gate on canDelete (real admin),
                         not isAdmin (which here means people:write).
-                        v0.73: export trigger added (isAdmin gate, separate
-                        from canDelete — endpoint is admin-only).  */}
+                        v0.73: export trigger added. Gated on canDelete
+                        too: the endpoint is admin-only.  */}
                     {isAdmin && (
                       <div className="mt-3 pt-2 flex justify-end gap-3"
                         style={{ borderTop: '1px solid var(--card-border)' }}>
@@ -1631,14 +1636,16 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
                             {resendingIds.has(p.id) ? <span className="animate-spin inline-block">⟳</span> : '✉'} {t('people.resend.cta')}
                           </button>
                         )}
-                        <button
-                          onClick={() => handleExportParticipant(p)}
-                          disabled={exportingIds.has(p.id)}
-                          title={t('people.export.cta.hint')}
-                          className="text-[10px] font-semibold hover:underline disabled:opacity-50"
-                          style={{ color: 'var(--text-muted)' }}>
-                          {exportingIds.has(p.id) ? <span className="animate-spin inline-block">⟳</span> : '↓'} {t('people.export.cta')}
-                        </button>
+                        {canDelete && (
+                          <button
+                            onClick={() => handleExportParticipant(p)}
+                            disabled={exportingIds.has(p.id)}
+                            title={t('people.export.cta.hint')}
+                            className="text-[10px] font-semibold hover:underline disabled:opacity-50"
+                            style={{ color: 'var(--text-muted)' }}>
+                            {exportingIds.has(p.id) ? <span className="animate-spin inline-block">⟳</span> : '↓'} {t('people.export.cta')}
+                          </button>
+                        )}
                         {canDelete && (
                           <button onClick={() => onDelete && onDelete(p.id, `${p.first_name} ${p.last_name}`)}
                             className="text-[10px] font-semibold hover:underline"

@@ -10,6 +10,16 @@ Terms used throughout the Moimio documentation, in the order you'll most likely 
 
 The top-level container for everything else. An event represents a single gathering — a retreat weekend, a conference, a youth camp. Participants register *to an event*; allocations are *within an event*; staff are assigned *to an event*. Events have a status that moves through `draft` → `open` → `closed`, and a separate boolean `is_archived` flag that can be set independently to file the event away (see [Archive](#archive)).
 
+### Phase
+
+The stage an event is in, shown across the top of the event. There are three:
+
+- **Setup** — the event is a draft. You fill in the Setup hub's cards (Details, Registration, Group types, Marks, Staff) and then open registration.
+- **Registration** — registration is open and the event hasn't started yet. People sign up through the link you share.
+- **Event** — registration has closed or the start date has arrived. Allocation, check-in and rosters take centre stage.
+
+The phase follows from the event's status and dates; you don't set it directly.
+
 ### Participant
 
 A person registered to an event. This is the central entity in Moimio — almost every other record (allocation, mark, custom field value, note) hangs off a participant.
@@ -22,34 +32,44 @@ The act of a participant signing up for an event, typically through the public r
 
 ### Confirmation
 
-The transition from `pending` to `confirmed` registration status. Triggered either by the participant clicking a link in their confirmation email, or by an admin confirming on their behalf. Confirmed participants are the pool the allocation engine works from.
+The transition from `pending` to `confirmed` registration status. It only applies when the event has **Require email confirmation for registration** switched on (it's off by default, in which case registrations are confirmed straight away). Triggered either by the participant clicking a link in their confirmation email, or by an admin confirming on their behalf. By default the allocation engine includes unconfirmed people too; switch off **Include unconfirmed people** in the engine settings to allocate only confirmed ones.
 
 ---
 
 ## Allocation
 
-### Allocation Category
+### Group type (allocation category)
 
-A named kind of allocation defined per event. Two categories — **Rooms** and **Small Groups** — are created by default for every new event; you can rename, delete, or add to them. Categories have a **rule type**:
+A way of dividing people up, defined per event. The interface calls it a **group type**; the code and older docs call it an *allocation category*. Two group types — **Room Allocation** and **Small Groups** — are created for every new event, and appear in each reader's own language until you rename them. You can rename, delete, or add to them, and export or import a set of group types as a file. Each group type answers **Can a person be in more than one?**:
 
-- **Exclusive** — a participant belongs to *one* unit in this category at a time. Rooms are the canonical example.
-- **Overlapping** — a participant can belong to *several* units in this category simultaneously. Workshops, sessions, or shifts.
+- **No, only one** (*exclusive*) — a participant belongs to *one* group in this group type at a time. Rooms are the canonical example.
+- **Yes, several** (*overlapping*) — a participant can belong to *several* groups at once. Workshops, sessions, or shifts.
 
-### Allocation Unit
+A group type also has a **Name** for its groups (e.g. "Room", "Team").
 
-A specific slot within a category. If "Rooms" is the category, then "Room 3" or "The Lakeview Suite" are units. Units have a capacity and an optional gender restriction.
+### Group (allocation unit)
+
+A specific slot within a group type. If "Room Allocation" is the group type, then "Room 3" or "The Lakeview Suite" are groups. The interface says **group**; the code and older docs say *unit*. Each group has an optional capacity, a gender setting (mixed by default), and can optionally be reserved for people carrying one mark (**{mark} only**).
 
 ### Allocation
 
-The link between a specific participant and a specific unit. The same participant can have multiple allocations (one per category for exclusive categories, several per category for overlapping ones).
+The link between a specific participant and a specific group. The same participant can have multiple allocations (one per group type for "only one" group types, several for "several" ones).
 
 ### Capacity
 
-The maximum number of participants a unit can hold. From v1.0 onwards capacity is required on every unit — there's no concept of an "uncapped" unit.
+The maximum number of participants a group can hold. Capacity is optional: tick **No capacity limit** (or leave the box empty) and the group accepts any number of people, with its occupancy shown as a plain count. You can still drag someone into a full group by hand; Moimio asks you to confirm the overbooking first.
 
 ### Gender restriction
 
-A property on a unit that limits placement to participants of a specified gender. Three values: `none` (default — anyone can be placed here), `male`, `female`. Participants whose gender is unknown cannot be placed in gender-restricted units.
+A setting on a group that limits placement to participants of one gender. Three values: **Mixed** (the default — anyone can be placed here), **male only**, **female only**. It applies both to the engine and to manual drag-and-drop. Participants whose gender is unknown cannot be placed in gender-restricted groups.
+
+### Exclusion
+
+Keeping one participant out of one group type while leaving them in every other — for example, someone who lives locally and needs no room but should still be in a small group. Use **Exclude** on the board; the person moves to an **Excluded** list, the engine skips them in that group type, and **Include** puts them back. Assigning an excluded person by hand asks first and lifts the exclusion. Exclusions travel in backups and show in exports.
+
+### Keep as-is (kept group)
+
+A lock on a single group. Click **Keep as-is** and Auto-Allocate won't add anyone to that group or move anyone out of it; click **Kept** to release it.
 
 ---
 
@@ -57,27 +77,27 @@ A property on a unit that limits placement to participants of a specified gender
 
 ### Allocation engine
 
-The deterministic algorithm that proposes a complete allocation in one shot, given the current participants, units, and configured engine settings. Run, review, override, or re-run as needed. See [Manual section 6](manual/06-allocation-engine.md) for the full algorithm.
+The deterministic algorithm that proposes a complete allocation for one group type in one shot, given the current participants, groups, and engine settings. Click **Auto-Allocate**, review the **Proposed allocation**, then **Commit allocation** or **Discard**. See [Manual section 6](manual/06-allocation-engine.md) for the full algorithm.
 
 ### Pass
 
-The engine works in five sequential passes (PASS 1 through PASS 5). Each pass handles a different concern: cluster placement, mark-based grouping, gender-restricted draining, round-robin filling, classification of anything unplaced.
+The engine works in sequential passes (numbered PASS 1 to PASS 5 in the code). In order: group codes (1); marks, in your priority order (2–3); filling restricted groups (4a) and everyone else (4b); evening out group sizes (4c, the **Even out group sizes** setting) and filling leftover seats (4d); and finally listing anyone unplaced with a reason (5).
 
 ### Cluster
 
-Two or more participants the engine should try to keep together — usually because they share a group code (a family or friend group), but sometimes because they share a mark configured to "keep together". A "cluster of one" (a single participant alone with their group code) is not treated as a cluster; they round-robin like any other individual.
+Two or more participants the engine should try to keep together — usually because they share a group code (a family or friend group), but sometimes because they share a mark set to **Keep together**. The interface mostly just says "group" here (e.g. "3 groups kept together"). A "cluster of one" (a single participant alone with their group code) is not treated as a cluster; they're placed like any other individual.
 
 ### Round-robin
 
-The engine's default placement strategy for individuals (PASS 4b). It walks units in capacity-ascending order, placing one participant per unit per cycle. Skips ineligible or full units. Produces a fair fill across the available space.
+The engine's default placement strategy for individuals (PASS 4b). It walks groups in capacity-ascending order, placing one participant per group per cycle, and skips groups that are full or don't fit the person. Produces a fair fill across the available space. The **Keep the same gender together** setting (on by default) changes the order in which people are taken here, aiming to keep the same gender together where nothing else decides.
 
 ### Drain (PASS 4a)
 
-The engine's strategy for gender-restricted units. The engine "drains" eligible-gender participants from the remaining pool into each restricted unit in turn (smallest capacity first), filling them as fully as possible before moving on to the unrestricted pool. This avoids the classic small-event problem of restricted rooms ending up half-empty because the algorithm got distracted.
+The engine's strategy for restricted groups (limited to one gender, or reserved for one mark). The engine "drains" eligible participants from the remaining pool into each restricted group in turn (smallest capacity first), filling them as fully as possible before moving on to the unrestricted groups. This avoids the classic small-event problem of restricted rooms ending up half-empty.
 
 ### Unplaced
 
-A participant the engine could not place. Each unplaced participant comes with a reason: `cluster_oversized_split_disabled`, `gender_unknown_no_mixed_unit_available`, or `no_capacity_remaining`. Admins resolve these manually.
+A participant the engine could not place. Each one comes with a reason, shown in plain words on the board: too many people share a group code to fit anywhere and splitting is switched off; a group code needs a mixed group and every group is single-gender; the person has no gender on record and every group is restricted to one gender; or every group is full. Admins resolve these by hand. (Excluded participants are not "unplaced"; they're listed separately.)
 
 ---
 
@@ -91,27 +111,23 @@ If a registrant doesn't enter a code, Moimio derives the stem from their last na
 
 The final group code is included in the registration confirmation email so the registrant can share it with anyone else who'd like to be grouped with them.
 
-(The codebase still has a few legacy references to `family_tag` — the previous name for this concept, kept around for backwards compatibility. They mean the same thing.)
-
-### Override group room
-
-A per-participant flag. When set, the participant's group code is ignored by the engine for **exclusive-rule categories** (rooms etc.). Useful for "I'm here with my family but I'd actually prefer a single room." Overlapping categories still respect the group code.
+Group codes apply in every group type where the engine setting **Keep group codes together** is on (the default). **Split group codes if needed** decides what happens when no single group has room for everyone sharing a code: on, they're spread across several groups; off, they're left unplaced for you to handle.
 
 ### Exclusive group codes
 
-A per-category toggle. When on, a group-code cluster *fully claims* the unit it lands in — no other participants are placed there even if leftover capacity remains. Useful when you don't want to fill spare beds in a room with random individuals.
+A per-group-type setting, shown in the engine settings as **A group code takes a whole group to itself**. When on, a group-code cluster *fully claims* the group it lands in — no other participants are placed there even if seats are left over. Useful for dorms and family rooms. Off by default, which suits tables and small groups.
 
 ### Cluster behaviour (per-mark)
 
-For marks that should influence allocation, three behaviours:
+Set per mark, per group type, in the engine settings. Three behaviours:
 
 - **Keep together** — participants sharing this mark form a sub-cluster (PASS 2). Placed together where possible.
-- **Spread evenly** — participants sharing this mark are distributed across units (PASS 3). One leader per room, that sort of thing.
+- **Spread evenly** — participants sharing this mark are distributed across groups (PASS 3). One leader per room, that sort of thing.
 - **No effect** — the mark is staff-visual only, ignored by the engine.
 
 ### Mark priority
 
-When a participant has more than one mark, only the highest-priority mark drives engine behaviour. Priority and cluster behaviour are configured **per category in the engine-settings popover** (next to the Auto-Allocate button on the AllocationBoard) — *not* in the mark editor itself. This means the same mark can have different priorities and behaviours in different categories — e.g. "Leader" set to *Keep together* in Rooms but *Spread evenly* in Small Groups.
+The order in which marks are applied (**Apply marks in this order**; drag to reorder, top first). When a participant has more than one mark, only their highest-priority mark drives engine behaviour. Priority and behaviour are configured **per group type in the Engine settings panel** (next to the Auto-Allocate button on the board) — *not* in the mark editor itself. This means the same mark can behave differently in different group types — e.g. "Leader" set to *Keep together* in Room Allocation but *Spread evenly* in Small Groups.
 
 ---
 
@@ -127,7 +143,7 @@ The link between a participant and a mark. A participant can have multiple mark 
 
 ### Mark definition
 
-The mark itself, including its name, colour, and engine behaviour. Defined per event, in the marks editor.
+The mark itself: its name, its colour, and which screens it shows on. Defined per event, in the marks editor. (What a mark does in allocation is set per group type; see [Mark priority](#mark-priority).)
 
 ---
 
@@ -139,7 +155,7 @@ An extra field added to the registration form, beyond Moimio's built-ins. Define
 
 ### Check-in field
 
-A custom tick column for the day participants arrive. "Arrived", "Picked up welcome pack", "Paid balance in cash", "Signed liability waiver" — anything you'd otherwise track on a clipboard.
+A custom tick column on the Check-in screen for the day participants arrive. "Arrived", "Picked up welcome pack", "Paid balance in cash", "Signed liability waiver" — anything you'd otherwise track on a clipboard. The Check-in screen can also show registration and custom fields as columns.
 
 ---
 
@@ -151,7 +167,7 @@ An organising-team account with login access. Distinct from a *participant* (a p
 
 ### Role
 
-A user's global authorisation level. Two values: `super_admin` (system-wide access) and `staff` (event-scoped, must be assigned to specific events). The previous `event_admin` global role was retired in favour of a per-event role on the assignment record. Two capability flags (`can_manage_users`, `can_create_events`) sit alongside the role and add fine-grained system-level abilities.
+A user's global authorisation level. Two values: **Super Admin** (`super_admin`, system-wide access; the account made on the first-time setup screen is one) and **Staff** (`staff`, event-scoped, must be assigned to specific events). The previous `event_admin` global role was retired in favour of a per-event role on the assignment record. Two capability flags (`can_manage_users`, `can_create_events`) sit alongside the role and add fine-grained system-level abilities.
 
 ### Per-event role
 
@@ -171,7 +187,7 @@ Event Admins implicitly have full access everywhere; per-surface permissions are
 
 ### Note
 
-A free-text memo attached to any major entity (participant, allocation, mark assignment, event). Notes can be **private** (visible only to the author) or **published** (visible to the whole organising team). Participants never see notes regardless of state.
+A free-text memo attached to a participant, an event, a group type or a group. Notes can be **private** (visible only to the author) or **published** (visible to the whole organising team), and show who wrote them. Participants never see notes regardless of state.
 
 ---
 
@@ -187,7 +203,7 @@ Full physical removal of a record from the database. Moimio v1.0 does not ship a
 
 ### Archive
 
-A reversible "filed away" state for events. Archived events become read-only for everyone, are excluded from the Active and Past tabs of the events list, and are shown in a separate Archived tab; their data stays intact and is still searchable, exportable, and restorable. Different from deletion — and reversible: a Super Admin can unarchive at any time, returning the event to whichever status it was in.
+A reversible "filed away" state for events. Archived events become read-only for everyone, Super Admins included (unarchive to make changes), are excluded from the Active and Past tabs of the events list, and are shown in a separate Archived tab; their data stays intact and is still searchable, exportable, and restorable. Different from deletion — and reversible: a Super Admin can unarchive at any time, returning the event to whichever status it was in.
 
 ### Participant number
 
@@ -201,7 +217,7 @@ A small per-event integer assigned to each participant on registration. Used in 
 
 An HTTP POST that Moimio sends to a URL you control, fired the moment a system event happens. Used to connect Moimio to Slack, Zapier, n8n, custom scripts, or any other system that accepts inbound webhooks. Each request is signed with HMAC-SHA256 so receivers can verify it came from Moimio.
 
-The subsystem ships with v1.0.0g; full integration guide at [`docs/webhooks.md`](webhooks.md).
+Today Moimio sends them when an event is created or deleted and when an allocation is committed. Full integration guide at [`docs/webhooks.md`](webhooks.md).
 
 ### Endpoint (webhook)
 
@@ -217,7 +233,11 @@ A single attempt to send a webhook event to an endpoint. Recorded in the `outbou
 
 ### Endpoint state
 
-A health indicator on each webhook endpoint: `active` (healthy), `degraded` (5 consecutive failures), `disabled` (20 consecutive failures, requires manual re-enable), or `paused` (manually paused by admin). Transitions are driven by delivery outcomes.
+A health indicator on each webhook endpoint: **Active** (healthy), **Degraded** (5 consecutive failures), **Disabled** (20 consecutive failures, requires **Re-enable**), or **Paused** (switched off by an admin with **Pause**, back on with **Resume**). Apart from pausing, transitions are driven by delivery outcomes.
+
+### Private targets
+
+Webhook addresses on private, loopback or link-local networks (`10.x`, `192.168.x`, `localhost`, `169.254.169.254` and similar). Moimio refuses them, both when the endpoint is saved and again before every delivery, so a webhook can't be used to reach machines only the server can see. A self-hoster whose receiver is on their own network can allow them with `WEBHOOK_ALLOW_PRIVATE_TARGETS=true`.
 
 ### SaaS-managed endpoint
 
@@ -229,7 +249,7 @@ A webhook endpoint that was auto-registered at container startup via the `MOIMIO
 
 ### "v1.0", "v0.x"
 
-`v1.0` is the first public release. Earlier `v0.x` references in the source code, commit messages, and internal documentation correspond to development iterations leading up to v1.0; they are not separate published releases.
+`v1.0` is the first public release. Earlier `v0.x` references in the source code, commit messages, and internal documentation correspond to development iterations leading up to v1.0; they are not separate published releases. Releases since then are tagged like `v1.0.6`; the [changelog](../CHANGELOG.md) lists them.
 
 ### "The engine"
 
@@ -237,8 +257,8 @@ Throughout the docs, "the engine" without qualification means the allocation eng
 
 ### "The board" / "AllocationBoard"
 
-The drag-and-drop UI for reviewing and adjusting an allocation, accessed under **Organise** in the admin nav.
+The drag-and-drop screen for reviewing and adjusting an allocation, opened from **Organise** in the event's menu by picking a group type. It shows each group, the **Unassigned** panel (which can be docked or floated), the **Excluded** list, and the **Auto-Allocate** and **Engine settings** buttons.
 
 ### "InsightPanel"
 
-A slide-in panel that shows everything Moimio holds about a single participant — registration data, marks, allocations, notes, audit history. In v1.0 the InsightPanel is reachable via the **(i)** icon next to a participant's name in the **AllocationBoard** (Organise page) or the **Check-in panel**. It is **not** opened from the People page (the People page focuses on table operations and inline editing).
+A slide-in panel, titled **Participant profile**, that shows everything Moimio holds about a single participant — registration data, marks, allocations, notes, audit history. The InsightPanel is reachable via the **(i)** icon next to a participant's name in the **AllocationBoard** (Organise page) or the **Check-in panel**. It is **not** opened from the People page (the People page focuses on table operations and inline editing).

@@ -28,11 +28,13 @@ The archive holds three things:
 
 - `manifest.json`, a short index: when the export was made, how many events
   it holds, and each event's id, name and archived flag.
-- `events/<id>.zip`, one full backup per event. Each one is exactly the
-  archive the Backup page produces for a single event, so it holds that
-  event's participants, custom fields, group types and units, marks,
+- `events/<id>.zip`, one full backup per event, in the same format the
+  Backup page produces for a single event, so it holds that event's
+  participants, custom fields, group types and units, marks, exclusions,
   preferences, placements, notes, check-in columns and ticks, and history.
-  Archived events are in there too.
+  Archived events are in there too. One difference from a Backup page
+  download: it holds every team member's private notes, not only those of
+  whoever ran it. Participants who were deleted in the app are not in it.
 - `team.json` and `webhooks.json`, two reference lists, described below.
 
 The two reference lists are for you to read. Restoring never applies
@@ -40,8 +42,8 @@ either of them. Both files are always in the archive, even when they are
 empty, so an absent file never has to be guessed at.
 
 `team.json` lists each account on the old instance: name, email, system
-role, the two system permission flags, and the per-event roles that account
-held, keyed by the same event ids the manifest lists. It holds **no
+role, whether the account was active, the two system permission flags, and
+the per-event roles that account held, keyed by the same event ids the manifest lists. It holds **no
 passwords and no password-reset tokens**.
 
 `webhooks.json` lists the outbound webhook endpoints you created yourself:
@@ -109,7 +111,8 @@ it with the reason. Everything else still comes back.
 ## What comes back
 
 Every event arrives as a **draft**, whatever it was before, and is
-attributed to the account you named with `--as`. Inside each event you get:
+attributed to the account you named with `--as`. An event that was archived
+on the old server stays archived. Inside each event you get:
 
 - participants, their registrations and their custom-field answers
 - group types, units, marks and mark assignments
@@ -119,10 +122,12 @@ attributed to the account you named with `--as`. Inside each event you get:
 - check-in columns and every tick against them
 - the event's history, each entry keeping the time it actually happened
 
-Two details worth knowing. A history entry says the person who did it was
-removed, because that account does not exist on your server. And an event
-keeps its original dates, so a restored event sits in your events list
-where its dates put it, not at the top.
+Three details worth knowing. A history entry says the person who did it was
+removed, because that account does not exist on your server. Every note,
+by contrast, comes back written by the `--as` account, and a private note
+stays private, so other people's private notes become private notes of
+that account. And an event keeps its original dates, so a restored event
+sits in your events list where its dates put it, not at the top.
 
 ---
 
@@ -149,8 +154,9 @@ redo:
 ## Reopening registration
 
 A restored event is a draft, and both Setup ticks are cleared: whatever was
-confirmed on the old server is not confirmed on yours. To take an event
-live again:
+confirmed on the old server is not confirmed on yours. (An event that came
+back archived is read-only to everyone but Super Admins; unarchive it
+first.) To take an event live again:
 
 1. Open the event, then the **Setup** hub.
 2. Open the **Details** card, check it reads correctly, and click **Save &

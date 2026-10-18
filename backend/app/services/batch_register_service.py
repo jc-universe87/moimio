@@ -101,6 +101,8 @@ IGNORED_HEADERS_NORMALISED: set[str] = {
     "checked in",           # boolean column on export
     "registered",           # registration timestamp on export
     "message",              # message field — read-only, not editable via import
+    "excluded from",        # v1.0.5 export column; re-importing an export
+                            # must not turn it into a custom field
 }
 
 

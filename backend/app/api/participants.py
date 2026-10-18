@@ -7,8 +7,10 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.logging import get_logger
+from app.core.rate_limit import client_ip, registration_limiter
 from app.core.email import send_confirmation_email, send_registration_receipt
 from app.core.urls import get_app_base_url
 from app.models.user import User, UserRole
@@ -82,14 +84,25 @@ async def public_register(
     db: AsyncSession = Depends(get_db),
 ):
     """Public registration form submission. No authentication required."""
+    # RATE_LIMIT_REGISTRATION: sign-ups per minute from one address, across
+    # all events. Checked before anything touches the database. Each extra
+    # family member on the form is its own request and counts.
+    ip = client_ip(request)
+    if not registration_limiter.hit(ip, get_settings().rate_limit_registration):
+        logger.warning("registration_rate_limited", event_id=str(event_id))
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={"key": "errors.participant.rate_limited"},
+            headers={"Retry-After": "60"},
+        )
+
     event = await get_event_by_id(db, event_id)
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"key": "errors.event.not_found"})
 
     # v0.50i: archived events reject new registrations regardless of
-    # their open/closed status. No user context here, so we can't defer
-    # to ensure_event_writable (which has a Super Admin bypass). For
-    # public registration there's no bypass — archived means closed.
+    # their open/closed status. No user context here, so this checks
+    # is_archived itself rather than calling ensure_event_writable.
     if event.is_archived:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

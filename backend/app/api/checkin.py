@@ -12,8 +12,8 @@ from app.core.logging import get_logger
 from app.models.user import User, UserRole
 from app.models.checkin_field import CheckInField
 from app.models.checkin_value import CheckInValue
-from app.api.deps import get_current_user, ensure_event_writable, require_event_admin_dep
-from app.services.permissions import get_event_permissions, has_write
+from app.api.deps import get_current_user, ensure_event_writable
+from app.services.permissions import get_event_permissions, has_write, has_checkin_pre_event
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["checkin"])
@@ -50,13 +50,28 @@ async def list_checkin_fields(
     ]
 
 
+async def _require_column_manage(db: AsyncSession, user: User, event_id: uuid.UUID) -> None:
+    """Who may add or delete check-in columns.
+
+    Event admins and Super Admins (FULL_WRITE carries pre_event=True), plus
+    staff with check-in access and "Access before the event starts": the
+    flag exists so a coordinator can set the columns up ahead of arrivals,
+    and the assignment form says so. Other check-in staff can tick boxes
+    but not change the columns.
+    """
+    perms = await get_event_permissions(db, user, event_id)
+    if perms is None or not has_checkin_pre_event(perms):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"key": "errors.checkin.permission_required"})
+
+
 @router.post("/api/events/{event_id}/checkin-fields/", status_code=201)
 async def create_checkin_field(
     event_id: uuid.UUID,
     data: CheckInFieldCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_event_admin_dep()),
+    current_user: User = Depends(get_current_user),
 ):
+    await _require_column_manage(db, current_user, event_id)
     await ensure_event_writable(db, event_id, current_user)
     field = CheckInField(event_id=event_id, field_name=data.field_name, sort_order=data.sort_order)
     db.add(field)
@@ -70,8 +85,9 @@ async def delete_checkin_field(
     event_id: uuid.UUID,
     field_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_event_admin_dep()),
+    current_user: User = Depends(get_current_user),
 ):
+    await _require_column_manage(db, current_user, event_id)
     await ensure_event_writable(db, event_id, current_user)
     result = await db.execute(select(CheckInField).where(CheckInField.id == field_id, CheckInField.event_id == event_id))
     field = result.scalar_one_or_none()

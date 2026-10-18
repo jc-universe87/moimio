@@ -10,7 +10,7 @@ You don't need to be a developer. You need to be willing to copy commands carefu
 
 ## A note on honesty before we start
 
-Installing Moimio is more involved than installing a desktop app. There's no "click the button, wait, done" experience yet. If you hit something the guide doesn't cover, asking a more technical friend or pasting the error into ChatGPT or Claude will usually get you unstuck in a few minutes.
+Installing Moimio is more involved than installing a desktop app. There's no "click the button, wait, done" experience yet. If you hit something the guide doesn't cover, asking a more technical friend or pasting the error into an AI chat assistant will usually get you unstuck in a few minutes.
 
 The first time you do this, plan for **about two hours**. Most of that is waiting for downloads. The second time, it's much faster.
 
@@ -23,7 +23,7 @@ Installation is the easy part. The harder question is what running a production 
 A self-hosted Moimio is a small Linux server you are now responsible for. Concretely, that means:
 
 - **The server has to stay on.** If your office loses power, the venue Wi-Fi goes down, or the VPS provider has an outage — registration is offline until you bring it back.
-- **Updates need applying.** New Moimio versions, security patches to Ubuntu, occasional Docker updates. Not weekly, but not zero.
+- **Updates need applying.** New Moimio versions (one command, see [Updating Moimio](#updating-moimio)), security patches to Ubuntu, occasional Docker updates. Not weekly, but not zero.
 - **Things will fail at inconvenient times.** SSL certificate renewal can fail; a database migration can refuse to run after an update; the database container can refuse to restart. The fix is usually one or two commands — *if you know which commands*.
 - **Backups are your problem.** Moimio has a backup feature, but actually running it before a major change, and storing the result somewhere safe, is on you.
 - **DNS, certificates, and tunnels are operationally fragile.** A domain expires, an IP changes, a Cloudflare token rotates — and the registration form goes 404.
@@ -241,11 +241,15 @@ openssl rand -hex 64
 
 Copy the output. Paste as the new `SECRET_KEY` value in `nano`.
 
-**`POSTGRES_PASSWORD`** — replace `moimio_dev` with another random string (run `openssl rand -hex 32` for a shorter one).
+**`POSTGRES_PASSWORD`** — replace `moimio_dev` with another random string (run `openssl rand -hex 32` for a shorter one). Do this now, before the first start: the database remembers the password it was first started with.
 
-**`DATABASE_URL`** — find the password segment (it currently says `moimio_dev`) and replace it with the same new password you set in `POSTGRES_PASSWORD`. The two must match.
+**`DATABASE_URL`** — you can leave this line alone; Moimio builds the real database address from `POSTGRES_PASSWORD` for you. If you like things tidy, replace the `moimio_dev` in it with your new password too.
+
+**`LOG_LEVEL`** — leave it at `INFO`. The `DEBUG` setting writes participants' names, addresses and dates of birth into the server's log files, so it's only for troubleshooting with made-up data.
 
 Save: **Ctrl-O**, then **Enter**. Quit: **Ctrl-X**.
+
+You don't need to touch anything else in this file now. Email settings are optional and covered in [Sending email (optional)](#sending-email-optional) below.
 
 ### 4.3 Start Moimio
 
@@ -264,11 +268,11 @@ docker compose logs --tail=30 backend
 Look for:
 
 ```
-INFO  [alembic.runtime.migration] Running upgrade ... → <latest migration>
+INFO  [alembic.runtime.migration] Running upgrade ... -> <latest migration>
 INFO  Application startup complete.
 ```
 
-If you see those, Moimio is up. **Don't proceed if you see error lines** — see the troubleshooting section at the bottom of this guide.
+If you see those, Moimio is up. (The first line only appears when the database needed setting up or updating, so it's fine if you only see the second.) **Don't proceed if you see error lines** — see the troubleshooting section at the bottom of this guide.
 
 ### 4.4 First-time setup (create your admin account)
 
@@ -283,23 +287,31 @@ Open a browser:
 - **Path A (VPS):** go to `http://YOUR_SERVER_IP:6120` (e.g. `http://203.0.113.42:6120`).
 - **Path B (self-hosted):** go to `http://localhost:6120` if you're on the same machine, or `https://events.yourchurch.org` if your Cloudflare Tunnel is configured.
 
-You'll automatically land on a **first-time setup screen** — Moimio detects that no users exist yet and offers a wizard:
+You'll automatically land on the **First-time setup** screen. Moimio shows it only while no accounts exist yet. Fill in:
 
-- **Email** — your login.
-- **Full name** — display name in the admin UI.
-- **Password** — minimum 8 characters. Use a real password manager.
+- **Full name** — how your name appears in Moimio.
+- **Email** — what you'll sign in with.
+- **Password** and **Confirm password** — at least 8 characters. A password manager is your friend here.
 
-Submit. Your account is created with the **Super Admin** role and you're logged in.
+You can switch the screen's language with the picker underneath. Click **Create Super Admin**. Moimio then shows the sign-in page: sign in with the email and password you just chose. This first account is the **Super Admin**, the one account that can do everything.
 
 🎉 **You've installed Moimio.**
 
-You should land on the events list — empty for now. Click **+ New event** to create your first event.
+<p align="center">
+  <img src="../assets/welcome-splash.png" alt="The Welcome to Moimio screen shown when there are no events yet" width="560">
+  <br>
+  <em>The Welcome to Moimio screen</em>
+</p>
+
+Because there are no events yet, you'll see a **Welcome to Moimio** screen explaining the three phases of an event (Setup, Registration, Event). Click **Create your first event** to begin.
+
+One more thing worth doing now: click **Workspace** in the left-hand menu and paste the web address of your organisation's **privacy notice**, if you have one. People filling in your registration form will then see a link to it right next to the consent tick box.
 
 ---
 
 ## Step 5 — Make it reachable on a real domain (optional, recommended)
 
-Visiting Moimio at `http://203.0.113.42:6120` works for you, but it's not where you'd send participants. For real registrations, you want something like `https://events.yourchurch.org`.
+Visiting Moimio at `http://203.0.113.42:6120` works for you, but it's not where you'd send participants. For real registrations, you want something like `https://events.yourchurch.org`. HTTPS also switches on a few conveniences that browsers only allow on secure sites, such as the "new version available" prompt and offline caching.
 
 If you went **Path B (self-host with Cloudflare Tunnel)**, you've already done this — your tunnel URL is the public address. Skip this section.
 
@@ -311,7 +323,7 @@ If you don't already have one, buy one from any domain registrar (Namecheap, Por
 
 You don't need a separate domain — a subdomain of one you already own works fine. If your church is at `yourchurch.org`, a subdomain like `events.yourchurch.org` is cleaner than a whole new domain.
 
-If domain registration and DNS feel intimidating, this is a good moment to ask a more technically-inclined friend, or paste your situation into ChatGPT or Claude — these assistants can walk you through the specific registrar's flow in a few minutes.
+If domain registration and DNS feel intimidating, this is a good moment to ask a more technically-inclined friend, or paste your situation into an AI chat assistant — it can walk you through the specific registrar's flow in a few minutes.
 
 ### Pointing the domain at your server (VPS path)
 
@@ -338,8 +350,10 @@ You have two clean options. Both work; pick whichever fits your comfort level.
 The simplest if you're new to TLS: use Cloudflare as a reverse proxy.
 
 1. Add your domain to a (free) Cloudflare account.
-2. Set the A record (or use Cloudflare Tunnel as in Path B).
-3. Cloudflare automatically handles HTTPS termination — you visit `https://events.yourchurch.org` and Cloudflare proxies to your origin.
+2. Set up a Cloudflare Tunnel on your VPS, exactly as in [Path B, Step 3](#step-3--set-up-cloudflare-tunnel), pointing it at `HTTP://localhost:6120`. (With a tunnel you don't need the A record above; Cloudflare creates the DNS entry for you.)
+3. Cloudflare automatically handles HTTPS — you visit `https://events.yourchurch.org` and the tunnel carries it to Moimio.
+
+A plain "proxied" A record on its own isn't enough: Cloudflare would forward visitors to the standard web ports (80/443), and Moimio listens on 6120. The tunnel avoids that, and you don't have to open any ports at all.
 
 This is what many self-hosters end up doing because it's effectively "set it and forget it."
 
@@ -377,7 +391,32 @@ sudo systemctl reload caddy
 
 Caddy fetches a TLS certificate from Let's Encrypt automatically (30–60 seconds the first time). Visit `https://events.yourchurch.org`.
 
-You can now (and should) close port 6120 from the public internet — only Caddy on the host needs to talk to it. On a Hetzner / DigitalOcean / etc. firewall, restrict 6120 to localhost. With `ufw`: `sudo ufw deny 6120`.
+You can now (and should) close port 6120 to the public internet, because only Caddy on the same server needs to talk to it. The reliable way is to tell Docker to listen on the server itself only. Open `.env` again (`nano .env`) and set:
+
+```
+FRONTEND_PORT=127.0.0.1:6120
+BACKEND_PORT=127.0.0.1:6121
+DB_PORT=127.0.0.1:6122
+```
+
+Save, then apply it with `docker compose up -d`. (A `ufw` rule on its own doesn't do this job: Docker opens its ports directly and goes around `ufw`.) Your provider's own firewall in their web console is a good second layer: allow only ports 22, 80 and 443.
+
+---
+
+## Sending email (optional)
+
+Moimio works without email. With it, people get a confirmation email when they register, and you can reset a forgotten password. To switch it on, you need the details of an email account that allows sending by "SMTP" (your email provider's help pages will call it that). Open `.env` and fill in the block that starts with `SMTP_`:
+
+```
+SMTP_HOST=smtp.yourprovider.com
+SMTP_PORT=587
+SMTP_USER=events@yourchurch.org
+SMTP_PASSWORD=your-app-password
+SMTP_FROM_EMAIL=events@yourchurch.org
+SMTP_FROM_NAME=Your Church Events
+```
+
+Save, then run `docker compose up -d` to apply it. To check it works, open an event's registration form settings and click **Send Test Email** under **Email confirmation**: a test message arrives in your own inbox. The [Quick Install Guide](quick-guide.md#smtp-reference-optional) has settings for common providers.
 
 ---
 
@@ -387,15 +426,23 @@ When a new version is released, on the server:
 
 ```bash
 cd ~/moimio
-git pull
-docker compose build --no-cache && docker compose up -d --force-recreate
+./upgrade.sh
 ```
 
-The first command moves into the Moimio folder. The second downloads new code. The third rebuilds the images and restarts the containers.
+The script shows you what's about to change and asks **Proceed with upgrade? [y/N]**. Type `y`. It then:
 
-Updates typically take 3–5 minutes. The site is briefly unavailable during the restart (10–30 seconds). If you have an event in progress, do this outside event hours.
+- saves a copy of your `.env` settings file,
+- saves a backup of the database next to the `moimio` folder (a file called `pgdata-pre-upgrade-<date-and-time>.sql.gz`),
+- downloads the new version, rebuilds Moimio and restarts it,
+- prints the exact commands to go back to the old version if you need to.
 
-Database migrations run automatically on backend startup — your participant data is preserved across updates.
+It may ask for your password, because it uses `sudo`. To move to one particular version instead of the newest, give its name, for example `./upgrade.sh v1.0.6` (the version names are listed in the changelog). To see what it would do without changing anything, run `./upgrade.sh --dry-run`.
+
+At the end the script waits up to 90 seconds for Moimio to report that it's healthy. If it prints "backend did not become healthy", open Moimio in your browser before you follow its rollback instructions: if it loads and you can sign in, the update most likely just needed longer to start.
+
+Updates typically take 3–5 minutes. The site is unavailable for part of that time while Moimio rebuilds and restarts. If you have an event in progress, do this outside event hours.
+
+Your participant data is kept across updates; any database changes a new version needs are applied automatically when it starts. Keep the backup files until you're happy with the new version, then delete them.
 
 ---
 
@@ -410,13 +457,24 @@ docker compose exec -T db pg_dump -U moimio moimio | gzip > ~/moimio-backup-$(da
 
 This creates a timestamped backup file in your home directory. Copy it to your laptop or cloud storage regularly.
 
-To restore from a backup:
+Restoring replaces everything in the database with what's in the backup, so only do it when you mean to. The database has to be emptied first, which is what the `dropdb` and `createdb` lines do:
 
 ```bash
-gunzip -c moimio-backup-2026-04-28.sql.gz | docker compose exec -T db psql -U moimio moimio
+cd ~/moimio
+docker compose stop backend
+docker compose exec -T db dropdb -U moimio moimio
+docker compose exec -T db createdb -U moimio moimio
+gunzip -c ~/moimio-backup-2026-04-28.sql.gz | docker compose exec -T db psql -U moimio moimio
+docker compose start backend
 ```
 
+(Use the name of your own backup file.)
+
 For real production deployments, automate the backup with `cron` and ship the file off-server. If that's beyond comfort, ask a technically-inclined friend, or open an issue on GitHub asking for a "scheduled-backup" guide.
+
+**Backups inside Moimio.** Admins also have a **Backup** page in the left-hand menu. It downloads a ZIP file per event, and its **Restore from backup** button brings an event back as a new draft. That's handy before a big change to one event, or for copying an event to another Moimio. Team members' accounts aren't included, so you'd invite them again on a new server.
+
+**Moving everything to a new server**, or bringing your events over from the hosted service? See [Moving a workspace to your own Moimio](../moving-a-workspace.md).
 
 ---
 
@@ -432,10 +490,20 @@ Three checks, in order:
 3. Is the firewall blocking you? VPS providers often have a separate firewall layer; make sure the port you need is open.
 
 **The browser loads but I can't log in (and there's no first-time setup screen).**
-A user already exists. The setup wizard only appears when there are zero users. Use the login form instead. If you don't know the password, reset it directly in the database — or recreate the deployment with a fresh database (only safe if there's no real data yet).
+An account already exists. The setup screen only appears when there are no accounts at all. Use the sign-in form instead. If you've forgotten the password and email isn't set up, you can create a second Super Admin account from the server (use a different email address), sign in with that, and carry on:
+
+```bash
+docker compose exec backend python -m app.cli.create_admin
+```
+
+**The page just says "Cannot reach the server".**
+The website part of Moimio is running, but the part behind it isn't answering. Run `docker compose ps` and check the `backend` row says `Up`; if not, `docker compose logs --tail=50 backend` usually says why.
+
+**The backend log says `password authentication failed`.**
+The database password in `.env` was changed after Moimio was first started; the database still expects the original one. Put the original password back in `.env` and run `docker compose up -d`.
 
 **Cloudflare Tunnel isn't reaching Moimio.**
-On the server: `cloudflared tunnel run` shows live logs. Common cause: the tunnel is pointed at `localhost:80` but Moimio is on `localhost:6120`. Update the tunnel's public hostname configuration.
+On the server: `sudo systemctl status cloudflared` shows whether the connector is running, and `sudo journalctl -u cloudflared -f` shows its live log (press Ctrl-C to stop watching). Common cause: the tunnel is pointed at `localhost:80` but Moimio is on `localhost:6120`. Update the tunnel's public hostname configuration.
 
 **HTTPS errors after setting up the domain (Caddy path).**
 DNS may not have propagated yet. Wait 5 minutes and retry. Or Caddy hasn't fetched the certificate — `sudo systemctl status caddy` shows what it's doing. Logs in `journalctl -u caddy`.

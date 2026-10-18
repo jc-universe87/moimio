@@ -70,6 +70,15 @@ def anyio_backend():
     return "asyncio"
 
 
+@pytest.fixture(autouse=True)
+def _reset_registration_limiter():
+    """Every test starts with a clean sign-up rate limit. The limiter is
+    process-wide and the test client always reports the same address."""
+    from app.core.rate_limit import registration_limiter
+    registration_limiter.reset()
+    yield
+
+
 @pytest_asyncio.fixture
 async def client():
     """Async test client for API integration tests."""

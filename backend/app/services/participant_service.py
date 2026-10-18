@@ -4,6 +4,7 @@ import re
 import uuid
 import secrets
 import random
+import unicodedata
 from datetime import datetime, timezone
 
 from sqlalchemy import select, func as sa_func, text
@@ -41,10 +42,23 @@ def _is_complete_code(code: str) -> bool:
     return bool(_COMPLETE_CODE_RE.match(code))
 
 
+# Latin letters that Unicode decomposition does not reduce to a base letter.
+# Mirrored in frontend/src/pages/RegisterPage.jsx (stemFromName).
+_STEM_TRANSLIT = {
+    'ß': 'SS', 'ẞ': 'SS', 'Æ': 'AE', 'æ': 'AE', 'Œ': 'OE', 'œ': 'OE',
+    'Ø': 'O', 'ø': 'O', 'Đ': 'D', 'đ': 'D', 'Ð': 'D', 'ð': 'D',
+    'Ł': 'L', 'ł': 'L', 'Þ': 'TH', 'þ': 'TH', 'ı': 'I',
+}
+_COMBINING_MARKS_RE = re.compile('[̀-ͯ]')
+
+
 def _stem_from(text: str) -> str:
     """Normalise a free-text input into a stem suitable for STEM-NNN.
-    Uppercase, strip whitespace, keep alnum only, truncate to 8."""
-    cleaned = re.sub(r'[^A-Z0-9]', '', text.upper())
+    Uppercase, fold accents to their base letter (Müller → MULLER, not
+    MLLER), keep alnum only, truncate to 8."""
+    folded = ''.join(_STEM_TRANSLIT.get(ch, ch) for ch in text)
+    folded = _COMBINING_MARKS_RE.sub('', unicodedata.normalize('NFKD', folded))
+    cleaned = re.sub(r'[^A-Z0-9]', '', folded.upper())
     return cleaned[:8] or 'GROUP'
 
 

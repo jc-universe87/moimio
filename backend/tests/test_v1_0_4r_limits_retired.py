@@ -63,6 +63,7 @@ class _Request:
 
     headers: dict[str, str] = {}
     base_url = "http://test.local/"
+    client = None  # read by the sign-up rate limit
 
 
 async def _event_with_two_group_types(db):
