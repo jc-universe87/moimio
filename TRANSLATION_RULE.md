@@ -209,5 +209,5 @@ exporter then splitter on a clean tree is a no-op.
 ## Current Status
 
 **1,227 keys × 6 languages = 7,362 translations.** All aligned. Zero
-missing keys. The 18 October 2026 native-polish pass updated 96 UI strings;
+missing keys. The 18 October 2026 native-polish pass updated 95 UI strings;
 future UI changes still require translation review in all six locales.
