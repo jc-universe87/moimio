@@ -2,7 +2,7 @@
 
 이 설명서는 Moimio로 행사를 처음부터 끝까지 운영하는 방법을 설명합니다. Moimio를 이미 설치하고 로그인했다고 가정합니다. 아직이라면 [설치 가이드](../installation/README.ko.md)부터 시작하세요.
 
-> 이 설명서는 오픈 소스로 직접 설치할 수 있는 **Moimio CE(Community Edition)**를 다룹니다. [moimio.app](https://moimio.app)의 호스팅 서비스에서도 같은 흐름이 적용됩니다. 두 에디션은 같은 코드를 사용합니다.
+> 이 설명서는 오픈 소스로 직접 설치할 수 있는 **Moimio CE**(Community Edition)를 다룹니다. [moimio.app](https://moimio.app)의 호스팅 서비스에서도 같은 흐름이 적용됩니다. 두 에디션은 같은 코드를 사용합니다.
 
 ---
 

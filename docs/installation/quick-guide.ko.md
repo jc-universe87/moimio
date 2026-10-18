@@ -9,7 +9,7 @@
 ## 준비 사항
 
 - Linux 호스트(최신 배포판이면 무엇이든. Ubuntu 22.04+, Debian 12+, Fedora, systemd를 쓰는 모든 배포판).
-- **Docker Engine 24+**와 **Docker Compose v2**(예전의 독립 실행형 `docker-compose`가 아니라 `docker compose` 하위 명령).
+- **Docker Engine 24 이상**과 **Docker Compose v2**(예전의 독립 실행형 `docker-compose`가 아니라 `docker compose` 하위 명령).
 - **Git**(저장소 내려받기용). 또는 소스 tarball을 내려받아 풀어도 됩니다.
 - **포트:** `6120`(프런트엔드. `/api`와 `/health`도 백엔드로 프록시하므로 브라우저에는 이 포트 하나만 필요합니다). Compose는 `6121`(백엔드, 디버깅 중 API에 직접 접근용)과 `6122`(PostgreSQL)도 엽니다. 둘 다 외부에 공개할 필요가 없습니다. localhost에만 묶는 방법은 아래 "포트 바꾸기"를 참고하세요.
 - `sudo docker compose`를 호출하는 `upgrade.sh`를 위한 `sudo` 권한.
