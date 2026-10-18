@@ -81,7 +81,7 @@ Todo evento passa por três fases simples. O Moimio mostra em qual delas você e
 
 Dê ao seu evento um nome, datas e um local. Escolha as perguntas do formulário de inscrição. Crie seus quartos e grupos. Uma lista de verificação mostra o que ainda falta.
 
-<p align="center"><img src="docs/assets/setup-hub.png" alt="A tela de Configuração: cinco cartões (Detalhes, Inscrição, Tipos de grupo, Marcas e Colaboradores) e um botão para abrir as inscrições" width="85%"></p>
+<p align="center"><img src="docs/assets/setup-hub.png" alt="A tela de Configuração: cinco cartões (Detalhes, Inscrição, Tipos de grupo, Marcações e Equipe) e um botão para abrir as inscrições" width="85%"></p>
 
 ### 2 · Inscrição: *deixe as pessoas se inscreverem*
 

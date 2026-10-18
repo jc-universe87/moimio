@@ -20,7 +20,7 @@ Esta seção explica como rodá-lo, o que ele faz, como ajustá-lo e o que fazer
 
 O quadro tem três partes:
 
-- **Barra de ferramentas superior**: o botão **✦ Atribuir automaticamente**, com um **⚙** (configurações do motor) ao lado, um link **+ Adicionar [item]** para criar um novo grupo (por exemplo, **+ Adicionar Quarto**) e um menu **⋯** (notas, **↗ Abrir visão geral**, downloads de PDF, **Limpar todas as alocações**).
+- **Barra de ferramentas superior**: o botão **✦ Atribuir automaticamente**, com um **⚙** (configurações do motor) ao lado, um link **+ Adicionar [item]** para criar um novo grupo (por exemplo, **+ Adicionar Quarto**) e um menu **⋯** (notas, **↗ Abrir visão geral**, downloads de PDF, **Limpar todas as atribuições**).
 - **Painel esquerdo, Não atribuídos**: todos que ainda não estão em um grupo, com uma caixa de busca e os filtros **Todos / ♂ Masculino / ♀ Feminino**. Quem ainda não confirmou o e-mail aparece com a etiqueta **Pendente**. Abaixo da lista fica o bloco **Não incluídos** (veja [Como deixar alguém de fora de um tipo de grupo](#como-deixar-alguém-de-fora-de-um-tipo-de-grupo)). O painel pode virar uma janela flutuante e voltar ao lugar pelo pequeno ícone no topo dele.
 - **Grade à direita, os grupos**: um cartão por grupo, com a ocupação (por exemplo, `5/8`), a restrição de gênero, se houver (por exemplo, **Apenas mulheres**), um pontinho colorido se o grupo for reservado para quem tem uma marcação, e as pessoas que estão nele.
 
@@ -126,7 +126,7 @@ A mesma marcação pode fazer coisas diferentes em tipos de grupo diferentes. Po
 
 Quando um grupo está exatamente do jeito certo (o quarto dos palestrantes, por exemplo), clique no pequeno cadeado do cartão. O cadeado se fecha e aparece a mensagem *"Mantido. A atribuição automática não o alterará."* A partir daí, nenhum dos modos de atribuição adiciona alguém a esse grupo nem tira alguém dele. Clique no cadeado de novo para liberá-lo.
 
-**Limpar todas as alocações**, no menu **⋯**, esvazia também os grupos bloqueados.
+**Limpar todas as atribuições**, no menu **⋯**, esvazia também os grupos bloqueados.
 
 ---
 
@@ -177,7 +177,7 @@ Confirmar uma proposta salva as atribuições. Além disso, você pode **confirm
 - Quando todos estiverem atribuídos, o quadro mostra **Pronto para confirmar**, com um botão **Confirmar este tipo de grupo →**.
 - Na página **Atribuição**, um tipo de grupo em andamento mostra um botão **Confirmar tipo de grupo** no cartão.
 
-Um tipo de grupo confirmado mostra **Confirmado** no cartão e um aviso no quadro. Qualquer mudança posterior (uma movimentação manual, uma proposta confirmada, **Limpar todas as alocações**) o reabre automaticamente; você também pode clicar em **Reabrir para editar** no aviso. Quando todos os tipos de grupo estiverem confirmados, o aviso oferece **Check-in pronto →**.
+Um tipo de grupo confirmado mostra **Confirmado** no cartão e um aviso no quadro. Qualquer mudança posterior (uma movimentação manual, uma proposta confirmada, **Limpar todas as atribuições**) o reabre automaticamente; você também pode clicar em **Reabrir para editar** no aviso. Quando todos os tipos de grupo estiverem confirmados, o aviso oferece **Check-in pronto →**.
 
 ---
 
@@ -204,7 +204,7 @@ Com **Equilibrar o tamanho dos grupos** ativado, a maioria das atribuições sai
 
 **"Confirmei e agora quero desfazer."**
 
-Não há um botão único de desfazer, mas nada é definitivo: mova as pessoas manualmente, rode o motor de novo ou use **⋯ ▸ Limpar todas as alocações** e comece de novo.
+Não há um botão único de desfazer, mas nada é definitivo: mova as pessoas manualmente, rode o motor de novo ou use **⋯ ▸ Limpar todas as atribuições** e comece de novo.
 
 ---
 

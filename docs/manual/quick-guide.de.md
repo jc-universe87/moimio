@@ -25,7 +25,7 @@ Die Seitenleiste ändert sich je nach Phase. In der Einrichtung zeigt sie nur ei
 Klick in der Event-Liste (die Seite, auf der du nach dem Anmelden landest) auf **+ Neues Event**. Das Formular ist bewusst schlicht:
 
 - **Eventname** – das sehen die Teilnehmer oben im Anmeldeformular.
-- **Einstellungen aus einer anderen Veranstaltung übernehmen** (optional) – setz den Haken, wähl ein früheres Event und entscheide, was übernommen werden soll: Markierungen, Anmeldeformular, benutzerdefinierte Felder, Gruppentypen und Teammitglieder. Teilnehmer werden nie übernommen.
+- **Einstellungen aus einem anderen Event übernehmen** (optional) – setz den Haken, wähl ein früheres Event und entscheide, was übernommen werden soll: Markierungen, Anmeldeformular, benutzerdefinierte Felder, Gruppentypen und Teammitglieder. Teilnehmer werden nie übernommen.
 
 Klick auf **Event erstellen**. Das Event wird als Entwurf angelegt. Sofern du keine Gruppentypen übernommen hast, sind schon zwei vorhanden: **Zimmerbelegung** und **Kleingruppen**. Du landest auf der **Einrichtungsseite** in der **Einrichtungsphase**.
 
@@ -167,7 +167,7 @@ Sobald das Enddatum vorbei ist, befindet sich das Event in der Eventphase, Unter
 - Die Anmeldung schließen, falls noch nicht geschehen – mit dem Button **Anmeldung schließen** im Banner **Anmeldung noch geöffnet** oben in der **Einteilung**.
 - Unter **Verwaltung ▸ Backup** ein Backup zur sicheren Aufbewahrung herunterladen (Super-Admins).
 - Das Event archivieren (Super-Admins): über das Menü **⋯** in der Event-Liste oder **Mehr ▸ Eventdetails ▸ Gefahrenbereich ▸ Archivieren**. Archivierte Events sind schreibgeschützt. Mit **Dearchivieren** lässt sich das rückgängig machen.
-- Die Einrichtung fürs nächste Jahr wiederverwenden: Klick auf **+ Neues Event**, setz den Haken bei **Einstellungen aus einer anderen Veranstaltung übernehmen** und wähl dieses Event. Gruppentypen, benutzerdefinierte Felder, Markierungen und mehr werden übernommen, Teilnehmer nicht.
+- Die Einrichtung fürs nächste Jahr wiederverwenden: Klick auf **+ Neues Event**, setz den Haken bei **Einstellungen aus einem anderen Event übernehmen** und wähl dieses Event. Gruppentypen, benutzerdefinierte Felder, Markierungen und mehr werden übernommen, Teilnehmer nicht.
 
 ---
 

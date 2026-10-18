@@ -103,7 +103,7 @@ Quando **Incluir capa** está marcado, o PDF começa com uma capa que mostra o n
 
 ## Marcações nos PDFs
 
-As marcações visíveis em **Atribuição** aparecem como pequenos pontinhos coloridos logo depois do nome de cada pessoa, nos três formatos. Uma legenda **Marcas** no fim da lista mostra qual cor corresponde a qual marcação, listando só as marcações que de fato aparecem naquele PDF.
+As marcações visíveis em **Atribuição** aparecem como pequenos pontinhos coloridos logo depois do nome de cada pessoa, nos três formatos. Uma legenda **Marcações** no fim da lista mostra qual cor corresponde a qual marcação, listando só as marcações que de fato aparecem naquele PDF.
 
 Se alguém tiver mais marcações do que cabem (4 pontinhos no Compacto e no Detalhado, 3 na folha de Presença), as que sobram ficam de fora. As marcações aparecem em ordem alfabética, para que todas as impressões fiquem iguais.
 

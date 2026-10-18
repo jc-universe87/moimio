@@ -140,7 +140,7 @@ Ein Mitarbeiter-Konto kann zusätzlich zwei Berechtigungen erhalten, unabhängig
 - **Darf Benutzer verwalten** – gibt Zugang zur Seite **Benutzer**.
 - **Kann neue Events erstellen** – gibt den Button **+ Neues Event**. Wer ein Event anlegt, wird für dieses Event automatisch **Event-Admin** (voller Zugriff).
 
-Sobald ein Benutzerkonto existiert, fügst du es innerhalb eines Events zu diesem Event hinzu: über die Karte **Helfer** auf der Einrichtungsseite oder später über **Mehr ▸ Team & Berechtigungen**. Dort legst du fest, ob die Person **Event-Admin** (voller Zugriff auf dieses Event) oder **Mitarbeiter** mit Zugriff auf bestimmte Bereiche ist. Das vollständige Berechtigungsmodell findest du in [Kapitel 11](11-staff-permissions.de.md).
+Sobald ein Benutzerkonto existiert, fügst du es innerhalb eines Events zu diesem Event hinzu: über die Karte **Mitarbeiter** auf der Einrichtungsseite oder später über **Mehr ▸ Team & Berechtigungen**. Dort legst du fest, ob die Person **Event-Admin** (voller Zugriff auf dieses Event) oder **Mitarbeiter** mit Zugriff auf bestimmte Bereiche ist. Das vollständige Berechtigungsmodell findest du in [Kapitel 11](11-staff-permissions.de.md).
 
 Ein Mitarbeiter, der noch keinem Event hinzugefügt wurde, sieht nach dem Anmelden die Seite **Warte auf deine erste Zuweisung** mit einem Button **Aktualisieren**.
 
@@ -174,7 +174,7 @@ Außerdem kannst du:
 - Zwischen den Tabs **Aktiv**, **Vergangen** (Enddatum ist vorbei) und **Archiviert** **wechseln**.
 - Über das Menü **⋯** auf einer Karte (Super-Admins) **Anheften**, **Archivieren** / **Dearchivieren** oder **Event löschen**. Angeheftete Events bleiben oben im Tab „Aktiv“.
 
-Um die Einrichtung eines früheren Events wiederzuverwenden, setz beim Anlegen des neuen Events den Haken bei **Einstellungen aus einer anderen Veranstaltung übernehmen** – siehe [Kapitel 02](02-events-and-registration.de.md).
+Um die Einrichtung eines früheren Events wiederzuverwenden, setz beim Anlegen des neuen Events den Haken bei **Einstellungen aus einem anderen Event übernehmen** – siehe [Kapitel 02](02-events-and-registration.de.md).
 
 ---
 

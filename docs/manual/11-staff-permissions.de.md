@@ -56,7 +56,7 @@ Jedes Event hat seine eigene Liste von Teammitgliedern. Jedes hat:
 - **Eine Rolle für dieses Event:** **Event-Admin** oder **Mitarbeiter**.
 - **Berechtigungen** (nur relevant, wenn die Rolle „Mitarbeiter“ ist).
 
-Das Team verwaltest du in der Einrichtungsphase über die Karte **Einrichtungsseite ▸ Helfer** oder, sobald die Anmeldung geöffnet ist, über **Mehr ▸ Team & Berechtigungen**. Beide öffnen denselben Bereich **Team & Berechtigungen**.
+Das Team verwaltest du in der Einrichtungsphase über die Karte **Einrichtungsseite ▸ Mitarbeiter** oder, sobald die Anmeldung geöffnet ist, über **Mehr ▸ Team & Berechtigungen**. Beide öffnen denselben Bereich **Team & Berechtigungen**.
 
 Um Personen hinzuzufügen, musst du Super-Admin sein oder **Darf Benutzer verwalten** haben – die Liste der Personen zur Auswahl kommt aus der Benutzerverwaltung. Jemand braucht ein Konto, bevor er hinzugefügt werden kann.
 
@@ -135,7 +135,7 @@ Die **ausführliche** Liste und die Teilnehmer-Tabellendatei enthalten personenb
 
 ## Jemanden zu einem Event hinzufügen
 
-Über die Karte **Helfer** oder **Team & Berechtigungen**:
+Über die Karte **Mitarbeiter** oder **Team & Berechtigungen**:
 
 1. Klick auf **+ Nutzer zuweisen**.
 2. Wähl unter **Nutzer** jemanden aus (**Nutzer auswählen**). Die Liste zeigt aktive Konten, die noch nicht in diesem Event sind.

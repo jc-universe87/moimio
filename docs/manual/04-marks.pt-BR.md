@@ -15,7 +15,7 @@ Esta seção explica como definir marcações, atribuí-las e configurar o compo
 
 O editor de marcações pode ser aberto de alguns lugares, dependendo do seu acesso e da fase do evento:
 
-- **Fase de Configuração:** o cartão **Marcas** no painel de configuração.
+- **Fase de Configuração:** o cartão **Marcações** no painel de configuração.
 - **Fases de Inscrição e Evento**, para administradores do evento e Superadministradores: **Mais ▸ Marcações**, na barra lateral.
 - Para membros da equipe com permissão de edição em marcações (mas sem direitos de administrador): **Marcações** aparece como um item próprio na barra lateral.
 

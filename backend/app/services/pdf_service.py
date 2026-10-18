@@ -283,7 +283,7 @@ PDF_TRANSLATIONS: dict[str, dict[str, str]] = {
         "col.notes":            "NOTAS",
         "signin.door_staff":    "RECEPÇÃO",
         "signin.date":          "DATA",
-        "marks.legend.title":   "Marcas",
+        "marks.legend.title":   "Marcações",
     },
     "fr": {
         "format.compact":       "Liste compacte",

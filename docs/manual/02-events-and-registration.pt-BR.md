@@ -39,8 +39,8 @@ São cinco cartões, cada um uma área de configuração. Clique em um cartão p
 | **Detalhes** | Nome do evento, descrição, local, datas de início e término, fuso horário. |
 | **Inscrição** | O formulário público de inscrição: quais campos padrão mostrar e os seus próprios campos personalizados. |
 | **Tipos de grupo** | As formas de dividir as pessoas: quartos, grupos pequenos, oficinas (veja a [seção 5](05-group-types-and-units.pt-BR.md)). Já vem com **Atribuição de quartos** e **Grupos pequenos**. Os quartos e grupos de cada tipo são adicionados depois, em **Atribuição**, e não neste cartão. |
-| **Marcas** | Opcional. Etiquetas coloridas como "Vegetariano" ou "Líder" (veja a [seção 4](04-marks.pt-BR.md)). |
-| **Colaboradores** | Opcional. Adicione outros usuários ao evento e escolha o que cada um pode acessar (veja a [seção 11](11-staff-permissions.pt-BR.md)). |
+| **Marcações** | Opcional. Etiquetas coloridas como "Vegetariano" ou "Líder" (veja a [seção 4](04-marks.pt-BR.md)). |
+| **Equipe** | Opcional. Adicione outros usuários ao evento e escolha o que cada um pode acessar (veja a [seção 11](11-staff-permissions.pt-BR.md)). |
 
 Os cartões **Detalhes** e **Inscrição** têm, cada um, um botão **Salvar e confirmar** no fim. **Os dois precisam estar confirmados** para você abrir as inscrições. O cartão **Inscrição** só pode ser confirmado se o evento tiver pelo menos um tipo de grupo; como os dois tipos padrão já vêm prontos, isso só importa se você tiver excluído todos.
 

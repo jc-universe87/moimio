@@ -56,7 +56,7 @@ Todo evento tem a sua própria lista de membros da equipe. Cada um tem:
 - **Uma função neste evento:** **Administrador do evento** ou **Equipe**.
 - **Permissões** (usadas só quando a função é Equipe).
 
-Gerencie a equipe pelo cartão **Painel de configuração ▸ Colaboradores** durante a fase de Configuração, ou por **Mais ▸ Equipe e permissões** depois que as inscrições abrirem. Os dois abrem o mesmo painel **Equipe e permissões**.
+Gerencie a equipe pelo cartão **Painel de configuração ▸ Equipe** durante a fase de Configuração, ou por **Mais ▸ Equipe e permissões** depois que as inscrições abrirem. Os dois abrem o mesmo painel **Equipe e permissões**.
 
 Para adicionar pessoas, você precisa ser Superadministrador ou ter **Permitir que este administrador gerencie usuários**: a lista de pessoas para escolher vem do Gerenciamento de usuários. A pessoa precisa ter uma conta antes de ser adicionada.
 
@@ -135,7 +135,7 @@ A lista **Detalhada** e a planilha de participantes contêm dados pessoais, ent�
 
 ## Como adicionar alguém a um evento
 
-No cartão **Colaboradores** ou em **Equipe e permissões**:
+No cartão **Equipe** ou em **Equipe e permissões**:
 
 1. Clique em **+ Atribuir usuário**.
 2. Em **Usuário**, escolha alguém (**Selecione um usuário**). A lista mostra as contas ativas que ainda não estão neste evento.

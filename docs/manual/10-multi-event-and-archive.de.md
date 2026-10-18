@@ -73,7 +73,7 @@ Bei einem wiederkehrenden Event – gleiches Anmeldeformular, ähnliche Zimmer, 
 
 1. Event-Liste ▸ **+ Neues Event**.
 2. Gib den Namen des neuen Events ein.
-3. Setz den Haken bei **Einstellungen aus einer anderen Veranstaltung übernehmen** und wähl das Event, von dem übernommen werden soll.
+3. Setz den Haken bei **Einstellungen aus einem anderen Event übernehmen** und wähl das Event, von dem übernommen werden soll.
 4. Entferne unter **Zu übernehmende Einstellungen** den Haken bei allem, was du nicht willst. Anfangs sind alle fünf angehakt:
    - **Markierungen** – die Definitionen der Markierungen (Name, Farbe usw.), nicht wer sie getragen hat.
    - **Anmeldeformular** – welche Standardfelder angezeigt werden und Pflicht sind.

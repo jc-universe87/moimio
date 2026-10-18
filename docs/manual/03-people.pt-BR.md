@@ -187,7 +187,7 @@ Na tabela Participantes, encontre as duas linhas (busque pelo nome ou e-mail). E
 
 ### "Quero marcar todos os líderes"
 
-Crie uma marcação em **Mais ▸ Marcações**, na barra lateral (ou no cartão **Marcas** do painel de configuração). Dê um nome, por exemplo "Líder", escolha uma cor bem diferente e confira se **Tabela de pessoas** está marcado em **Visível em**.
+Crie uma marcação em **Mais ▸ Marcações**, na barra lateral (ou no cartão **Marcações** do painel de configuração). Dê um nome, por exemplo "Líder", escolha uma cor bem diferente e confira se **Tabela de pessoas** está marcado em **Visível em**.
 Depois, na tabela Participantes, encontre cada líder. Ao lado do nome há um pequeno botão ● (um círculo vazio quando a pessoa ainda não tem marcações). Clique nele e clique em **Atribuir** ao lado de "Líder".
 
 ### "Exportar todo mundo para uma lista de e-mails"

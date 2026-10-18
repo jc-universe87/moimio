@@ -140,7 +140,7 @@ Um usuário da Equipe também pode receber duas permissões extras, independente
 - **Permitir que este administrador gerencie usuários**: dá acesso à página **Usuários**.
 - **Pode criar novos eventos**: dá acesso ao botão **+ Novo evento**. Quem cria um evento se torna automaticamente **Administrador do evento** (acesso total) daquele evento.
 
-Depois que a conta existe, você adiciona a pessoa a um evento específico de dentro desse evento: pelo cartão **Colaboradores** no painel de configuração ou, mais tarde, em **Mais ▸ Equipe e permissões**. Ali você escolhe se ela será **Administrador do evento** (acesso total àquele evento) ou **Equipe**, com acesso a áreas específicas. Veja a [seção 11](11-staff-permissions.pt-BR.md) para o modelo completo de permissões.
+Depois que a conta existe, você adiciona a pessoa a um evento específico de dentro desse evento: pelo cartão **Equipe** no painel de configuração ou, mais tarde, em **Mais ▸ Equipe e permissões**. Ali você escolhe se ela será **Administrador do evento** (acesso total àquele evento) ou **Equipe**, com acesso a áreas específicas. Veja a [seção 11](11-staff-permissions.pt-BR.md) para o modelo completo de permissões.
 
 Um usuário da Equipe que ainda não foi adicionado a nenhum evento vê, depois de entrar, a página **Aguardando sua primeira atribuição**, com um botão **Atualizar**.
 

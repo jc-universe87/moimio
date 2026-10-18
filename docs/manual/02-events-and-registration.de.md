@@ -11,7 +11,7 @@ Wie du ein Event anlegst, seine Details ausfüllst, das Anmeldeformular einricht
 Klick in der Event-Liste auf **+ Neues Event**. Das Formular **Event erstellen** ist bewusst schlicht:
 
 - **Eventname** – erscheint oben im Anmeldeformular und in deiner Event-Liste. Halte ihn menschlich („Frühjahrsfreizeit 2026“ statt „FF2026-EVENT-001“).
-- **Einstellungen aus einer anderen Veranstaltung übernehmen** (optional, sichtbar, sobald du mindestens ein Event hast) – setz den Haken, wähl das Event, von dem kopiert werden soll, und dann **Zu übernehmende Einstellungen**: **Markierungen**, **Anmeldeformular**, **Benutzerdefinierte Felder**, **Gruppentypen** (mit ihren Zimmern und Gruppen) und **Teammitglieder**. Anfangs sind alle fünf angehakt; entferne den Haken bei allem, was du nicht willst. Übernommen wird nur die Einrichtung – niemals Teilnehmer, Zuweisungen, Check-ins oder Notizen.
+- **Einstellungen aus einem anderen Event übernehmen** (optional, sichtbar, sobald du mindestens ein Event hast) – setz den Haken, wähl das Event, von dem kopiert werden soll, und dann **Zu übernehmende Einstellungen**: **Markierungen**, **Anmeldeformular**, **Benutzerdefinierte Felder**, **Gruppentypen** (mit ihren Zimmern und Gruppen) und **Teammitglieder**. Anfangs sind alle fünf angehakt; entferne den Haken bei allem, was du nicht willst. Übernommen wird nur die Einrichtung – niemals Teilnehmer, Zuweisungen, Check-ins oder Notizen.
 
 Klick auf **Event erstellen**. Das Event wird als Entwurf angelegt, und du landest auf der **Einrichtungsseite**.
 
@@ -40,7 +40,7 @@ Fünf Karten, jede ein Konfigurationsbereich. Klick auf eine Karte, um sie zu ö
 | **Anmeldung** | Das öffentliche Anmeldeformular – welche Standardfelder angezeigt werden, und deine eigenen benutzerdefinierten Felder. |
 | **Gruppentypen** | Die Arten, wie du Menschen aufteilst: Zimmer, Kleingruppen, Workshops (siehe [Kapitel 5](05-group-types-and-units.de.md)). Bringt **Zimmerbelegung** und **Kleingruppen** schon mit. Die einzelnen Zimmer und Gruppen innerhalb jedes Typs legst du später in der **Einteilung** an, nicht auf dieser Karte. |
 | **Markierungen** | Optional. Farbige Labels wie „Vegetarisch“ oder „Leitung“ (siehe [Kapitel 4](04-marks.de.md)). |
-| **Helfer** | Optional. Füge andere Benutzer zum Event hinzu und leg fest, worauf sie zugreifen dürfen (siehe [Kapitel 11](11-staff-permissions.de.md)). |
+| **Mitarbeiter** | Optional. Füge andere Benutzer zum Event hinzu und leg fest, worauf sie zugreifen dürfen (siehe [Kapitel 11](11-staff-permissions.de.md)). |
 
 Die Karten **Details** und **Anmeldung** haben unten jeweils einen Button **Speichern & bestätigen**. **Beide müssen bestätigt sein**, bevor du die Anmeldung öffnen kannst. Die Karte **Anmeldung** lässt sich nur bestätigen, solange das Event mindestens einen Gruppentyp hat – da die beiden Standardtypen von Anfang an da sind, spielt das nur eine Rolle, wenn du alle gelöscht hast.
 

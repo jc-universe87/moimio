@@ -68,7 +68,7 @@ Es ist keine Ticketing-Software für Großunternehmen. Es gibt keine Zahlungsabw
 | ✋ **Du behältst die Kontrolle** | Zieh jede Person überallhin. Fixiere ein fertiges Zimmer, damit die Engine es in Ruhe lässt. Nimm jemanden von der Zimmerverteilung aus, lass ihn aber in seiner Kleingruppe. |
 | 🖨️ **Druckbare Listen** | Kompakte Listen für die Tür, Unterschriftenlisten mit Ankreuzfeldern für den Empfang, detaillierte Listen fürs Team. Druck sie in jeder der sechs Sprachen. |
 | ✅ **Check-in auf Tablet oder Handy** | Eine Vollbildliste für den Empfang. Füge eigene Ankreuzspalten hinzu, etwa *Bezahlt*, *Armband* oder *Einverständniserklärung*. |
-| 👥 **Bring dein Team mit** | Gib Helfern genau den Zugriff, den sie brauchen: nur lesen, nur Check-in oder vollen Zugriff – Event für Event. |
+| 👥 **Bring dein Team mit** | Gib Mitarbeitern genau den Zugriff, den sie brauchen: nur lesen, nur Check-in oder vollen Zugriff – Event für Event. |
 | 🔒 **Datenschutz eingebaut** | Gib jeder Person mit einem Klick ihre eigenen Daten, entferne Personen sauber und verlinke deinen eigenen Datenschutzhinweis im Anmeldeformular. |
 
 ---
@@ -112,7 +112,7 @@ Schließ die Anmeldung, druck deine Listen aus und öffne den Check-in-Bildschir
 | | |
 |:---:|:---:|
 | <img src="docs/assets/events-list.png" alt="Die Event-Liste"><br><sub>Alle deine Events in einer Liste</sub> | <img src="docs/assets/organise-dashboard.png" alt="Die Einteilungsseite mit zwei Gruppentypen"><br><sub>Einteilung: deine Gruppentypen auf einen Blick</sub> |
-| <img src="docs/assets/people-table.png" alt="Die Teilnehmertabelle"><br><sub>Alle Angemeldeten, durchsuchbar und sortierbar</sub> | <img src="docs/assets/staff-permissions.png" alt="Team und Berechtigungen"><br><sub>Leg fest, was jeder Helfer sehen und tun darf</sub> |
+| <img src="docs/assets/people-table.png" alt="Die Teilnehmertabelle"><br><sub>Alle Angemeldeten, durchsuchbar und sortierbar</sub> | <img src="docs/assets/staff-permissions.png" alt="Team und Berechtigungen"><br><sub>Leg fest, was jeder Mitarbeiter sehen und tun darf</sub> |
 | <img src="docs/assets/engine-settings.png" alt="Die Einstellungen der Zuweisungs-Engine" width="60%"><br><sub>Sag der Engine, was dir wichtig ist</sub> | <img src="docs/assets/first-time-setup.png" alt="Ersteinrichtung" width="70%"><br><sub>Die Ersteinrichtung dauert eine Minute</sub> |
 
 </details>
