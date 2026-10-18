@@ -1,3 +1,5 @@
+🌐 [English](09-data-export-gdpr.md) · [Deutsch](09-data-export-gdpr.de.md) · **한국어** · [Español](09-data-export-gdpr.es.md) · [Português (Brasil)](09-data-export-gdpr.pt-BR.md) · [Français](09-data-export-gdpr.fr.md)
+
 # 09: 데이터 내보내기와 개인정보보호(GDPR)
 
 Moimio는 행사를 운영하는 주최자가 앱을 벗어나지 않고도 개인정보 처리자(데이터 컨트롤러)로서 GDPR 의무를 다할 수 있도록 만들어졌습니다. 관련 기능은 참가자별 데이터 내보내기(제15조 / 제20조), 그 자리에서 수정하기(제16조), 제거(제17조), 행사 단위 백업, 그리고 취소된 참가자의 명확한 처리입니다.

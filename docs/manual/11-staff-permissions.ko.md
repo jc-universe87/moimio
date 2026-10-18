@@ -1,3 +1,5 @@
+🌐 [English](11-staff-permissions.md) · [Deutsch](11-staff-permissions.de.md) · **한국어** · [Español](11-staff-permissions.es.md) · [Português (Brasil)](11-staff-permissions.pt-BR.md) · [Français](11-staff-permissions.fr.md)
+
 # 11: 스태프와 권한
 
 Moimio에는 두 종류의 사용자 계정과 행사마다의 팀이 있습니다. 이 장에서는 둘 다 다룹니다. 누가 최고 관리자이고 누가 스태프인지, 그리고 특정 행사에 알맞은 권한으로 사람을 추가하는 방법입니다.

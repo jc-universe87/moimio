@@ -1,3 +1,5 @@
+🌐 [English](06-allocation-engine.md) · [Deutsch](06-allocation-engine.de.md) · [한국어](06-allocation-engine.ko.md) · [Español](06-allocation-engine.es.md) · **Português (Brasil)** · [Français](06-allocation-engine.fr.md)
+
 # 06 — Motor de atribuição
 
 O motor de atribuição é o que diferencia o Moimio de uma planilha. Quando as inscrições chegam, o motor propõe uma atribuição completa com um clique, respeitando códigos de grupo, marcações, restrições de gênero e por marcação, exclusões e a capacidade dos grupos. Você revisa a proposta e depois a confirma ou descarta.

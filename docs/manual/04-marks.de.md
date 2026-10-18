@@ -1,3 +1,5 @@
+🌐 [English](04-marks.md) · **Deutsch** · [한국어](04-marks.ko.md) · [Español](04-marks.es.md) · [Português (Brasil)](04-marks.pt-BR.md) · [Français](04-marks.fr.md)
+
 # 04 – Markierungen
 
 Eine **Markierung** ist ein farbiges Label, das du einer teilnehmenden Person anheftest. Markierungen sieht das Team in der Admin-Oberfläche, die Teilnehmer selbst sehen sie nicht. Sie haben zwei Aufgaben:

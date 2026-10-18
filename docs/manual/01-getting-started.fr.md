@@ -1,3 +1,5 @@
+🌐 [English](01-getting-started.md) · [Deutsch](01-getting-started.de.md) · [한국어](01-getting-started.ko.md) · [Español](01-getting-started.es.md) · [Português (Brasil)](01-getting-started.pt-BR.md) · **Français**
+
 # 01 — Premiers pas
 
 Cette section présente les parties de Moimio que vous utiliserez lors de votre première session : la configuration initiale, l’interface d’administration, la liste des événements, le modèle de phases qui structure tout le reste, et les bases de la gestion des utilisateurs.

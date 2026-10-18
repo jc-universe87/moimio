@@ -1,3 +1,5 @@
+🌐 [English](03-people.md) · [Deutsch](03-people.de.md) · [한국어](03-people.ko.md) · [Español](03-people.es.md) · [Português (Brasil)](03-people.pt-BR.md) · **Français**
+
 # 03 — Participants
 
 La liste des participants est l’endroit où vous passerez le plus de temps pendant la phase Inscription. Elle recense toutes les personnes inscrites à votre événement, avec des outils pour les consulter, les modifier, les confirmer, leur attribuer des marques et les regrouper.

@@ -1,3 +1,5 @@
+🌐 [English](README.md) · [Deutsch](README.de.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Português (Brasil)](README.pt-BR.md) · **Français**
+
 # Manuel d’utilisation
 
 Ce manuel explique comment utiliser Moimio pour organiser un événement de bout en bout. Il part du principe que vous avez déjà installé Moimio et que vous êtes connecté. Si ce n’est pas le cas, commencez par le [guide d’installation](../installation/README.fr.md).

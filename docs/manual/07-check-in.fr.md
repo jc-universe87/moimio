@@ -1,3 +1,5 @@
+🌐 [English](07-check-in.md) · [Deutsch](07-check-in.de.md) · [한국어](07-check-in.ko.md) · [Español](07-check-in.es.md) · [Português (Brasil)](07-check-in.pt-BR.md) · **Français**
+
 # 07 — Check-in
 
 L’écran de check-in est ce qu’utilise l’équipe le jour de l’événement pour enregistrer l’arrivée des participants. C’est une liste simple avec de grandes cases à cocher, conçue pour bien fonctionner sur une tablette ou un téléphone à l’accueil.

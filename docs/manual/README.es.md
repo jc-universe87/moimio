@@ -1,3 +1,5 @@
+🌐 [English](README.md) · [Deutsch](README.de.md) · [한국어](README.ko.md) · **Español** · [Português (Brasil)](README.pt-BR.md) · [Français](README.fr.md)
+
 # Manual de usuario
 
 Este manual explica cómo usar Moimio para organizar un evento de principio a fin. Da por hecho que ya has instalado Moimio y has iniciado sesión; si no es así, empieza por la [Guía de instalación](../installation/README.es.md).

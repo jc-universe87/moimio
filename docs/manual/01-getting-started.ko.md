@@ -1,3 +1,5 @@
+🌐 [English](01-getting-started.md) · [Deutsch](01-getting-started.de.md) · **한국어** · [Español](01-getting-started.es.md) · [Português (Brasil)](01-getting-started.pt-BR.md) · [Français](01-getting-started.fr.md)
+
 # 01: 시작하기
 
 이 장에서는 처음 사용할 때 만나게 되는 부분을 다룹니다. 초기 설정, 관리 화면 구성, 행사 목록, 모든 것의 바탕이 되는 단계 구조, 그리고 사용자 관리의 기본입니다.

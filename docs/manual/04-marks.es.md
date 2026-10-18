@@ -1,3 +1,5 @@
+🌐 [English](04-marks.md) · [Deutsch](04-marks.de.md) · [한국어](04-marks.ko.md) · **Español** · [Português (Brasil)](04-marks.pt-BR.md) · [Français](04-marks.fr.md)
+
 # 04 — Marcas
 
 Una **marca** es una etiqueta de color que asignas a un participante. Las marcas las ve el personal en el área de administración, pero no los participantes. Sirven para dos cosas:

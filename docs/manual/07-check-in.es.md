@@ -1,3 +1,5 @@
+🌐 [English](07-check-in.md) · [Deutsch](07-check-in.de.md) · [한국어](07-check-in.ko.md) · **Español** · [Português (Brasil)](07-check-in.pt-BR.md) · [Français](07-check-in.fr.md)
+
 # 07 — Check-in
 
 La pantalla de check-in es la que usa el personal el día del evento para marcar a las personas que llegan. Es una lista sencilla con casillas grandes, pensada para funcionar bien en una tableta o un móvil en la mesa de recepción.

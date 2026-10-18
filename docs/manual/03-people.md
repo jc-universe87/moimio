@@ -1,3 +1,5 @@
+🌐 **English** · [Deutsch](03-people.de.md) · [한국어](03-people.ko.md) · [Español](03-people.es.md) · [Português (Brasil)](03-people.pt-BR.md) · [Français](03-people.fr.md)
+
 # 03 — People
 
 The People table is where you'll spend most of your time during Registration phase. It's a list of everyone signed up for your event, with tools to view, edit, confirm, mark, and group them.

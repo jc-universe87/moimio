@@ -1,3 +1,5 @@
+🌐 [English](06-allocation-engine.md) · [Deutsch](06-allocation-engine.de.md) · [한국어](06-allocation-engine.ko.md) · **Español** · [Português (Brasil)](06-allocation-engine.pt-BR.md) · [Français](06-allocation-engine.fr.md)
+
 # 06 — Motor de asignación
 
 El motor de asignación es lo que diferencia a Moimio de una hoja de cálculo. Cuando llegan las inscripciones, el motor propone una asignación completa con un solo clic, respetando los códigos de grupo, las marcas, las restricciones de género y por marca, las exclusiones y la capacidad de los grupos. Tú revisas la propuesta y luego la confirmas o la descartas.

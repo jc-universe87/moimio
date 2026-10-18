@@ -1,3 +1,5 @@
+🌐 [English](10-multi-event-and-archive.md) · [Deutsch](10-multi-event-and-archive.de.md) · [한국어](10-multi-event-and-archive.ko.md) · [Español](10-multi-event-and-archive.es.md) · [Português (Brasil)](10-multi-event-and-archive.pt-BR.md) · **Français**
+
 # 10 — Plusieurs événements et archives
 
 Moimio part du principe qu’une organisation mène plus d’un événement. Une fois que vous avez paramétré un formulaire d’inscription, des types de groupe et une équipe, vous voudrez souvent réutiliser cette configuration. Cette section explique comment mener plusieurs événements depuis un même Moimio, comment fonctionne l’archivage, et comment créer un nouvel événement à partir d’un ancien.

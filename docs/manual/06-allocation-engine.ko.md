@@ -1,3 +1,5 @@
+🌐 [English](06-allocation-engine.md) · [Deutsch](06-allocation-engine.de.md) · **한국어** · [Español](06-allocation-engine.es.md) · [Português (Brasil)](06-allocation-engine.pt-BR.md) · [Français](06-allocation-engine.fr.md)
+
 # 06: 배정 엔진
 
 Moimio가 스프레드시트와 다른 점은 바로 배정 엔진입니다. 등록이 들어오면 엔진이 클릭 한 번으로 완전한 배정안을 제안합니다. 그룹 코드, 마크, 성별과 마크 제한, 제외, 그룹 수용 인원을 모두 지킵니다. 여러분은 제안을 검토한 뒤 확정하거나 버리면 됩니다.

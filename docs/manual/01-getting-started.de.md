@@ -1,3 +1,5 @@
+🌐 [English](01-getting-started.md) · **Deutsch** · [한국어](01-getting-started.ko.md) · [Español](01-getting-started.es.md) · [Português (Brasil)](01-getting-started.pt-BR.md) · [Français](01-getting-started.fr.md)
+
 # 01 – Erste Schritte
 
 Dieses Kapitel behandelt die Teile von Moimio, mit denen du in der ersten Sitzung zu tun hast: die Ersteinrichtung, den Aufbau der Admin-Oberfläche, die Event-Liste, das Phasenmodell, auf dem alles andere aufbaut, und die Grundlagen der Benutzerverwaltung.

@@ -1,3 +1,5 @@
+🌐 [English](quick-guide.md) · [Deutsch](quick-guide.de.md) · **한국어** · [Español](quick-guide.es.md) · [Português (Brasil)](quick-guide.pt-BR.md) · [Français](quick-guide.fr.md)
+
 # 빠른 설치 가이드
 
 터미널, Docker, 간단한 서버 관리에 익숙한 분을 위한 가이드입니다. 그렇지 않다면 [초보자 가이드](beginner.ko.md)가 같은 내용을 더 천천히, 더 자세히 안내합니다.

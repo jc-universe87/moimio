@@ -1,3 +1,5 @@
+🌐 **English** · [Deutsch](07-check-in.de.md) · [한국어](07-check-in.ko.md) · [Español](07-check-in.es.md) · [Português (Brasil)](07-check-in.pt-BR.md) · [Français](07-check-in.fr.md)
+
 # 07 — Check-in
 
 The check-in screen is what staff use on the day of the event to mark people as arrived. It's a simple list with big tick boxes, designed to work well on a tablet or phone at the registration desk.

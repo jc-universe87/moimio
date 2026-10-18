@@ -1,3 +1,5 @@
+🌐 [English](08-reports-and-pdf-exports.md) · **Deutsch** · [한국어](08-reports-and-pdf-exports.ko.md) · [Español](08-reports-and-pdf-exports.es.md) · [Português (Brasil)](08-reports-and-pdf-exports.pt-BR.md) · [Français](08-reports-and-pdf-exports.fr.md)
+
 # 08 – Berichte und PDF-Exporte
 
 Die Seite **Berichte** zeigt dir die wichtigsten Zahlen deines Events auf einen Blick, und hier lädst du druckbare Listen herunter: oben ein paar Kacheln mit Kennzahlen, darunter Listen-PDFs für jeden Gruppentyp.

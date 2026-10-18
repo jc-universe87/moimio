@@ -1,3 +1,5 @@
+🌐 [English](quick-guide.md) · **Deutsch** · [한국어](quick-guide.ko.md) · [Español](quick-guide.es.md) · [Português (Brasil)](quick-guide.pt-BR.md) · [Français](quick-guide.fr.md)
+
 # Schnellinstallationsanleitung
 
 Für alle, die sich mit Terminal, Docker und ein bisschen Systemadministration wohlfühlen. Wenn das nicht auf dich zutrifft: Die [Anleitung für Einsteiger](beginner.de.md) behandelt dasselbe in gemächlicherem Tempo und mit mehr Unterstützung.

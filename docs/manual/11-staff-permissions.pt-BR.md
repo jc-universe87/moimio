@@ -1,3 +1,5 @@
+🌐 [English](11-staff-permissions.md) · [Deutsch](11-staff-permissions.de.md) · [한국어](11-staff-permissions.ko.md) · [Español](11-staff-permissions.es.md) · **Português (Brasil)** · [Français](11-staff-permissions.fr.md)
+
 # 11 — Equipe e permissões
 
 O Moimio tem dois tipos de conta de usuário e uma equipe para cada evento. Esta seção trata das duas coisas: quem é Superadministrador, quem é Equipe e como dar a alguém acesso a um evento específico, com as permissões certas.

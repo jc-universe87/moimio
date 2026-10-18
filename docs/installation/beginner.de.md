@@ -1,3 +1,5 @@
+🌐 [English](beginner.md) · **Deutsch** · [한국어](beginner.ko.md) · [Español](beginner.es.md) · [Português (Brasil)](beginner.pt-BR.md) · [Français](beginner.fr.md)
+
 # Installationsanleitung für Einsteiger
 
 Diese Anleitung ist für alle, die noch nie ein Terminal geöffnet haben, aber Moimio für ein echtes Event zum Laufen bringen müssen. Wir gehen es langsam an.

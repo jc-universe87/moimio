@@ -1,3 +1,5 @@
+🌐 [English](02-events-and-registration.md) · [Deutsch](02-events-and-registration.de.md) · [한국어](02-events-and-registration.ko.md) · **Español** · [Português (Brasil)](02-events-and-registration.pt-BR.md) · [Français](02-events-and-registration.fr.md)
+
 # 02 — Eventos e inscripción
 
 Cómo crear un evento, rellenar sus detalles, preparar su formulario de inscripción, abrirlo a las inscripciones y seguir de cerca las que van llegando.

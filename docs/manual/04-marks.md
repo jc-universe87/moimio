@@ -1,3 +1,5 @@
+🌐 **English** · [Deutsch](04-marks.de.md) · [한국어](04-marks.ko.md) · [Español](04-marks.es.md) · [Português (Brasil)](04-marks.pt-BR.md) · [Français](04-marks.fr.md)
+
 # 04 — Marks
 
 A **mark** is a colour-coded badge you attach to a participant. Marks are visible to staff in the admin UI but invisible to participants. They serve two purposes:

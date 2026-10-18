@@ -1,3 +1,5 @@
+🌐 [English](05-group-types-and-units.md) · [Deutsch](05-group-types-and-units.de.md) · [한국어](05-group-types-and-units.ko.md) · [Español](05-group-types-and-units.es.md) · [Português (Brasil)](05-group-types-and-units.pt-BR.md) · **Français**
+
 # 05 — Types de groupe et unités
 
 Le moteur de répartition place les participants dans des **unités** (les chambres, groupes, tables ou ateliers eux-mêmes), elles-mêmes organisées en **types de groupe**. Cette section explique les deux : ce qu’ils sont, comment les mettre en place, et les choix qui détermineront leur comportement par la suite.

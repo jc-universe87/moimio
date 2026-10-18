@@ -1,3 +1,5 @@
+🌐 **English** · [Deutsch](08-reports-and-pdf-exports.de.md) · [한국어](08-reports-and-pdf-exports.ko.md) · [Español](08-reports-and-pdf-exports.es.md) · [Português (Brasil)](08-reports-and-pdf-exports.pt-BR.md) · [Français](08-reports-and-pdf-exports.fr.md)
+
 # 08 — Reports & PDF exports
 
 The **Reports** page gives you the headline numbers for your event at a glance and is where you download printable rosters: a few summary tiles at the top, and roster PDFs for each group type below.

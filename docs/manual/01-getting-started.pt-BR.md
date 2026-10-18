@@ -1,3 +1,5 @@
+🌐 [English](01-getting-started.md) · [Deutsch](01-getting-started.de.md) · [한국어](01-getting-started.ko.md) · [Español](01-getting-started.es.md) · **Português (Brasil)** · [Français](01-getting-started.fr.md)
+
 # 01 — Primeiros passos
 
 Esta seção trata das partes do Moimio que você vai usar na primeira sessão: a configuração inicial, o layout da área administrativa, a lista de eventos, o modelo de fases que comanda todo o resto e o básico do gerenciamento de usuários.

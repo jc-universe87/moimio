@@ -1,3 +1,5 @@
+🌐 [English](README.md) · [Deutsch](README.de.md) · **한국어** · [Español](README.es.md) · [Português (Brasil)](README.pt-BR.md) · [Français](README.fr.md)
+
 # 설치
 
 이 가이드는 오픈 소스로 직접 설치할 수 있는 **Moimio CE**(Community Edition)의 설치 방법을 다룹니다(호스팅 서비스를 쓰려면 [moimio.app](https://moimio.app)에서 가입하세요. 설치가 필요 없습니다).

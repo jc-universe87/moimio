@@ -1,3 +1,5 @@
+🌐 [English](README.md) · [Deutsch](README.de.md) · [한국어](README.ko.md) · [Español](README.es.md) · **Português (Brasil)** · [Français](README.fr.md)
+
 # Instalação
 
 Este guia trata da instalação do **Moimio CE (Community Edition)**, a versão de código aberto que você pode hospedar por conta própria. (Para o produto hospedado, basta se cadastrar em [moimio.app](https://moimio.app), sem precisar instalar nada.)

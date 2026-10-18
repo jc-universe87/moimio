@@ -1,3 +1,5 @@
+🌐 [English](07-check-in.md) · [Deutsch](07-check-in.de.md) · **한국어** · [Español](07-check-in.es.md) · [Português (Brasil)](07-check-in.pt-BR.md) · [Français](07-check-in.fr.md)
+
 # 07: 체크인
 
 체크인 화면은 행사 당일 스태프가 도착한 사람을 표시할 때 쓰는 화면입니다. 큰 체크박스가 있는 간단한 목록이며, 등록 데스크의 태블릿이나 휴대폰에서 잘 쓸 수 있도록 만들었습니다.

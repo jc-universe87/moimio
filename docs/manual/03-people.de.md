@@ -1,3 +1,5 @@
+🌐 [English](03-people.md) · **Deutsch** · [한국어](03-people.ko.md) · [Español](03-people.es.md) · [Português (Brasil)](03-people.pt-BR.md) · [Français](03-people.fr.md)
+
 # 03 – Teilnehmer
 
 In der Teilnehmertabelle verbringst du in der Anmeldephase die meiste Zeit. Sie listet alle auf, die für dein Event angemeldet sind, mit Werkzeugen zum Ansehen, Bearbeiten, Bestätigen, Markieren und Gruppieren.

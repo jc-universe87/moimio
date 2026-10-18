@@ -1,3 +1,5 @@
+🌐 [English](05-group-types-and-units.md) · [Deutsch](05-group-types-and-units.de.md) · **한국어** · [Español](05-group-types-and-units.es.md) · [Português (Brasil)](05-group-types-and-units.pt-BR.md) · [Français](05-group-types-and-units.fr.md)
+
 # 05: 그룹 유형과 그룹
 
 배정 엔진은 참가자를 **그룹**(개별 방, 소그룹, 테이블, 워크숍)에 배정하며, 그룹은 **그룹 유형**으로 묶여 있습니다. 이 장에서는 둘 다 설명합니다. 각각 무엇인지, 어떻게 설정하는지, 나중의 동작을 좌우하는 선택은 무엇인지 다룹니다.

@@ -1,3 +1,5 @@
+🌐 [English](beginner.md) · [Deutsch](beginner.de.md) · **한국어** · [Español](beginner.es.md) · [Português (Brasil)](beginner.pt-BR.md) · [Français](beginner.fr.md)
+
 # 초보자 설치 가이드
 
 터미널을 한 번도 열어 본 적 없지만 실제 행사를 위해 Moimio를 실행해야 하는 분을 위한 가이드입니다. 천천히 가겠습니다.

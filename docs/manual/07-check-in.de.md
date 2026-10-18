@@ -1,3 +1,5 @@
+🌐 [English](07-check-in.md) · **Deutsch** · [한국어](07-check-in.ko.md) · [Español](07-check-in.es.md) · [Português (Brasil)](07-check-in.pt-BR.md) · [Français](07-check-in.fr.md)
+
 # 07 – Check-in
 
 Mit dem Check-in-Bildschirm markiert das Team am Tag des Events, wer angekommen ist. Es ist eine einfache Liste mit großen Ankreuzfeldern, gemacht für Tablet oder Handy am Empfang.

@@ -1,3 +1,5 @@
+<p align="center">🌐 <b>English</b> · <a href="README.de.md">Deutsch</a> · <a href="README.ko.md">한국어</a> · <a href="README.es.md">Español</a> · <a href="README.pt-BR.md">Português (Brasil)</a> · <a href="README.fr.md">Français</a></p>
+
 <div align="center">
 
 <img src="docs/assets/logo.svg" alt="Moimio logo" width="300">

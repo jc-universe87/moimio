@@ -1,3 +1,5 @@
+🌐 [English](quick-guide.md) · **Deutsch** · [한국어](quick-guide.ko.md) · [Español](quick-guide.es.md) · [Português (Brasil)](quick-guide.pt-BR.md) · [Français](quick-guide.fr.md)
+
 # Kurzanleitung
 
 Das ist die Schnelldurchlauf-Version des Handbuchs. Ein Event, von Anfang bis Ende. Details überspringen, direkt zum PDF.

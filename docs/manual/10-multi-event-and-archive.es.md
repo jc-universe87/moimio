@@ -1,3 +1,5 @@
+🌐 [English](10-multi-event-and-archive.md) · [Deutsch](10-multi-event-and-archive.de.md) · [한국어](10-multi-event-and-archive.ko.md) · **Español** · [Português (Brasil)](10-multi-event-and-archive.pt-BR.md) · [Français](10-multi-event-and-archive.fr.md)
+
 # 10 — Varios eventos y archivo
 
 Moimio parte de la idea de que una organización lleva más de un evento. Cuando ya has configurado un formulario de inscripción, unos tipos de grupo y un equipo, a menudo querrás reutilizar esa configuración. Esta sección explica cómo llevar varios eventos desde un mismo Moimio, cómo funciona el archivo y cómo crear un evento nuevo a partir de uno anterior.

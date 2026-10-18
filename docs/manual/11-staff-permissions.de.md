@@ -1,3 +1,5 @@
+🌐 [English](11-staff-permissions.md) · **Deutsch** · [한국어](11-staff-permissions.ko.md) · [Español](11-staff-permissions.es.md) · [Português (Brasil)](11-staff-permissions.pt-BR.md) · [Français](11-staff-permissions.fr.md)
+
 # 11 – Team und Berechtigungen
 
 Moimio kennt zwei Arten von Benutzerkonten und ein Team für jedes Event. Dieses Kapitel behandelt beides: wer Super-Admin ist, wer Mitarbeiter ist und wie du Personen mit den richtigen Berechtigungen Zugriff auf ein bestimmtes Event gibst.

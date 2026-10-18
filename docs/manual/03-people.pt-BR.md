@@ -1,3 +1,5 @@
+🌐 [English](03-people.md) · [Deutsch](03-people.de.md) · [한국어](03-people.ko.md) · [Español](03-people.es.md) · **Português (Brasil)** · [Français](03-people.fr.md)
+
 # 03 — Participantes
 
 A tabela Participantes é onde você vai passar a maior parte do tempo durante a fase de Inscrição. É uma lista de todos os inscritos no seu evento, com ferramentas para ver, editar, confirmar, marcar e agrupar as pessoas.

@@ -1,3 +1,5 @@
+🌐 [English](04-marks.md) · [Deutsch](04-marks.de.md) · [한국어](04-marks.ko.md) · [Español](04-marks.es.md) · [Português (Brasil)](04-marks.pt-BR.md) · **Français**
+
 # 04 — Marques
 
 Une **marque** est un badge de couleur que vous attachez à un participant. Les marques sont visibles par l’équipe dans l’interface d’administration, mais invisibles pour les participants. Elles ont deux usages :

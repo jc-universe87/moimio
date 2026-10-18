@@ -1,3 +1,5 @@
+🌐 [English](08-reports-and-pdf-exports.md) · [Deutsch](08-reports-and-pdf-exports.de.md) · **한국어** · [Español](08-reports-and-pdf-exports.es.md) · [Português (Brasil)](08-reports-and-pdf-exports.pt-BR.md) · [Français](08-reports-and-pdf-exports.fr.md)
+
 # 08: 보고서와 PDF 내보내기
 
 **보고서** 페이지에서는 행사의 핵심 수치를 한눈에 보고 인쇄용 명단을 다운로드합니다. 위쪽에 요약 타일 몇 개가, 아래쪽에 그룹 유형별 명단 PDF가 있습니다.

@@ -1,3 +1,5 @@
+🌐 **English** · [Deutsch](09-data-export-gdpr.de.md) · [한국어](09-data-export-gdpr.ko.md) · [Español](09-data-export-gdpr.es.md) · [Português (Brasil)](09-data-export-gdpr.pt-BR.md) · [Français](09-data-export-gdpr.fr.md)
+
 # 09 — Data export & GDPR
 
 Moimio is built so that an organiser running an event can fulfil their GDPR obligations as a data controller without leaving the app. The relevant pieces are: per-participant data export (Article 15 / Article 20), in-place editing (Article 16), removal (Article 17), event-level backup, and clear handling of cancelled participants.

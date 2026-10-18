@@ -1,3 +1,5 @@
+🌐 [English](05-group-types-and-units.md) · [Deutsch](05-group-types-and-units.de.md) · [한국어](05-group-types-and-units.ko.md) · [Español](05-group-types-and-units.es.md) · **Português (Brasil)** · [Français](05-group-types-and-units.fr.md)
+
 # 05 — Tipos de grupo e grupos
 
 O motor de atribuição coloca os participantes em **grupos** (os quartos, grupos, mesas ou oficinas individuais), que são organizados em **tipos de grupo**. Esta seção explica os dois: o que são, como configurá-los e as escolhas que definem o comportamento mais tarde.

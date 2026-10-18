@@ -1,3 +1,5 @@
+🌐 [English](08-reports-and-pdf-exports.md) · [Deutsch](08-reports-and-pdf-exports.de.md) · [한국어](08-reports-and-pdf-exports.ko.md) · [Español](08-reports-and-pdf-exports.es.md) · **Português (Brasil)** · [Français](08-reports-and-pdf-exports.fr.md)
+
 # 08 — Relatórios e PDFs
 
 A página **Relatórios** mostra de relance os principais números do seu evento e é onde você baixa as listas para imprimir: alguns blocos de resumo no topo e, abaixo, as listas em PDF de cada tipo de grupo.

@@ -1,3 +1,5 @@
+🌐 [English](04-marks.md) · [Deutsch](04-marks.de.md) · [한국어](04-marks.ko.md) · [Español](04-marks.es.md) · **Português (Brasil)** · [Français](04-marks.fr.md)
+
 # 04 — Marcações
 
 Uma **marcação** é uma etiqueta colorida que você atribui a um participante. As marcações aparecem para a equipe na área administrativa, mas os participantes não as veem. Elas servem para duas coisas:

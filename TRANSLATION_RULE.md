@@ -206,6 +206,34 @@ python3 scripts/export-translations.py /path/to/output/unified.json
 Parity-validated, round-trip-safe with the splitter — running
 exporter then splitter on a clean tree is a no-op.
 
+## Translated documentation
+
+The root `README.md`, the user manual (`docs/manual/`) and the
+installation guides (`docs/installation/`) exist in all six languages,
+side by side: `03-people.md` is English, `03-people.de.md`,
+`03-people.ko.md`, `03-people.es.md`, `03-people.pt-BR.md` and
+`03-people.fr.md` are the translations. The FAQ, glossary and developer
+docs are English only.
+
+Rules for these files:
+
+- **Change English, change all six.** A doc edit is not finished until
+  the five translations say the same thing.
+- **UI labels come from the locale files.** A bold label in a German doc
+  is the value of the same key in `de.json`, so the doc matches the
+  screen. The address forms and terminology above apply to the docs too.
+- **Links stay in the reader's language.** A translated file links to
+  the same-language version of another translated file, and to the
+  English file for everything else. Anchors use the translated
+  heading's slug.
+- **Language bar.** Every one of these files starts with a line linking
+  its siblings. Don't edit it by hand:
+
+```bash
+python3 scripts/docs-i18n.py bar     # add or refresh the language bars
+python3 scripts/docs-i18n.py check   # every sibling exists, every link and #anchor resolves
+```
+
 ## Current Status
 
 **1,041 keys × 6 languages = 6,246 translations.** All aligned. Zero

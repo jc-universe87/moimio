@@ -1,3 +1,5 @@
+🌐 [English](02-events-and-registration.md) · [Deutsch](02-events-and-registration.de.md) · **한국어** · [Español](02-events-and-registration.es.md) · [Português (Brasil)](02-events-and-registration.pt-BR.md) · [Français](02-events-and-registration.fr.md)
+
 # 02: 행사와 등록
 
 행사를 만들고, 세부 정보를 입력하고, 등록 양식을 설정하고, 신청을 받기 시작하고, 들어오는 등록을 지켜보는 방법을 설명합니다.

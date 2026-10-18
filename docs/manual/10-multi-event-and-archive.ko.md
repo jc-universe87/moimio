@@ -1,3 +1,5 @@
+🌐 [English](10-multi-event-and-archive.md) · [Deutsch](10-multi-event-and-archive.de.md) · **한국어** · [Español](10-multi-event-and-archive.es.md) · [Português (Brasil)](10-multi-event-and-archive.pt-BR.md) · [Français](10-multi-event-and-archive.fr.md)
+
 # 10: 여러 행사와 보관
 
 Moimio는 한 단체가 행사를 여러 번 운영한다는 전제로 만들어졌습니다. 등록 양식, 그룹 유형, 팀을 한 번 설정해 두면 그 설정을 다시 쓰고 싶을 때가 많습니다. 이 장에서는 하나의 Moimio에서 여러 행사를 운영하는 방법, 보관이 작동하는 방식, 지난 행사로 새 행사를 시작하는 방법을 다룹니다.

@@ -1,3 +1,5 @@
+🌐 [English](quick-guide.md) · [Deutsch](quick-guide.de.md) · [한국어](quick-guide.ko.md) · **Español** · [Português (Brasil)](quick-guide.pt-BR.md) · [Français](quick-guide.fr.md)
+
 # Guía de instalación rápida
 
 Para quienes se manejan con la terminal, Docker y un poco de administración de sistemas. Si no es tu caso, la [Guía para principiantes](beginner.es.md) cubre lo mismo con más calma y más acompañamiento.

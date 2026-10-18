@@ -1,3 +1,5 @@
+🌐 [English](04-marks.md) · [Deutsch](04-marks.de.md) · **한국어** · [Español](04-marks.es.md) · [Português (Brasil)](04-marks.pt-BR.md) · [Français](04-marks.fr.md)
+
 # 04: 마크
 
 **마크**는 참가자에게 붙이는 색상 배지입니다. 마크는 관리 화면의 스태프에게는 보이지만 참가자에게는 보이지 않습니다. 두 가지 용도가 있습니다.

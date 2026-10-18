@@ -1,3 +1,5 @@
+🌐 [English](02-events-and-registration.md) · **Deutsch** · [한국어](02-events-and-registration.ko.md) · [Español](02-events-and-registration.es.md) · [Português (Brasil)](02-events-and-registration.pt-BR.md) · [Français](02-events-and-registration.fr.md)
+
 # 02 – Events und Anmeldung
 
 Wie du ein Event anlegst, seine Details ausfüllst, das Anmeldeformular einrichtest, die Anmeldung öffnest und die eingehenden Anmeldungen im Blick behältst.

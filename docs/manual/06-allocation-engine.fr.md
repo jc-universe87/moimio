@@ -1,3 +1,5 @@
+🌐 [English](06-allocation-engine.md) · [Deutsch](06-allocation-engine.de.md) · [한국어](06-allocation-engine.ko.md) · [Español](06-allocation-engine.es.md) · [Português (Brasil)](06-allocation-engine.pt-BR.md) · **Français**
+
 # 06 — Moteur de répartition
 
 Le moteur de répartition, c’est ce qui distingue Moimio d’un tableur. Une fois les inscriptions arrivées, le moteur propose une répartition complète en un clic, en respectant les codes de groupe, les marques, les restrictions de genre et de marque, les exclusions et la capacité des groupes. Vous examinez la proposition, puis vous la validez ou l’abandonnez.

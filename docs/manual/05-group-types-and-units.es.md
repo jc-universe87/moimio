@@ -1,3 +1,5 @@
+🌐 [English](05-group-types-and-units.md) · [Deutsch](05-group-types-and-units.de.md) · [한국어](05-group-types-and-units.ko.md) · **Español** · [Português (Brasil)](05-group-types-and-units.pt-BR.md) · [Français](05-group-types-and-units.fr.md)
+
 # 05 — Tipos de grupo y unidades
 
 El motor de asignación coloca a los participantes en **unidades** (cada habitación, grupo, mesa o taller concreto), que se organizan en **tipos de grupo**. Esta sección explica ambos conceptos: qué son, cómo prepararlos y qué decisiones determinan después su comportamiento.

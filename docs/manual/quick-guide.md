@@ -1,3 +1,5 @@
+🌐 **English** · [Deutsch](quick-guide.de.md) · [한국어](quick-guide.ko.md) · [Español](quick-guide.es.md) · [Português (Brasil)](quick-guide.pt-BR.md) · [Français](quick-guide.fr.md)
+
 # Quick Guide
 
 This is the speed-run version of the manual. One event, beginning to end. Skip the detail, get to the PDF.

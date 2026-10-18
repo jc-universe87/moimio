@@ -1,3 +1,5 @@
+🌐 [English](03-people.md) · [Deutsch](03-people.de.md) · **한국어** · [Español](03-people.es.md) · [Português (Brasil)](03-people.pt-BR.md) · [Français](03-people.fr.md)
+
 # 03: 참가자 명단
 
 등록 단계에서 가장 많은 시간을 보내게 될 곳이 참가자 명단 표입니다. 행사에 신청한 모든 사람의 목록이며, 보기, 수정, 확정, 마크 붙이기, 그룹 묶기 도구가 함께 있습니다.

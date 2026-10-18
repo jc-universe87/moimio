@@ -1,3 +1,5 @@
+🌐 [English](quick-guide.md) · [Deutsch](quick-guide.de.md) · [한국어](quick-guide.ko.md) · [Español](quick-guide.es.md) · **Português (Brasil)** · [Français](quick-guide.fr.md)
+
 # Guia rápido
 
 Esta é a versão expressa do manual. Um evento, do começo ao fim. Sem detalhes, direto ao PDF.

@@ -1,3 +1,5 @@
+🌐 [English](05-group-types-and-units.md) · **Deutsch** · [한국어](05-group-types-and-units.ko.md) · [Español](05-group-types-and-units.es.md) · [Português (Brasil)](05-group-types-and-units.pt-BR.md) · [Français](05-group-types-and-units.fr.md)
+
 # 05 – Gruppentypen und Gruppen
 
 Die Zuweisungs-Engine verteilt Teilnehmer auf **Gruppen** (im Englischen *units*) – die einzelnen Zimmer, Gruppen, Tische oder Workshops –, die in **Gruppentypen** zusammengefasst sind. Dieses Kapitel erklärt beides: was sie sind, wie du sie einrichtest und welche Entscheidungen später das Verhalten bestimmen.

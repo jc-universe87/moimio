@@ -1,3 +1,5 @@
+🌐 [English](06-allocation-engine.md) · **Deutsch** · [한국어](06-allocation-engine.ko.md) · [Español](06-allocation-engine.es.md) · [Português (Brasil)](06-allocation-engine.pt-BR.md) · [Français](06-allocation-engine.fr.md)
+
 # 06 – Zuweisungs-Engine
 
 Die Zuweisungs-Engine ist das, was Moimio von einer Tabelle unterscheidet. Sobald Anmeldungen eingehen, schlägt die Engine mit einem Klick eine komplette Zuweisung vor – unter Berücksichtigung von Gruppencodes, Markierungen, Geschlechter- und Markierungsbeschränkungen, Ausnahmen und Gruppenkapazitäten. Du prüfst den Vorschlag und übernimmst ihn oder verwirfst ihn.

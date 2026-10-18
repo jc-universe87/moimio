@@ -1,3 +1,5 @@
+🌐 [English](09-data-export-gdpr.md) · [Deutsch](09-data-export-gdpr.de.md) · [한국어](09-data-export-gdpr.ko.md) · **Español** · [Português (Brasil)](09-data-export-gdpr.pt-BR.md) · [Français](09-data-export-gdpr.fr.md)
+
 # 09 — Exportación de datos y RGPD
 
 Moimio está pensado para que quien organiza un evento pueda cumplir sus obligaciones del RGPD como responsable del tratamiento sin salir de la aplicación. Las piezas que intervienen son: la exportación de datos por participante (artículos 15 y 20), la edición directa (artículo 16), la eliminación (artículo 17), la copia de seguridad de eventos y un tratamiento claro de los participantes cancelados.
