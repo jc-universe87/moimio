@@ -94,7 +94,7 @@ A página **Inscrição** mostra os números ao vivo, um gráfico de inscriçõe
 - **Pendente**: só existe com a confirmação por e-mail ativada: a pessoa se inscreveu, mas ainda não clicou no link do e-mail.
 - **Cancelado**: a inscrição foi cancelada, pela pessoa ou por você.
 
-Por padrão, o motor de atribuição só distribui pessoas **confirmadas** (existe a opção **Incluir participantes não confirmados** se você precisar). Na página Participantes você pode:
+Por padrão, o motor de atribuição também distribui as pessoas **pendentes**, junto com as confirmadas (desative **Incluir participantes não confirmados** se preferir esperar as confirmações). Na página Participantes você pode:
 
 - Clicar em uma célula (nome, e-mail, código de grupo, telefone etc.) para editá-la ali mesmo.
 - Mudar o status de alguém pelo indicador de status na linha da pessoa; útil quando um e-mail nunca chegou e você quer confirmar a inscrição manualmente. **Reenviar** manda o e-mail de inscrição de novo.
@@ -115,7 +115,7 @@ A página Atribuição mostra um cartão para cada tipo de grupo. Abra um tipo d
 
 O motor então segue suas configurações nesta ordem (você as encontra em **Configurações do motor**):
 
-1. **Incluir participantes não confirmados**: desativado por padrão.
+1. **Incluir participantes não confirmados**: ativado por padrão.
 2. **Manter códigos de grupo juntos**: quem compartilha um código de grupo fica junto (com **Dividir códigos de grupo se necessário** para códigos grandes demais para um único grupo, e **Um código de grupo ocupa um grupo inteiro** para quartos de família).
 3. **Aplicar as marcações nesta ordem**: cada marcação mantém juntas as pessoas que a têm ou as distribui por igual, conforme você definir.
 4. **Manter juntas as pessoas do mesmo gênero**.

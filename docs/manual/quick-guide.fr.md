@@ -94,7 +94,7 @@ La page **Inscription** affiche les compteurs en direct, un graphique des inscri
 - **En attente** : uniquement si la confirmation par e-mail est activée : inscrit, mais n’a pas encore cliqué sur le lien de l’e-mail.
 - **Annulé** : inscription annulée, par la personne ou par vous.
 
-Par défaut, le moteur de répartition ne place que les personnes **confirmées** (le réglage **Inclure les participants non confirmés** existe si besoin). Sur la page Participants, vous pouvez :
+Par défaut, le moteur de répartition place aussi les personnes **en attente**, avec les personnes confirmées (désactivez **Inclure les participants non confirmés** si vous préférez attendre les confirmations). Sur la page Participants, vous pouvez :
 
 - Cliquer sur une cellule (nom, e-mail, code de groupe, téléphone, etc.) pour la modifier directement.
 - Changer le statut d’une personne via la pastille de statut sur sa ligne : pratique quand un e-mail n’est jamais arrivé et que vous voulez la confirmer à la main. **Renvoyer** lui renvoie son e-mail d’inscription.
@@ -115,7 +115,7 @@ Répartition affiche une carte par type de groupe. Ouvrez un type de groupe, ajo
 
 Le moteur applique ensuite ses réglages dans cet ordre (vous les trouverez sous **Paramètres du moteur**) :
 
-1. **Inclure les participants non confirmés** : désactivé par défaut.
+1. **Inclure les participants non confirmés** : activé par défaut.
 2. **Garder les codes de groupe ensemble** : les personnes qui partagent un code de groupe sont placées ensemble (avec **Séparer les codes de groupe si nécessaire** pour les codes trop grands pour un seul groupe, et **Un code de groupe occupe un groupe entier** pour les chambres familiales).
 3. **Appliquer les marques dans cet ordre** : chaque marque garde ses porteurs ensemble ou les répartit uniformément, selon votre réglage.
 4. **Garder ensemble les personnes du même genre**.

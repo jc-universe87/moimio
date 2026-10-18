@@ -94,7 +94,7 @@ Die Seite **Anmeldung** zeigt Live-Zahlen, ein Diagramm der Anmeldungen und die 
 - **Ausstehend** – nur bei eingeschalteter E-Mail-Bestätigung: angemeldet, aber noch nicht auf den Link in der E-Mail geklickt.
 - **Storniert** – abgesagt, von der Person selbst oder von dir.
 
-Standardmäßig verteilt die Zuweisungs-Engine nur **bestätigte** Personen (es gibt die Einstellung **Unbestätigte Teilnehmer einbeziehen**, falls du sie brauchst). Auf der Teilnehmerseite kannst du:
+Standardmäßig verteilt die Zuweisungs-Engine auch **ausstehende** Personen, zusammen mit den bestätigten (schalte **Unbestätigte Teilnehmer einbeziehen** aus, wenn du lieber auf die Bestätigungen wartest). Auf der Teilnehmerseite kannst du:
 
 - Auf eine Zelle klicken (Name, E-Mail, Gruppencode, Telefon usw.), um sie direkt zu bearbeiten.
 - Den Status einer Person über das Status-Label in ihrer Zeile ändern – praktisch, wenn eine E-Mail nie angekommen ist und du die Person von Hand bestätigen willst. **Erneut senden** schickt ihre Anmelde-E-Mail noch einmal.
@@ -115,7 +115,7 @@ Die Einteilung zeigt eine Karte pro Gruppentyp. Öffne einen Gruppentyp, füge s
 
 Die Engine arbeitet ihre Einstellungen dann in dieser Reihenfolge ab (du findest sie unter **Engine-Einstellungen**):
 
-1. **Unbestätigte Teilnehmer einbeziehen** – standardmäßig aus.
+1. **Unbestätigte Teilnehmer einbeziehen** – standardmäßig an.
 2. **Gruppencodes zusammenhalten** – Personen mit demselben Gruppencode kommen zusammen (mit **Gruppencodes bei Bedarf aufteilen** für Codes, die für jede einzelne Gruppe zu groß sind, und **Ein Gruppencode belegt eine ganze Gruppe** für Familienzimmer).
 3. **Markierungen in dieser Reihenfolge anwenden** – jede Markierung hält ihre Träger zusammen oder verteilt sie gleichmäßig, je nachdem, wie du sie einstellst.
 4. **Gleiches Geschlecht zusammenhalten**.

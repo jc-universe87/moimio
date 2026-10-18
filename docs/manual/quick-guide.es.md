@@ -94,7 +94,7 @@ La página **Inscripción** muestra los recuentos en tiempo real, un gráfico de
 - **Pendiente**: solo cuando la confirmación por correo está activada; inscrito, pero todavía no ha hecho clic en el enlace del correo.
 - **Cancelado**: cancelado, por la propia persona o por ti.
 
-Por defecto, el motor de asignación solo coloca a las personas **confirmadas** (hay un ajuste, **Incluir participantes sin confirmar**, por si lo necesitas). En la página Participantes puedes:
+Por defecto, el motor de asignación también coloca a las personas **pendientes**, junto con las confirmadas (desactiva **Incluir participantes sin confirmar** si prefieres esperar a las confirmaciones). En la página Participantes puedes:
 
 - Hacer clic en una celda (nombre, correo, código de grupo, teléfono, etc.) para editarla directamente.
 - Cambiar el estado de alguien desde la etiqueta de estado de su fila; útil cuando un correo nunca llegó y quieres confirmarlo a mano. **Reenviar** vuelve a enviar su correo de inscripción.
@@ -115,7 +115,7 @@ Asignación muestra una tarjeta por cada tipo de grupo. Abre un tipo de grupo, a
 
 Después, el motor aplica sus ajustes en este orden (los encontrarás en **Configuración del motor**):
 
-1. **Incluir participantes sin confirmar**: desactivado por defecto.
+1. **Incluir participantes sin confirmar**: activado por defecto.
 2. **Mantener juntos los códigos de grupo**: las personas que comparten un código de grupo se colocan juntas (con **Dividir códigos de grupo si es necesario** para los códigos demasiado grandes para un solo grupo, y **Un código de grupo ocupa un grupo entero** para habitaciones familiares).
 3. **Aplicar las marcas en este orden**: cada marca mantiene juntas a sus personas o las reparte por igual, según lo configures.
 4. **Mantener juntas a las personas del mismo género**.
