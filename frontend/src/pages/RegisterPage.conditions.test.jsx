@@ -15,14 +15,17 @@ const EVENT_ID = '22222222-2222-2222-2222-222222222222';
 const TEAMER = 'f-teamer';
 const TEAM = 'f-team';
 const NOTE = 'f-note';
+const CONTACT = 'f-contact';
 
 const CUSTOM_FIELDS = [
   { id: TEAMER, label: 'Teamer', field_type: 'boolean', is_required: false, show_if: null },
   { id: TEAM, label: 'Which team', field_type: 'text', is_required: true,
-    show_if: { source: TEAMER, any_of: ['true'] } },
+    show_if: { match: 'all', conditions: [{ source: TEAMER, op: 'one_of', value: ['true'] }] } },
   { id: NOTE, label: 'Parental consent', field_type: 'info', is_required: false,
     options: { text: 'Bring the [signed form](https://example.org/consent.pdf).' },
-    show_if: { source: 'date_of_birth', age_under: 18 } },
+    show_if: { match: 'all', conditions: [{ source: 'date_of_birth', op: 'age_under', value: 18 }] } },
+  { id: CONTACT, label: 'Other contact', field_type: 'text', is_required: false,
+    show_if: { match: 'all', conditions: [{ source: 'phone', op: 'is_empty' }] } },
 ];
 
 function mockFetch() {
@@ -34,7 +37,10 @@ function mockFetch() {
     }
     if (u.includes('/custom-fields')) return { ok: true, json: async () => CUSTOM_FIELDS };
     if (u.includes('/fields')) {
-      return { ok: true, json: async () => [{ field_name: 'date_of_birth', is_enabled: true, is_required: false }] };
+      return { ok: true, json: async () => [
+        { field_name: 'date_of_birth', is_enabled: true, is_required: false },
+        { field_name: 'phone', is_enabled: true, is_required: false },
+      ] };
     }
     return {
       ok: true, status: 200,
@@ -112,6 +118,24 @@ describe('RegisterPage conditional fields', () => {
     // And it does not come back when the field does.
     fireEvent.click(teamerRadio(true));
     expect(teamInput().getAttribute('aria-invalid')).toBe('false');
+  });
+
+  it('shows a field only while the phone number is empty', async () => {
+    await renderForm();
+    const contact = () => document.querySelector(`input[name="cf_${CONTACT}"]`);
+    expect(contact()).not.toBeNull();
+    set('phone', '0171 234567');
+    expect(contact()).toBeNull();
+  });
+
+  it('refuses a phone number that is not one, in its own words', async () => {
+    await renderForm();
+    fillValid();
+    set('phone', 'ring me');
+    fireEvent.submit(document.querySelector('#register-form'));
+    await waitFor(() => expect(document.querySelector('input[name="phone"]').getAttribute('aria-invalid')).toBe('true'));
+    expect(document.body.textContent).toContain('Please enter a valid phone number.');
+    expect(lastPostBody()).toBeNull();
   });
 
   it('shows the consent note, with its link, to someone under 18 on the start date', async () => {

@@ -18,7 +18,8 @@ from app.models.event import Event
 from app.core.config import get_settings
 from app.services.webhook_service import queue_event
 from app.services.field_conditions import (
-    INFO, filter_answers, load_defs, reference_date, refresh_info_marks,
+    BUILTIN_KINDS, INFO, filter_answers, load_defs, person_of, reference_date,
+    refresh_info_marks,
 )
 
 
@@ -193,7 +194,7 @@ async def register_participant(
         select(Event.start_date).where(Event.id == event_id)
     )).scalar_one_or_none()
     answers = filter_answers(
-        defs, data.custom_fields, data.date_of_birth, reference_date(event_start),
+        defs, data.custom_fields, person_of(data), reference_date(event_start),
     )
     if answers:
         for field_id_str, value in answers.items():
@@ -324,7 +325,7 @@ async def update_participant(
     # silently. Pull it out of update_data and upsert per-id below.
     incoming_cfs: dict | None = update_data.pop("custom_fields", None)
     defs = None
-    if incoming_cfs is not None or "date_of_birth" in update_data:
+    if incoming_cfs is not None or BUILTIN_KINDS.keys() & update_data.keys():
         defs = await load_defs(db, participant.event_id)
     if incoming_cfs is not None:
         # v1.0.7: an info text's "applies" mark is worked out, never typed in.

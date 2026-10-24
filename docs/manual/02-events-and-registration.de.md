@@ -82,6 +82,7 @@ Für alles, was die Standardfelder nicht abdecken, klickst du unter **Benutzerde
 - **Typ** – **Text**, **Zahl**, **Auswahl**, **Ja/Nein**, **Datum** oder **Infotext**.
 - **Pflichtfeld** – ob es ausgefüllt werden muss.
 - **Optionen** – bei **Auswahl** die Antwortmöglichkeiten, durch Kommas getrennt (z. B. `S, M, L, XL`).
+- **Format** – bei **Text** wahlweise **Telefonnummer**, **E-Mail-Adresse** oder **Nur Ziffern**. Das Formular lehnt dann eine Antwort ab, die nicht passt, in der Sprache der Person, die sich anmeldet. Die Prüfung ist bewusst großzügig: Eine Telefonnummer braucht 6 bis 15 Ziffern und darf Leerzeichen, `+`, `-`, `/` und Klammern enthalten. Das Standardfeld **Telefon** wird immer so geprüft.
 - **Im Anmeldeformular anzeigen** – entferne diesen Haken für ein Feld, das nur dein Team ausfüllt (es erscheint trotzdem in der Teilnehmertabelle).
 
 Klick auf **Benutzerdefiniertes Feld hinzufügen**, um es zu speichern.
@@ -104,11 +105,15 @@ Ein **Infotext** ist ein Hinweis von dir im Formular, etwa eine Wegbeschreibung 
 
 #### Ein Feld nur anzeigen, wenn es zutrifft
 
-Hake bei einem Feld **Nur anzeigen, wenn…** an, damit es nur erscheint, wenn eine Antwort weiter oben passt:
+Hake bei einem Feld **Nur anzeigen, wenn…** an, damit es nur erscheint, wenn seine Bedingungen erfüllt sind. Jede Bedingung prüft ein Feld:
 
-- ein **Ja/Nein**-Feld darüber hat die Antwort, die du wählst. Beispiel: „Teamer“ ist **Ja**, dann erscheint „Welches Team?“.
-- ein **Auswahl**-Feld darüber hat eine der Optionen, die du anhakst.
-- die Person ist jünger als ein Alter, das du festlegst, anhand des **Geburtsdatums**. Das Alter zählt am Starttag des Events, oder am Tag der Anmeldung, wenn kein Starttag eingetragen ist. Das **Geburtsdatum** muss bei den Standardfeldern eingeschaltet sein.
+- ein Standardfeld: **Geburtsdatum** (Alter ist unter, mindestens oder genau eine Zahl von Jahren, gezählt am Starttag des Events, oder am Tag der Anmeldung, wenn kein Starttag eingetragen ist), **Geschlecht**, **E-Mail**, **Telefon**, **Adresse**, **Land** oder **Gemeinde / Organisation**. Die Standardfelder stehen immer über deinen benutzerdefinierten Feldern, deshalb kann jedes benutzerdefinierte Feld sie nutzen. Außer der E-Mail, die immer im Formular steht, müssen sie oben eingeschaltet sein.
+- ein benutzerdefiniertes Feld darüber: **Ja/Nein** (ist Ja oder Nein), **Auswahl** (ist eines oder keines der angehakten Optionen), **Text** (ist genau, enthält, enthält nicht), **Zahl** (ist genau, ist größer als, ist kleiner als) oder **Datum** (ist vor dem, ist nach dem, ist am).
+- jedes Feld lässt sich außerdem auf **ist leer** oder **ist ausgefüllt** prüfen. Beispiel: „Telefon ist leer“ zeigt „Wie können wir dich sonst erreichen?“.
+
+Textvergleiche ignorieren Groß- und Kleinschreibung und überzählige Leerzeichen, „Deutschland“ passt also auch zu „ deutschland“. **Enthält** findet auch Wortteile: „Kirche“ passt zu „Kirchengemeinde“. Außer **ist leer** ist eine Bedingung erst erfüllt, wenn das Feld beantwortet ist.
+
+Mit **+ Bedingung hinzufügen** kommen weitere Bedingungen dazu. Dann wählst du **Anzeigen, wenn alle zutreffen** oder **Anzeigen, wenn mindestens eine zutrifft**. Beispiel: 12 bis 17 Jahre sind „Alter ist mindestens 12“ und „Alter ist unter 18“, und alle müssen zutreffen.
 
 Ein ausgeblendetes Feld ist nie Pflicht, und eine Antwort, die eingetippt wurde, bevor das Feld wieder verschwand, wird nicht gespeichert. Bei einer Familienanmeldung wird jede weitere Person für sich geprüft: Eine 15-Jährige sieht den Hinweis für Minderjährige, ihr Vater nicht.
 

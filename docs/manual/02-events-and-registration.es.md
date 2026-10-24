@@ -82,6 +82,7 @@ Para todo lo que no cubren los campos estándar, haz clic en **+ Añadir campo**
 - **Tipo**: **Texto**, **Número**, **Lista desplegable**, **Sí/No**, **Fecha** o **Texto informativo**.
 - **Obligatorio**: si hay que rellenarlo o no.
 - **Opciones**: para una **Lista desplegable**, las opciones separadas por comas (p. ej. `S, M, L, XL`).
+- **Formato**: para **Texto**, opcionalmente **Número de teléfono**, **Dirección de correo electrónico** o **Solo dígitos**. El formulario rechaza entonces una respuesta que no encaje, en el idioma de quien se inscribe. La comprobación es flexible a propósito: un número de teléfono necesita de 6 a 15 dígitos y puede llevar espacios, `+`, `-`, `/` y paréntesis. El campo estándar **Teléfono** siempre se comprueba así.
 - **Mostrar en el formulario de registro**: desmárcalo para un campo que solo rellena tu equipo (sigue apareciendo en la tabla de Participantes).
 
 Haz clic en **Añadir campo personalizado** para guardarlo.
@@ -104,11 +105,15 @@ Un **Texto informativo** es una nota tuya en el formulario, como indicaciones pa
 
 #### Mostrar un campo solo cuando corresponde
 
-Marca **Mostrar solo si…** en un campo para que aparezca solo cuando una respuesta anterior coincide:
+Marca **Mostrar solo si…** en un campo para que aparezca solo cuando se cumplan sus condiciones. Cada condición comprueba un campo:
 
-- un campo de **Sí/No** que está arriba tiene la respuesta que eliges. Ejemplo: «Monitor» es **Sí**, y entonces aparece «¿Qué equipo?».
-- un campo de **Lista desplegable** que está arriba tiene una de las opciones que marcas.
-- la persona tiene menos de la edad que indiques, según la **Fecha de nacimiento**. La edad se calcula en la fecha de inicio del evento, o el día del registro si el evento no tiene fecha de inicio. La **Fecha de nacimiento** tiene que estar activada en los campos estándar.
+- un campo estándar: **Fecha de nacimiento** (la edad es menor de, al menos o exactamente un número de años, calculada en la fecha de inicio del evento, o el día del registro si el evento no tiene fecha de inicio), **Género**, **Correo electrónico**, **Teléfono**, **Dirección**, **País** o **Iglesia / organización**. Los campos estándar siempre están encima de tus campos personalizados, así que cualquier campo personalizado puede usarlos. Salvo el correo electrónico, que siempre está en el formulario, tienen que estar activados arriba.
+- un campo personalizado que esté arriba: **Sí/No** (es Sí o No), **Lista desplegable** (es uno de, o no es ninguno de, las opciones que marques), **Texto** (es exactamente, contiene, no contiene), **Número** (es exactamente, es mayor que, es menor que) o **Fecha** (es antes del, es después del, es el).
+- cualquier campo también se puede comprobar con **está vacío** o **está rellenado**. Ejemplo: «Teléfono está vacío» muestra «¿Cómo podemos contactarte si no?».
+
+Las comparaciones de texto ignoran mayúsculas y espacios de más, así que «Deutschland» coincide con « deutschland». **Contiene** también encuentra partes de palabras: «Iglesia» coincide con «Iglesias». Salvo **está vacío**, una condición solo se cumple cuando el campo ya tiene respuesta.
+
+Haz clic en **+ Añadir condición** para añadir más, y elige **Mostrar si se cumplen todas** o **Mostrar si se cumple al menos una**. Ejemplo: de 12 a 17 años son «la edad es al menos 12» y «la edad es menor de 18», y deben cumplirse todas.
 
 Un campo oculto nunca es obligatorio, y una respuesta escrita antes de que el campo volviera a ocultarse no se guarda. En una inscripción familiar, cada persona adicional se comprueba por separado: una chica de 15 años ve la nota para menores de 18, su padre no.
 

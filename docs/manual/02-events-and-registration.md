@@ -82,6 +82,7 @@ For anything the built-ins don't cover, click **+ Add Field** under **Custom Fie
 - **Type** — **Text**, **Number**, **Dropdown**, **Yes/No**, **Date** or **Info text**.
 - **Required** — whether it must be filled in.
 - **Options** — for **Dropdown**, the choices separated by commas (e.g. `S, M, L, XL`).
+- **Format** — for **Text**, optionally **Phone number**, **Email address** or **Digits only**. The form then refuses an answer that doesn't fit, in the registrant's language. The check is deliberately loose: a phone number needs 6 to 15 digits and may contain spaces, `+`, `-`, `/` and brackets. The built-in **Phone** field is always checked this way.
 - **Show on registration form** — untick this for a field only your team fills in (it still appears in the People table).
 
 Click **Add Custom Field** to save it.
@@ -104,11 +105,15 @@ An **Info text** is a note from you on the form, such as directions or a reminde
 
 #### Showing a field only when it applies
 
-Tick **Show only if…** on a field to show it only when an earlier answer matches:
+Tick **Show only if…** on a field to show it only when its conditions are met. Each condition tests one field:
 
-- a **Yes/No** field above it has the answer you pick. Example: "Teamer" is **Yes**, then "Which team?" appears.
-- a **Dropdown** field above it has one of the options you tick.
-- the person is under an age you set, using **Date of Birth**. Age is counted on the event's start date, or on the day of registration if the event has no start date. **Date of Birth** must be switched on under the built-in fields.
+- a built-in field: **Date of Birth** (age is under, at least, or exactly a number of years, counted on the event's start date, or on the day of registration if the event has no start date), **Gender**, **Email**, **Phone**, **Address**, **Country** or **Church / Organisation**. Built-in fields always sit above your custom fields, so every custom field can use them. Apart from Email, which is always on the form, they must be switched on above.
+- a custom field above this one: **Yes/No** (is Yes or No), **Dropdown** (is one of, or is not one of, the options you tick), **Text** (is exactly, contains, does not contain), **Number** (is exactly, is more than, is less than) or **Date** (is before, is after, is on).
+- any field can also be tested for **is empty** or **is filled in**. Example: "Phone is empty" shows "How else can we reach you?".
+
+Text comparisons ignore capital letters and extra spaces, so "Deutschland" matches " deutschland". **Contains** also matches inside words: "Kirche" matches "Kirchengemeinde". Apart from **is empty**, a condition is only met once the field has been answered.
+
+Click **+ Add condition** for more than one, then choose **Show if all of these are true** or **Show if any one of these is true**. Example: ages 12 to 17 are "age is at least 12" and "age is under 18", with all of them true.
 
 A hidden field is never required, and an answer typed before the field was hidden again is not saved. Each extra person on a family registration is checked on their own: a 15-year-old sees the note for under-18s, their parent does not.
 

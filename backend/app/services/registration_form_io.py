@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.event_field_config import EventFieldConfig
 from app.models.custom_field import CustomFieldDefinition
 from app.services.field_conditions import (
-    DOB_SOURCE, ConditionError, clean_rule, load_defs, ordered, rule_problem,
+    BUILTIN_KINDS, ConditionError, clean_rule, load_defs, ordered, rule_problem,
 )
 
 EXPORT_KIND = "moimio.registration_form"
@@ -58,15 +58,18 @@ async def export_registration_form(db: AsyncSession, event_id: uuid.UUID) -> dic
 
 
 def _rule_out(rule: dict | None, label_of: dict[str, str]) -> dict | None:
+    """A rule for the file: custom sources named by label, not id."""
     if not rule:
         return None
-    if rule.get("source") == DOB_SOURCE:
-        return dict(rule)
-    label = label_of.get(str(rule.get("source")))
-    if label is None:
-        return None
-    out = {k: v for k, v in rule.items() if k != "source"}
-    return {"source_label": label, **out}
+    out = []
+    for c in rule.get("conditions") or []:
+        if c.get("source") in BUILTIN_KINDS:
+            out.append(dict(c))
+            continue
+        label = label_of.get(str(c.get("source")))
+        if label is not None:
+            out.append({**{k: v for k, v in c.items() if k != "source"}, "source_label": label})
+    return {"match": rule.get("match", "all"), "conditions": out} if out else None
 
 
 async def import_registration_form(db: AsyncSession, event_id: uuid.UUID, payload: dict) -> dict:
@@ -146,16 +149,25 @@ async def import_registration_form(db: AsyncSession, event_id: uuid.UUID, payloa
 
 
 def _rule_in(rule, id_by_label: dict[str, uuid.UUID]) -> dict | None:
-    if not isinstance(rule, dict):
+    """A rule from the file. A condition naming a field that cannot be found
+    drops the whole rule, and the import counts it: keeping the rest would
+    quietly change what the rule means (fewer conditions to meet under
+    "all", more under "any"), and a counted drop is one the organiser hears
+    about."""
+    if not isinstance(rule, dict) or not isinstance(rule.get("conditions"), list):
         return None
-    if rule.get("source") == DOB_SOURCE:
-        candidate = rule
-    else:
-        src = id_by_label.get(rule.get("source_label"))
+    conditions = []
+    for c in rule["conditions"]:
+        if not isinstance(c, dict):
+            return None
+        if c.get("source") in BUILTIN_KINDS:
+            conditions.append(c)
+            continue
+        src = id_by_label.get(c.get("source_label"))
         if src is None:
             return None
-        candidate = {**{k: v for k, v in rule.items() if k != "source_label"}, "source": str(src)}
+        conditions.append({**{k: v for k, v in c.items() if k != "source_label"}, "source": str(src)})
     try:
-        return clean_rule(candidate)
+        return clean_rule({"match": rule.get("match", "all"), "conditions": conditions})
     except ConditionError:
         return None

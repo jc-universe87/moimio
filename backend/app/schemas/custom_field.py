@@ -12,6 +12,8 @@ class CustomFieldCreate(BaseModel):
     options: list[str] | None = None  # for select type
     # v1.0.7: the organiser's text, for the info type.
     info_text: str | None = Field(default=None, max_length=5000)
+    # v1.0.7: for the text type: phone | email | digits, or None for any text.
+    text_format: str | None = None
     is_required: bool = False
     # v1.0.7: None puts the new field at the end of the form.
     sort_order: int | None = None
@@ -29,6 +31,8 @@ class CustomFieldUpdate(BaseModel):
     field_type: str | None = None
     options: list[str] | None = None
     info_text: str | None = Field(default=None, max_length=5000)
+    # Sending null clears the format; leaving it out keeps it.
+    text_format: str | None = None
     is_required: bool | None = None
     sort_order: int | None = None
     show_in_form: bool | None = None

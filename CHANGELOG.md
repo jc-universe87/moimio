@@ -19,11 +19,20 @@ Fixes found while bringing the manual up to date with the app.
   form counts as one sign-up. Somebody over the limit is asked, in their own
   language, to wait a minute and try again. Set `0` to turn it off.
 - **Fields that show only when they apply.** A custom field can be set to
-  "Show only if…" an earlier Yes/No or Dropdown answer matches, or the person
-  is under an age you choose. Age is counted on the event's start date (or
-  the day of registration when there is none). Hidden fields are never
+  "Show only if…" one or more conditions hold, all of them or any one. A
+  condition tests a built-in field (age under, at least or exactly a number
+  of years; gender; email, phone, address, country or organisation) or a
+  custom field above it (Yes/No, Dropdown is or is not one of, text is
+  exactly / contains / does not contain, number, date), or whether a field
+  is empty or filled in. Age is counted on the event's start date (or the
+  day of registration when there is none). Hidden fields are never
   required, and an answer to a field the person was not shown is not saved.
   Each extra family member on the form is checked on their own.
+- **Phone numbers and text formats are checked.** The built-in phone number
+  must look like one (6 to 15 digits, usual separators), and a text field
+  can require a phone number, an email address or digits only. The form
+  says what is wrong in the registrant's language; the CSV import reports
+  it per row.
 - **Info texts on the registration form.** A new field type for a note from
   the organiser that nobody fills in. Links work: paste an address, or write
   `[wording](https://…)`. No HTML is interpreted. An info text with a

@@ -7,11 +7,12 @@ import { useToast } from '../hooks/useToast';
 
 import TranslatedError from './TranslatedError';
 import FieldConditionEditor, { conditionSummary } from './FieldConditionEditor';
-import { INFO } from '../utils/fieldConditions';
+import { BUILTIN_KINDS, CUSTOM_KINDS, FORMATS, INFO } from '../utils/fieldConditions';
 
 // v1.0.7: info_text is the organiser's text for an info field; show_if is
 // the field's "show only if" rule, or null.
-const EMPTY_FIELD = { label: '', field_type: 'text', is_required: false, options: '', show_in_form: true, info_text: '', show_if: null };
+// text_format is a text field's required format ('' for any text).
+const EMPTY_FIELD = { label: '', field_type: 'text', is_required: false, options: '', show_in_form: true, info_text: '', show_if: null, text_format: '' };
 
 // What the API takes for a field, from the builder's form state.
 const fieldPayload = (f) => {
@@ -24,6 +25,7 @@ const fieldPayload = (f) => {
     payload.options = f.options.split(',').map(o => o.trim()).filter(Boolean);
   }
   if (f.field_type === INFO) payload.info_text = f.info_text;
+  if (f.field_type === 'text') payload.text_format = f.text_format || null;
   return payload;
 };
 
@@ -65,7 +67,28 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
     { value: INFO, label: t('event.field.type.info') },
   ];
   const typeLabel = (type) => FIELD_TYPES.find(ft => ft.value === type)?.label || type;
-  const dobEnabled = !!fields.find(f => f.field_name === 'date_of_birth')?.is_enabled;
+  // v1.0.7: what a condition can test. The built-in fields always sit above
+  // the custom ones; email is always on the form, the others only when
+  // switched on (or when a saved rule already uses one, so it still shows).
+  const BUILTIN_LABEL_KEYS = {
+    date_of_birth: 'register.dob', gender: 'register.gender', email: 'register.email',
+    phone: 'register.phone', address: 'register.address', country: 'register.country',
+    church_organisation: 'register.church',
+  };
+  const enabledBuiltins = new Set(['email', ...fields.filter(f => f.is_enabled).map(f => f.field_name)]);
+  const builtinSources = Object.keys(BUILTIN_KINDS).map(name => ({
+    id: name, label: t(BUILTIN_LABEL_KEYS[name]), kind: BUILTIN_KINDS[name], builtin: true,
+  }));
+  const customSources = (list) => list
+    .filter(cf => CUSTOM_KINDS[cf.field_type])
+    .map(cf => ({ id: cf.id, label: cf.label, kind: CUSTOM_KINDS[cf.field_type], choices: cf.options?.choices || [] }));
+  const sourcesFor = (above, rule) => {
+    const used = new Set((rule?.conditions || []).map(c => c.source));
+    return [
+      ...builtinSources.filter(s => enabledBuiltins.has(s.id) || used.has(s.id)),
+      ...customSources(above),
+    ];
+  };
 
   useEffect(() => { loadAll(); }, [eventId]);
 
@@ -191,6 +214,7 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
       show_in_form: cf.show_in_form !== false,  // default true if undefined (legacy)
       options: cf.options?.choices ? cf.options.choices.join(', ') : '',
       info_text: cf.options?.text || '',
+      text_format: cf.options?.format || '',
       show_if: cf.show_if || null,
     });
   };
@@ -379,7 +403,21 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
                 <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-subtle)' }}>{t('event.field.info_text.hint')}</p>
               </div>
             )}
-            <FieldConditionEditor value={newField.show_if} sources={customFieldList} dobEnabled={dobEnabled}
+            {newField.field_type === 'text' && (
+              <div>
+                <label className="block text-[10px] uppercase tracking-caps font-semibold mb-0.5"
+                  style={{ color: 'var(--text-subtle)' }}>
+                  {t('event.field.format')}
+                </label>
+                <select value={newField.text_format} onChange={e => setNewField(p => ({ ...p, text_format: e.target.value }))}
+                  className={inputClass}>
+                  <option value="">{t('event.field.format.any')}</option>
+                  {FORMATS.map(f => <option key={f} value={f}>{t(`event.field.format.${f}`)}</option>)}
+                </select>
+              </div>
+            )}
+            <FieldConditionEditor value={newField.show_if} sources={sourcesFor(customFieldList, newField.show_if)}
+              enabledBuiltins={enabledBuiltins}
               onChange={rule => setNewField(p => ({ ...p, show_if: rule }))}
               t={t} inputClass={inputClass} />
             <label className="flex items-center gap-1.5 text-xs cursor-pointer"
@@ -452,7 +490,21 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
                         <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-subtle)' }}>{t('event.field.info_text.hint')}</p>
                       </div>
                     )}
-                    <FieldConditionEditor value={editField.show_if} sources={customFieldList.slice(0, i)} dobEnabled={dobEnabled}
+                    {editField.field_type === 'text' && (
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-caps font-semibold mb-0.5"
+                          style={{ color: 'var(--text-subtle)' }}>
+                          {t('event.field.format')}
+                        </label>
+                        <select value={editField.text_format} onChange={e => setEditField(p => ({ ...p, text_format: e.target.value }))}
+                          className={inputClass}>
+                          <option value="">{t('event.field.format.any')}</option>
+                          {FORMATS.map(f => <option key={f} value={f}>{t(`event.field.format.${f}`)}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    <FieldConditionEditor value={editField.show_if} sources={sourcesFor(customFieldList.slice(0, i), editField.show_if)}
+                      enabledBuiltins={enabledBuiltins}
                       onChange={rule => setEditField(p => ({ ...p, show_if: rule }))}
                       t={t} inputClass={inputClass} />
                     {/* v0.86 #16: show_in_form toggle. Default true for fields
@@ -488,6 +540,12 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
                         }}>
                         {typeLabel(cf.field_type)}
                       </span>
+                      {cf.field_type === 'text' && cf.options?.format && (
+                        <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded"
+                          style={{ color: 'var(--text-subtle)', background: 'rgba(0,0,0,0.05)' }}>
+                          {t(`event.field.format.${cf.options.format}`)}
+                        </span>
+                      )}
                       {cf.is_required && (
                         <span className="ml-1 text-[10px]" style={{ color: 'var(--alert-burgundy)' }}>
                           {t('common.required')}
@@ -513,7 +571,7 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
                       {/* v1.0.7: the rule, in words. */}
                       {cf.show_if && (
                         <span className="block text-[11px] mt-0.5" style={{ color: 'var(--io-accent)' }}>
-                          {conditionSummary(cf.show_if, customFieldList, t)}
+                          {conditionSummary(cf.show_if, [...builtinSources, ...customSources(customFieldList)], t)}
                         </span>
                       )}
                       {cf.field_type === INFO && cf.options?.text && (

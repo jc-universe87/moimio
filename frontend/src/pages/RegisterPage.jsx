@@ -5,7 +5,9 @@ import { I18nProvider, useI18n, SUPPORTED_LANGS } from '../hooks/useI18n';
 import TranslatedError from '../components/TranslatedError';
 import DemoNotice from '../components/DemoNotice';
 import InfoText from '../components/InfoText';
-import { INFO, answersToSend, referenceDate, visibleFieldIds } from '../utils/fieldConditions';
+import {
+  BUILTIN_KINDS, INFO, answersToSend, fieldFormat, fitsFormat, referenceDate, visibleFieldIds,
+} from '../utils/fieldConditions';
 
 // v1.0.1d grouping v2: mirror the backend group-code rules so the live
 // preview matches exactly what the server will store.
@@ -147,22 +149,22 @@ function RegisterForm() {
     const updated = { ...formData, [name]: type === 'checkbox' ? checked : value };
     setFormData(updated);
     saveDraft({ formData: updated });
-    if (name === 'date_of_birth') dropHiddenFieldErrors(customValues, value);
+    if (name in BUILTIN_KINDS) dropHiddenFieldErrors(customValues, personFrom(updated));
   };
 
   const handleCustomChange = (fieldId, value) => {
     // v1.0.4zg: same clearing rule as every other field (2.7.3 of v1.0.4zf).
     clearFieldError(`cf_${fieldId}`);
     setCustomValues(prev => ({ ...prev, [fieldId]: value }));
-    dropHiddenFieldErrors({ ...customValues, [fieldId]: value }, formData.date_of_birth);
+    dropHiddenFieldErrors({ ...customValues, [fieldId]: value }, personFrom(formData));
   };
 
   // v1.0.7: a field that has just been hidden takes its error mark with it,
   // and the banner too if that was the last one. Otherwise "Which team?"
   // stays marked after Teamer is switched to No, and the banner points at a
   // field that is no longer on the page.
-  const dropHiddenFieldErrors = (values, dob) => {
-    const shown = shownFor(values, dob);
+  const dropHiddenFieldErrors = (values, person) => {
+    const shown = shownFor(values, person);
     customFields
       .filter(cf => !shown.has(cf.id) && fieldErrors[`cf_${cf.id}`])
       .forEach(cf => clearFieldError(`cf_${cf.id}`));
@@ -178,11 +180,24 @@ function RegisterForm() {
   const isFieldRequired = (name) => fields.find(f => f.field_name === name)?.is_required || false;
 
   // v1.0.7: which custom fields this person is shown. A field with a rule
-  // appears only once an earlier answer matches, or the date of birth makes
-  // them young enough on the event's start date. The server applies the
-  // same rules again, so an answer to a field nobody was shown is not stored.
-  const shownFor = (values, dob) => visibleFieldIds(
-    customFields, values, isFieldEnabled('date_of_birth') ? dob : '', referenceDate(event?.start_date),
+  // appears only when its conditions hold: earlier answers, or the built-in
+  // fields (age on the event's start date, gender, phone …). The server
+  // applies the same rules again, so an answer to a field nobody was shown
+  // is not stored.
+  //
+  // `personFrom` is the built-in answers as the server will receive them:
+  // email always, the others only when the field is on the form.
+  const personFrom = (src) => Object.fromEntries(Object.keys(BUILTIN_KINDS).map(name => [
+    name, name === 'email' || isFieldEnabled(name) ? (src?.[name] ?? '') : '',
+  ]));
+  // An extra person who copies the first person's details is sent the first
+  // person's phone, address, country and organisation.
+  const epPerson = (ep) => personFrom(ep.copyFromPrimary ? {
+    ...ep, phone: formData.phone, address: formData.address,
+    country: formData.country, church_organisation: formData.church_organisation,
+  } : ep);
+  const shownFor = (values, person) => visibleFieldIds(
+    customFields, values, person, referenceDate(event?.start_date),
   );
 
   // v1.0.4ze (FORM-1, D7): the loosest possible shape test for an address —
@@ -232,7 +247,7 @@ function RegisterForm() {
     // collide with a built-in name — the same prefix the extra-person cards
     // have used since v1.0.0k. A boolean is answered, not ticked: either
     // radio counts as filled, which is what `required` on a radio group meant.
-    const shown = shownFor(customValues, formData.date_of_birth);
+    const shown = shownFor(customValues, personFrom(formData));
     for (const cf of customFields) {
       if (!cf.is_required || cf.field_type === INFO || !shown.has(cf.id)) continue;
       const v = customValues[cf.id];
@@ -240,6 +255,16 @@ function RegisterForm() {
         ? (v === 'true' || v === 'false')
         : !!(v && String(v).trim());
       if (!filled) errs[`cf_${cf.id}`] = 'errors.field.required';
+    }
+    // v1.0.7: formats. A phone number has to look like one; a text field
+    // may ask for a phone number, an email address or digits only. Same
+    // loose test as the server's, so neither refuses what the other takes.
+    if (isFieldEnabled('phone') && !fitsFormat('phone', formData.phone)) errs.phone = 'errors.field.phone';
+    for (const cf of customFields) {
+      const fmt = fieldFormat(cf);
+      if (fmt && shown.has(cf.id) && !errs[`cf_${cf.id}`] && !fitsFormat(fmt, customValues[cf.id])) {
+        errs[`cf_${cf.id}`] = `errors.field.${fmt}`;
+      }
     }
 
     // The consent box. `errors.participant.gdpr_required` is the message the
@@ -275,7 +300,7 @@ function RegisterForm() {
     // Errors keyed as `cf_${cf.id}` so they don't collide with
     // built-in field names. epInputClass + epCustomFieldClass
     // pick the same prefix.
-    const shown = shownFor(ep.customValues, ep.date_of_birth);
+    const shown = shownFor(ep.customValues, epPerson(ep));
     for (const cf of customFields) {
       if (cf.is_required && cf.field_type !== INFO && shown.has(cf.id)) {
         const v = ep.customValues?.[cf.id];
@@ -287,7 +312,11 @@ function RegisterForm() {
           if (!v || !String(v).trim()) errs[`cf_${cf.id}`] = true;
         }
       }
+      // v1.0.7: and the same formats as the first person's.
+      const fmt = fieldFormat(cf);
+      if (fmt && shown.has(cf.id) && !fitsFormat(fmt, ep.customValues?.[cf.id])) errs[`cf_${cf.id}`] = true;
     }
+    if (!ep.copyFromPrimary && isFieldEnabled('phone') && !fitsFormat('phone', ep.phone)) errs.phone = true;
     return errs;
   });
 
@@ -366,7 +395,7 @@ function RegisterForm() {
         submission.group_code = stemFromName(startCustomName);
       }
       // v1.0.7: only answers to fields the registrant was shown.
-      const cfAnswers = answersToSend(customFields, customValues, shownFor(customValues, formData.date_of_birth));
+      const cfAnswers = answersToSend(customFields, customValues, shownFor(customValues, personFrom(formData)));
       if (Object.keys(cfAnswers).length > 0) submission.custom_fields = cfAnswers;
       submission.preferred_language = lang;
       // Send preference requests only if user picked 'request' mode and prefs are enabled
@@ -442,7 +471,7 @@ function RegisterForm() {
         // the backend treats unset fields the same way for primary
         // and extras.
         // v1.0.7: and only those this person was shown.
-        const epAnswers = answersToSend(customFields, ep.customValues, shownFor(ep.customValues, ep.date_of_birth));
+        const epAnswers = answersToSend(customFields, ep.customValues, shownFor(ep.customValues, epPerson(ep)));
         if (Object.keys(epAnswers).length > 0) {
           epSubmission.custom_fields = epAnswers;
         }
@@ -585,7 +614,12 @@ function RegisterForm() {
     });
   };
 
-  const primaryShown = shownFor(customValues, formData.date_of_birth);
+  const primaryShown = shownFor(customValues, personFrom(formData));
+  // v1.0.7: the right keyboard on a phone for a text field with a format.
+  const inputTypeFor = (cf) => (
+    cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date'
+      : ({ phone: 'tel', email: 'email' }[fieldFormat(cf)] || 'text')
+  );
 
   const OPTIONAL_FIELDS = [
     { name: 'gender', labelKey: 'register.gender', type: 'select' },
@@ -765,7 +799,7 @@ function RegisterForm() {
                     </label>
                   </div>
                 ) : (
-                  <input type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : 'text'}
+                  <input type={inputTypeFor(cf)} inputMode={fieldFormat(cf) === 'digits' ? 'numeric' : undefined}
                     name={`cf_${cf.id}`}
                     value={customValues[cf.id] || ''} onChange={e => handleCustomChange(cf.id, e.target.value)}
                     required={cf.is_required} aria-invalid={!!fieldErrors[`cf_${cf.id}`]}
@@ -932,7 +966,7 @@ function RegisterForm() {
           {/* ── Multi-person: extra registrants ── */}
           {extraPersons.map((ep, idx) => {
             const isCollapsed = collapsedPersons.has(idx);
-            const epShown = shownFor(ep.customValues, ep.date_of_birth);
+            const epShown = shownFor(ep.customValues, epPerson(ep));
             const updateEp = (patch) => {
               const next = extraPersons.map((p, i) => i === idx ? { ...p, ...patch } : p);
               setExtraPersons(next);
@@ -959,7 +993,7 @@ function RegisterForm() {
                 }
                 // v1.0.7: and drop the mark of any field this change hid.
                 const nextEp = next[idx];
-                const epShownNow = shownFor(nextEp.customValues, nextEp.date_of_birth);
+                const epShownNow = shownFor(nextEp.customValues, epPerson(nextEp));
                 customFields.forEach(cf => {
                   if (!epShownNow.has(cf.id)) delete fieldErrs[`cf_${cf.id}`];
                 });
@@ -1147,7 +1181,7 @@ function RegisterForm() {
                               ))}
                             </div>
                           ) : (
-                            <input type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : 'text'}
+                            <input type={inputTypeFor(cf)} inputMode={fieldFormat(cf) === 'digits' ? 'numeric' : undefined}
                               value={value}
                               onChange={e => updateEp({ customValues: { ...(ep.customValues || {}), [cf.id]: e.target.value } })}
                               required={cf.is_required} aria-invalid={!!extraPersonErrors[idx]?.[errKey]}

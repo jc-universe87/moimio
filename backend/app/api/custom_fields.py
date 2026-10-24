@@ -15,7 +15,7 @@ from app.schemas.custom_field import (
 )
 from app.services.event_service import get_event_by_id
 from app.services.field_conditions import (
-    INFO, ConditionError, check_rules, clean_rule, dependants_of, load_defs,
+    FORMATS, INFO, ConditionError, check_rules, clean_rule, dependants_of, load_defs,
     refresh_event_info_marks,
 )
 from app.api.deps import get_current_user, ensure_event_writable, require_event_admin_dep
@@ -28,12 +28,20 @@ def _refuse(err: ConditionError):
     raise HTTPException(status_code=409, detail={"key": err.key})
 
 
-def _options_for(field_type: str, choices: list[str] | None, info_text: str | None) -> dict | None:
+def _options_for(field_type: str, choices: list[str] | None, info_text: str | None,
+                 text_format: str | None = None) -> dict | None:
     if field_type == "select" and choices:
         return {"choices": choices}
     if field_type == INFO:
         return {"text": (info_text or "").strip()}
+    if field_type == "text" and text_format:
+        return {"format": text_format}
     return None
+
+
+def _check_format(text_format: str | None):
+    if text_format is not None and text_format not in FORMATS:
+        raise HTTPException(status_code=422, detail={"key": "errors.field.invalid"})
 
 
 @router.get("/", response_model=list[CustomFieldResponse])
@@ -96,12 +104,13 @@ async def create_custom_field(
         rule = clean_rule(data.show_if)
     except ConditionError as err:
         _refuse(err)
+    _check_format(data.text_format)
 
     field = CustomFieldDefinition(
         event_id=event_id,
         label=data.label,
         field_type=data.field_type,
-        options=_options_for(data.field_type, data.options, data.info_text),
+        options=_options_for(data.field_type, data.options, data.info_text, data.text_format),
         # Nobody fills in an info text, so it can never be required.
         is_required=data.is_required and data.field_type != INFO,
         sort_order=sort_order,
@@ -143,6 +152,9 @@ async def update_custom_field(
 
     update_data = data.model_dump(exclude_unset=True)
     info_text = update_data.pop("info_text", None)
+    has_format = "text_format" in update_data
+    text_format = update_data.pop("text_format", None)
+    _check_format(text_format)
     if "options" in update_data and update_data["options"] is not None:
         update_data["options"] = {"choices": update_data["options"]}
     if "show_if" in update_data:
@@ -163,6 +175,12 @@ async def update_custom_field(
         if field.options and "choices" not in field.options:
             field.options = None
         field.values.clear()  # delete-orphan: the rows go on flush
+    if field.field_type == "text":
+        if has_format:
+            field.options = _options_for("text", None, None, text_format)
+    elif field.options and "format" in field.options:
+        # A format belongs to a text field only.
+        field.options = {k: v for k, v in field.options.items() if k != "format"} or None
     db.add(field)
     await db.flush()
     await db.refresh(field)
