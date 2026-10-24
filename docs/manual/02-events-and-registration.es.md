@@ -112,7 +112,7 @@ Marca **Mostrar solo si…** en un campo para que aparezca solo cuando una respu
 
 Un campo oculto nunca es obligatorio, y una respuesta escrita antes de que el campo volviera a ocultarse no se guarda. En una inscripción familiar, cada persona adicional se comprueba por separado: una chica de 15 años ve la nota para menores de 18, su padre no.
 
-Un **Texto informativo** con condición también tiene una columna en **Participantes** (marcada desde el principio) y en **Check-in** (actívala en **Columnas**). Pone **Aplica** para todas las personas a las que iba dirigida la nota, así el equipo de recepción ve quién tiene que traer, por ejemplo, una autorización firmada. Si corriges la fecha de nacimiento de alguien o cambias la fecha de inicio del evento, la columna se actualiza.
+Un **Texto informativo** con condición también tiene una columna en **Participantes** (marcada desde el principio) y en **Check-in** (actívala en **Columnas**). Pone **Se aplica** para todas las personas a las que iba dirigida la nota, así el equipo de recepción ve quién tiene que traer, por ejemplo, una autorización firmada. Si corriges la fecha de nacimiento de alguien o cambias la fecha de inicio del evento, la columna se actualiza.
 
 Usa **↑** y **↓** para cambiar el orden de tus campos personalizados. Un campo solo puede depender de un campo que esté arriba, así que un cambio de orden que rompería eso se rechaza con un mensaje. Por la misma razón, un campo del que depende otro no se puede eliminar hasta que quites esa condición.
 

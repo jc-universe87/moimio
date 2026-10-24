@@ -112,7 +112,7 @@ Cochez **Afficher uniquement si…** sur un champ pour qu’il n’apparaisse qu
 
 Un champ masqué n’est jamais obligatoire, et une réponse saisie avant que le champ ne soit de nouveau masqué n’est pas enregistrée. Dans une inscription familiale, chaque personne supplémentaire est vérifiée séparément : une jeune de 15 ans voit la note destinée aux mineurs, son père non.
 
-Un **Texte d’information** avec condition obtient aussi une colonne dans **Participants** (cochée dès le départ) et au **Check-in** (à activer sous **Colonnes**). Elle indique **Concerné** pour toutes les personnes à qui la note s’adressait, ce qui permet à l’accueil de voir qui doit apporter, par exemple, une autorisation signée. Si vous corrigez la date de naissance d’une personne ou modifiez la date de début de l’événement, la colonne suit.
+Un **Texte d’information** avec condition obtient aussi une colonne dans **Participants** (cochée dès le départ) et au **Check-in** (à activer sous **Colonnes**). Elle indique **S’applique** pour toutes les personnes à qui la note s’adressait, ce qui permet à l’accueil de voir qui doit apporter, par exemple, une autorisation signée. Si vous corrigez la date de naissance d’une personne ou modifiez la date de début de l’événement, la colonne suit.
 
 Utilisez **↑** et **↓** pour changer l’ordre de vos champs personnalisés. Un champ ne peut dépendre que d’un champ situé au-dessus : un déplacement qui romprait cette règle est refusé avec un message. Pour la même raison, un champ dont dépend un autre champ ne peut pas être supprimé tant que cette condition n’est pas retirée.
 
