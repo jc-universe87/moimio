@@ -17,6 +17,9 @@ from app.schemas.participant import ParticipantRegister, ParticipantUpdate
 from app.models.event import Event
 from app.core.config import get_settings
 from app.services.webhook_service import queue_event
+from app.services.field_conditions import (
+    INFO, filter_answers, load_defs, reference_date, refresh_info_marks,
+)
 
 
 # ─── v1.0-pre: collision-safe group-code allocation ─────────────────────────
@@ -182,12 +185,19 @@ async def register_participant(
     db.add(participant)
     await db.flush()
 
-    if data.custom_fields:
-        for field_id_str, value in data.custom_fields.items():
-            try:
-                field_id = uuid.UUID(field_id_str)
-            except ValueError:
-                continue
+    # v1.0.7: only answers to this event's fields that the person was shown
+    # are kept, and the conditional info texts that applied are marked. The
+    # form hides the same fields; this is what makes it true of the data.
+    defs = await load_defs(db, event_id)
+    event_start = (await db.execute(
+        select(Event.start_date).where(Event.id == event_id)
+    )).scalar_one_or_none()
+    answers = filter_answers(
+        defs, data.custom_fields, data.date_of_birth, reference_date(event_start),
+    )
+    if answers:
+        for field_id_str, value in answers.items():
+            field_id = uuid.UUID(field_id_str)
             cfv = CustomFieldValue(
                 participant_id=participant.id,
                 field_id=field_id,
@@ -313,6 +323,13 @@ async def update_participant(
     # backed by the CustomFieldValue relationship — `setattr` would fail
     # silently. Pull it out of update_data and upsert per-id below.
     incoming_cfs: dict | None = update_data.pop("custom_fields", None)
+    defs = None
+    if incoming_cfs is not None or "date_of_birth" in update_data:
+        defs = await load_defs(db, participant.event_id)
+    if incoming_cfs is not None:
+        # v1.0.7: an info text's "applies" mark is worked out, never typed in.
+        info_ids = {str(d.id) for d in defs if d.field_type == INFO}
+        incoming_cfs = {k: v for k, v in incoming_cfs.items() if k not in info_ids}
 
     for key, value in update_data.items():
         setattr(participant, key, value)
@@ -383,6 +400,14 @@ async def update_participant(
         # Force SQLAlchemy to re-load custom_field_values on the next
         # access — without this, the selectin-loaded relationship still
         # holds the pre-mutation list (including the just-deleted rows).
+        await db.refresh(participant, attribute_names=["custom_field_values"])
+
+    if defs is not None:
+        await db.flush()
+        event_start = (await db.execute(
+            select(Event.start_date).where(Event.id == participant.event_id)
+        )).scalar_one_or_none()
+        await refresh_info_marks(db, participant.event_id, [participant], event_start, defs)
         await db.refresh(participant, attribute_names=["custom_field_values"])
 
     db.add(participant)

@@ -79,7 +79,7 @@ Chaque formulaire comporte aussi une zone facultative **Message aux organisateur
 Pour tout ce que les champs intégrés ne couvrent pas, cliquez sur **+ Ajouter un champ** sous **Champs personnalisés**. Choisissez :
 
 - **Nom du champ** : ce que voit la personne qui s’inscrit (« Taille de t-shirt », « Êtes-vous déjà venu ? »).
-- **Type** : **Texte**, **Nombre**, **Liste déroulante**, **Oui/Non** ou **Date**.
+- **Type** : **Texte**, **Nombre**, **Liste déroulante**, **Oui/Non**, **Date** ou **Texte d’information**.
 - **Obligatoire** : s’il doit être rempli.
 - **Options** : pour une **Liste déroulante**, les choix séparés par des virgules (par exemple `S, M, L, XL`).
 - **Afficher sur le formulaire d'inscription** : décochez cette case pour un champ que seule votre équipe remplit (il apparaît quand même dans la liste des participants).
@@ -97,6 +97,24 @@ Champs personnalisés courants :
 Les champs personnalisés appartiennent à un seul événement : ajouter « Taille de t-shirt » ici ne l’ajoute pas à vos autres événements. Vous pouvez modifier ou supprimer un champ après l’arrivée des inscriptions, mais **supprimer un champ supprime aussi toutes les réponses déjà données**.
 
 > **Réutiliser un formulaire.** Le menu **⋯** en haut de la carte propose **Exporter le formulaire** et **Importer un formulaire** : vous pouvez enregistrer un formulaire dans un fichier et le charger dans un autre événement (ou une autre installation de Moimio). L’import ne crée jamais de doublons des champs que vous avez déjà.
+
+#### Textes d’information
+
+Un **Texte d’information** est une note de votre part dans le formulaire, par exemple un itinéraire ou un rappel. Personne ne le remplit, il n’a donc pas de case **Obligatoire**. Donnez-lui un titre et un texte. Les retours à la ligne sont conservés. Pour un lien, collez l’adresse web, ou écrivez `[texte du lien](https://example.org/formulaire.pdf)` pour afficher vos propres mots. Les liens s’ouvrent dans un nouvel onglet.
+
+#### Afficher un champ seulement quand il s’applique
+
+Cochez **Afficher uniquement si…** sur un champ pour qu’il n’apparaisse que lorsqu’une réponse précédente correspond :
+
+- un champ **Oui/Non** situé au-dessus a la réponse que vous choisissez. Exemple : « Animateur » est **Oui**, alors « Quelle équipe ? » apparaît.
+- un champ **Liste déroulante** situé au-dessus a l’une des options que vous cochez.
+- la personne a moins d’un âge que vous fixez, d’après la **Date de naissance**. L’âge est calculé à la date de début de l’événement, ou au jour de l’inscription si l’événement n’a pas de date de début. La **Date de naissance** doit être activée parmi les champs intégrés.
+
+Un champ masqué n’est jamais obligatoire, et une réponse saisie avant que le champ ne soit de nouveau masqué n’est pas enregistrée. Dans une inscription familiale, chaque personne supplémentaire est vérifiée séparément : une jeune de 15 ans voit la note destinée aux mineurs, son père non.
+
+Un **Texte d’information** avec condition obtient aussi une colonne dans **Participants** (cochée dès le départ) et au **Check-in** (à activer sous **Colonnes**). Elle indique **Concerné** pour toutes les personnes à qui la note s’adressait, ce qui permet à l’accueil de voir qui doit apporter, par exemple, une autorisation signée. Si vous corrigez la date de naissance d’une personne ou modifiez la date de début de l’événement, la colonne suit.
+
+Utilisez **↑** et **↓** pour changer l’ordre de vos champs personnalisés. Un champ ne peut dépendre que d’un champ situé au-dessus : un déplacement qui romprait cette règle est refusé avec un message. Pour la même raison, un champ dont dépend un autre champ ne peut pas être supprimé tant que cette condition n’est pas retirée.
 
 ### Codes de groupe : garder ensemble familles et amis
 

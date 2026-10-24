@@ -4,6 +4,8 @@ import { participants } from '../services/api';
 import { I18nProvider, useI18n, SUPPORTED_LANGS } from '../hooks/useI18n';
 import TranslatedError from '../components/TranslatedError';
 import DemoNotice from '../components/DemoNotice';
+import InfoText from '../components/InfoText';
+import { INFO, answersToSend, referenceDate, visibleFieldIds } from '../utils/fieldConditions';
 
 // v1.0.1d grouping v2: mirror the backend group-code rules so the live
 // preview matches exactly what the server will store.
@@ -162,6 +164,14 @@ function RegisterForm() {
   const isFieldEnabled = (name) => fields.find(f => f.field_name === name)?.is_enabled || false;
   const isFieldRequired = (name) => fields.find(f => f.field_name === name)?.is_required || false;
 
+  // v1.0.7: which custom fields this person is shown. A field with a rule
+  // appears only once an earlier answer matches, or the date of birth makes
+  // them young enough on the event's start date. The server applies the
+  // same rules again, so an answer to a field nobody was shown is not stored.
+  const shownFor = (values, dob) => visibleFieldIds(
+    customFields, values, isFieldEnabled('date_of_birth') ? dob : '', referenceDate(event?.start_date),
+  );
+
   // v1.0.4ze (FORM-1, D7): the loosest possible shape test for an address —
   // something before an @, something after it, a dot and at least two more
   // characters. It is not here to be clever about what an address may legally
@@ -209,8 +219,9 @@ function RegisterForm() {
     // collide with a built-in name — the same prefix the extra-person cards
     // have used since v1.0.0k. A boolean is answered, not ticked: either
     // radio counts as filled, which is what `required` on a radio group meant.
+    const shown = shownFor(customValues, formData.date_of_birth);
     for (const cf of customFields) {
-      if (!cf.is_required) continue;
+      if (!cf.is_required || cf.field_type === INFO || !shown.has(cf.id)) continue;
       const v = customValues[cf.id];
       const filled = cf.field_type === 'boolean'
         ? (v === 'true' || v === 'false')
@@ -251,8 +262,9 @@ function RegisterForm() {
     // Errors keyed as `cf_${cf.id}` so they don't collide with
     // built-in field names. epInputClass + epCustomFieldClass
     // pick the same prefix.
+    const shown = shownFor(ep.customValues, ep.date_of_birth);
     for (const cf of customFields) {
-      if (cf.is_required) {
+      if (cf.is_required && cf.field_type !== INFO && shown.has(cf.id)) {
         const v = ep.customValues?.[cf.id];
         // Boolean fields are "filled" if set to either 'true' or
         // 'false'. Other types: any non-empty string.
@@ -340,8 +352,9 @@ function RegisterForm() {
         // JUGEND-104 here must not silently join that group).
         submission.group_code = stemFromName(startCustomName);
       }
-      const cfEntries = Object.entries(customValues).filter(([_, v]) => v);
-      if (cfEntries.length > 0) submission.custom_fields = Object.fromEntries(cfEntries);
+      // v1.0.7: only answers to fields the registrant was shown.
+      const cfAnswers = answersToSend(customFields, customValues, shownFor(customValues, formData.date_of_birth));
+      if (Object.keys(cfAnswers).length > 0) submission.custom_fields = cfAnswers;
       submission.preferred_language = lang;
       // Send preference requests only if user picked 'request' mode and prefs are enabled
       if (groupingMode === 'request' && prefEnabled) {
@@ -415,9 +428,10 @@ function RegisterForm() {
         // primary's payload shape — empty values are filtered out so
         // the backend treats unset fields the same way for primary
         // and extras.
-        const epCfEntries = Object.entries(ep.customValues || {}).filter(([_, v]) => v !== '' && v != null);
-        if (epCfEntries.length > 0) {
-          epSubmission.custom_fields = Object.fromEntries(epCfEntries);
+        // v1.0.7: and only those this person was shown.
+        const epAnswers = answersToSend(customFields, ep.customValues, shownFor(ep.customValues, ep.date_of_birth));
+        if (Object.keys(epAnswers).length > 0) {
+          epSubmission.custom_fields = epAnswers;
         }
         await participants.register(eventId, epSubmission);
       }
@@ -557,6 +571,8 @@ function RegisterForm() {
       return next;
     });
   };
+
+  const primaryShown = shownFor(customValues, formData.date_of_birth);
 
   const OPTIONAL_FIELDS = [
     { name: 'gender', labelKey: 'register.gender', type: 'select' },
@@ -698,7 +714,10 @@ function RegisterForm() {
                 They were the one part of the form the browser was still
                 policing on its own — a required custom field had `required`
                 and nothing else. */}
-            {customFields.map(cf => (
+            {customFields.filter(cf => primaryShown.has(cf.id)).map(cf => cf.field_type === INFO ? (
+              <InfoText key={cf.id} title={cf.label} text={cf.options?.text}
+                linkColor={hasCustomStyle ? cs.primaryColor : undefined} />
+            ) : (
               <div key={cf.id}>
                 <label className="block text-sm font-semibold text-gray-600 mb-1">
                   {cf.label} {cf.is_required && <span style={{ color: 'var(--alert-burgundy)' }}>*</span>}
@@ -900,6 +919,7 @@ function RegisterForm() {
           {/* ── Multi-person: extra registrants ── */}
           {extraPersons.map((ep, idx) => {
             const isCollapsed = collapsedPersons.has(idx);
+            const epShown = shownFor(ep.customValues, ep.date_of_birth);
             const updateEp = (patch) => {
               const next = extraPersons.map((p, i) => i === idx ? { ...p, ...patch } : p);
               setExtraPersons(next);
@@ -1069,7 +1089,11 @@ function RegisterForm() {
                         by custom_field.id. Required-field highlights
                         use the `cf_${id}` key in epInputClass which
                         the validator sets alongside other errors. */}
-                    {customFields.map(cf => {
+                    {customFields.filter(cf => epShown.has(cf.id)).map(cf => {
+                      if (cf.field_type === INFO) return (
+                        <InfoText key={cf.id} title={cf.label} text={cf.options?.text}
+                          linkColor={hasCustomStyle ? cs.primaryColor : undefined} />
+                      );
                       const errKey = `cf_${cf.id}`;
                       const cfClass = epInputClass(idx, errKey);
                       const value = ep.customValues?.[cf.id] || '';

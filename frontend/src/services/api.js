@@ -330,6 +330,8 @@ export const customFields = {
   create: (eventId, data) => request(`/events/${eventId}/custom-fields/`, { method: 'POST', body: JSON.stringify(data) }),
   update: (eventId, fieldId, data) => request(`/events/${eventId}/custom-fields/${fieldId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   delete: (eventId, fieldId) => request(`/events/${eventId}/custom-fields/${fieldId}`, { method: 'DELETE' }),
+  // v1.0.7: every field id of the event, in the new order.
+  reorder: (eventId, fieldIds) => request(`/events/${eventId}/custom-fields/reorder`, { method: 'POST', body: JSON.stringify({ field_ids: fieldIds }) }),
 };
 
 // ─── Preference Requests ───

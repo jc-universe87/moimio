@@ -17,7 +17,8 @@ export function cfSortValue(cfDef, raw) {
     const n = parseFloat(raw);
     return Number.isNaN(n) ? -Infinity : n;
   }
-  if (type === 'boolean') {
+  // v1.0.7: an info text's "applies" mark sorts like a yes.
+  if (type === 'boolean' || type === 'info') {
     if (unset) return -1;                      // unset < false < true
     return /^(true|1|yes|ja)$/i.test(String(raw)) ? 1 : 0;
   }

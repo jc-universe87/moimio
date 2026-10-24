@@ -79,7 +79,7 @@ Todos los formularios incluyen además un cuadro opcional **Mensaje a los organi
 Para todo lo que no cubren los campos estándar, haz clic en **+ Añadir campo** en **Campos personalizados**. Elige:
 
 - **Nombre del campo**: lo que ve la persona al inscribirse («Talla de camiseta», «¿Has venido antes?»).
-- **Tipo**: **Texto**, **Número**, **Lista desplegable**, **Sí/No** o **Fecha**.
+- **Tipo**: **Texto**, **Número**, **Lista desplegable**, **Sí/No**, **Fecha** o **Texto informativo**.
 - **Obligatorio**: si hay que rellenarlo o no.
 - **Opciones**: para una **Lista desplegable**, las opciones separadas por comas (p. ej. `S, M, L, XL`).
 - **Mostrar en el formulario de registro**: desmárcalo para un campo que solo rellena tu equipo (sigue apareciendo en la tabla de Participantes).
@@ -97,6 +97,24 @@ Campos personalizados habituales:
 Los campos personalizados pertenecen a un solo evento: añadir «Talla de camiseta» aquí no lo añade a tus otros eventos. Puedes editar o eliminar un campo aunque ya hayan llegado inscripciones, pero **al eliminar un campo también se eliminan todas las respuestas que ya se hayan dado**.
 
 > **Reutilizar un formulario.** El menú **⋯** de la parte superior de la tarjeta tiene **Exportar formulario** e **Importar formulario**, para guardar un formulario en un archivo y cargarlo en otro evento (o en otra instalación de Moimio). Al importar nunca se duplican los campos que ya tienes.
+
+#### Textos informativos
+
+Un **Texto informativo** es una nota tuya en el formulario, como indicaciones para llegar o un recordatorio. Nadie lo rellena, así que no tiene casilla de **Obligatorio**. Dale un título y el texto. Los saltos de línea se conservan. Para un enlace, pega la dirección web o escribe `[texto del enlace](https://example.org/formulario.pdf)` para mostrar tus propias palabras. Los enlaces se abren en una pestaña nueva.
+
+#### Mostrar un campo solo cuando corresponde
+
+Marca **Mostrar solo si…** en un campo para que aparezca solo cuando una respuesta anterior coincide:
+
+- un campo de **Sí/No** que está arriba tiene la respuesta que eliges. Ejemplo: «Monitor» es **Sí**, y entonces aparece «¿Qué equipo?».
+- un campo de **Lista desplegable** que está arriba tiene una de las opciones que marcas.
+- la persona tiene menos de la edad que indiques, según la **Fecha de nacimiento**. La edad se calcula en la fecha de inicio del evento, o el día del registro si el evento no tiene fecha de inicio. La **Fecha de nacimiento** tiene que estar activada en los campos estándar.
+
+Un campo oculto nunca es obligatorio, y una respuesta escrita antes de que el campo volviera a ocultarse no se guarda. En una inscripción familiar, cada persona adicional se comprueba por separado: una chica de 15 años ve la nota para menores de 18, su padre no.
+
+Un **Texto informativo** con condición también tiene una columna en **Participantes** (marcada desde el principio) y en **Check-in** (actívala en **Columnas**). Pone **Aplica** para todas las personas a las que iba dirigida la nota, así el equipo de recepción ve quién tiene que traer, por ejemplo, una autorización firmada. Si corriges la fecha de nacimiento de alguien o cambias la fecha de inicio del evento, la columna se actualiza.
+
+Usa **↑** y **↓** para cambiar el orden de tus campos personalizados. Un campo solo puede depender de un campo que esté arriba, así que un cambio de orden que rompería eso se rechaza con un mensaje. Por la misma razón, un campo del que depende otro no se puede eliminar hasta que quites esa condición.
 
 ### Códigos de grupo: mantener juntos a familias y amigos
 

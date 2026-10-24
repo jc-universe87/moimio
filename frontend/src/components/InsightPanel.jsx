@@ -405,7 +405,8 @@ export default function InsightPanel({ participant, eventId, marksForPerson = []
               {customFieldDefs.map(def => {
                 const val = participant.custom_fields?.[def.id];
                 if (val === undefined || val === null || val === '') return null;
-                return <Row key={def.id} label={def.label}>{String(val)}</Row>;
+                // v1.0.7: an info text's value is its "applies" mark.
+                return <Row key={def.id} label={def.label}>{def.field_type === 'info' ? t('field.info.applies') : String(val)}</Row>;
               })}
             </section>
           )}

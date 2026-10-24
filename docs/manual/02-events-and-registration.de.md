@@ -79,7 +79,7 @@ Jedes Formular hat außerdem ein optionales Feld **Nachricht an die Organisatore
 Für alles, was die Standardfelder nicht abdecken, klickst du unter **Benutzerdefinierte Felder** auf **+ Feld hinzufügen**. Wähle:
 
 - **Feldbezeichnung** – das, was die Person sieht („T-Shirt-Größe“, „Warst du schon einmal dabei?“).
-- **Typ** – **Text**, **Zahl**, **Auswahl**, **Ja/Nein** oder **Datum**.
+- **Typ** – **Text**, **Zahl**, **Auswahl**, **Ja/Nein**, **Datum** oder **Infotext**.
 - **Pflichtfeld** – ob es ausgefüllt werden muss.
 - **Optionen** – bei **Auswahl** die Antwortmöglichkeiten, durch Kommas getrennt (z. B. `S, M, L, XL`).
 - **Im Anmeldeformular anzeigen** – entferne diesen Haken für ein Feld, das nur dein Team ausfüllt (es erscheint trotzdem in der Teilnehmertabelle).
@@ -97,6 +97,24 @@ Häufige benutzerdefinierte Felder:
 Benutzerdefinierte Felder gehören zu einem Event – wenn du hier „T-Shirt-Größe“ hinzufügst, erscheint das Feld nicht in deinen anderen Events. Du kannst ein Feld auch dann noch bearbeiten oder löschen, wenn schon Anmeldungen eingegangen sind, aber **wenn du ein Feld löschst, werden auch alle bereits gegebenen Antworten darauf gelöscht**.
 
 > **Ein Formular wiederverwenden.** Das Menü **⋯** oben auf der Karte enthält **Formular exportieren** und **Formular importieren**. So kannst du ein Formular in einer Datei speichern und in ein anderes Event (oder eine andere Moimio-Installation) laden. Beim Import entstehen nie doppelte Felder, die du schon hast.
+
+#### Infotexte
+
+Ein **Infotext** ist ein Hinweis von dir im Formular, etwa eine Wegbeschreibung oder eine Erinnerung. Niemand füllt ihn aus, deshalb hat er kein Kästchen **Pflichtfeld**. Gib ihm eine Überschrift und den Text. Zeilenumbrüche bleiben erhalten. Für einen Link füge die Webadresse ein, oder schreib `[Linktext](https://example.org/formular.pdf)`, damit dein eigener Wortlaut angezeigt wird. Links öffnen sich in einem neuen Tab.
+
+#### Ein Feld nur anzeigen, wenn es zutrifft
+
+Hake bei einem Feld **Nur anzeigen, wenn…** an, damit es nur erscheint, wenn eine Antwort weiter oben passt:
+
+- ein **Ja/Nein**-Feld darüber hat die Antwort, die du wählst. Beispiel: „Teamer“ ist **Ja**, dann erscheint „Welches Team?“.
+- ein **Auswahl**-Feld darüber hat eine der Optionen, die du anhakst.
+- die Person ist jünger als ein Alter, das du festlegst, anhand des **Geburtsdatums**. Das Alter zählt am Starttag des Events, oder am Tag der Anmeldung, wenn kein Starttag eingetragen ist. Das **Geburtsdatum** muss bei den Standardfeldern eingeschaltet sein.
+
+Ein ausgeblendetes Feld ist nie Pflicht, und eine Antwort, die eingetippt wurde, bevor das Feld wieder verschwand, wird nicht gespeichert. Bei einer Familienanmeldung wird jede weitere Person für sich geprüft: Eine 15-Jährige sieht den Hinweis für Minderjährige, ihr Vater nicht.
+
+Ein **Infotext** mit Bedingung bekommt außerdem eine Spalte in **Teilnehmer** (von Anfang an angehakt) und beim **Check-in** (unter **Spalten** einschalten). Dort steht **Trifft zu** bei allen, für die der Hinweis gedacht war. So sieht das Team am Empfang, wer zum Beispiel eine unterschriebene Einverständniserklärung mitbringen muss. Wenn du das Geburtsdatum einer Person korrigierst oder den Starttag des Events änderst, passt sich die Spalte an.
+
+Mit **↑** und **↓** änderst du die Reihenfolge deiner benutzerdefinierten Felder. Ein Feld kann nur von einem Feld darüber abhängen. Eine Verschiebung, die das brechen würde, wird deshalb mit einer Meldung abgelehnt. Aus demselben Grund lässt sich ein Feld, von dem ein anderes abhängt, erst löschen, wenn diese Bedingung entfernt ist.
 
 ### Gruppencodes: Familien und Freunde zusammenhalten
 

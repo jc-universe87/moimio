@@ -34,6 +34,7 @@ from app.models.allocation_unit import AllocationUnit
 from app.models.checkin_field import CheckInField
 from app.models.checkin_value import CheckInValue
 from app.models.custom_field import CustomFieldDefinition, CustomFieldValue
+from app.services.field_conditions import remap_rule
 from app.models.event import Event
 from app.models.event_field_config import EventFieldConfig
 from app.models.mark import MarkDefinition, MarkAssignment
@@ -220,6 +221,9 @@ BACKUP_REGISTER: dict[str, Table] = {
         # CSV-import fields back on the public registration form.
         "show_in_form": Col(True, "copied"),
         "options": Col(True, "copied", raw=True),
+        # v1.0.7: the rule names its source field by id, so restore
+        # translates it through the field id map once every field exists.
+        "show_if": Col(True, "remapped", raw=True),
     }),
     "custom_field_values": Table("custom_fields.json", "values", {
         # Written as {old participant id: [{field_id, value}]}, so the
@@ -1149,7 +1153,7 @@ async def export_event_zip(
     custom_fields_data = {
         "definitions": [
             _row(cf, *_row_fields("custom_field_definitions"))
-            | {"options": cf.options}
+            | {"options": cf.options, "show_if": cf.show_if}
             for cf in cf_defs
         ],
         "values": cfv_data,
@@ -1703,6 +1707,7 @@ async def confirm_restore(
     # ── Custom field definitions ──
     cf_data = data["custom_fields.json"]
     seen_cf_ids: set[str] = set()
+    restored_cfs: list = []
     for cf_src in cf_data.get("definitions", []):
         if not isinstance(cf_src, dict):
             skip("custom_fields.json")
@@ -1734,6 +1739,12 @@ async def confirm_restore(
             **ts(cf_src, "created_at", "custom_field_definitions", "created_at"),
         )
         db.add(cf)
+        restored_cfs.append((cf, cf_src.get("show_if")))
+    # v1.0.7: a rule's source is another field, so rules are translated only
+    # now that every field has its new id. A rule whose source is not in the
+    # file is dropped, never left pointing into the original event.
+    for cf, rule in restored_cfs:
+        cf.show_if = remap_rule(rule if isinstance(rule, dict) else None, cf_map)
     await db.flush()
 
     # ── Field configs (registration form settings) ──

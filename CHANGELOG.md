@@ -18,6 +18,23 @@ Fixes found while bringing the manual up to date with the app.
   now does, with a default of 60 a minute. Each extra family member on the
   form counts as one sign-up. Somebody over the limit is asked, in their own
   language, to wait a minute and try again. Set `0` to turn it off.
+- **Fields that show only when they apply.** A custom field can be set to
+  "Show only if…" an earlier Yes/No or Dropdown answer matches, or the person
+  is under an age you choose. Age is counted on the event's start date (or
+  the day of registration when there is none). Hidden fields are never
+  required, and an answer to a field the person was not shown is not saved.
+  Each extra family member on the form is checked on their own.
+- **Info texts on the registration form.** A new field type for a note from
+  the organiser that nobody fills in. Links work: paste an address, or write
+  `[wording](https://…)`. No HTML is interpreted. An info text with a
+  condition gets a column in People (on by default) and at check-in (off by
+  default) that reads "Applies" for the people it was meant for, and follows
+  later corrections to a date of birth or the event's start date.
+- **Custom fields can be reordered** with up and down arrows. A move that
+  would put a field above the field it depends on is refused with a message,
+  and a field others depend on cannot be deleted until that condition goes.
+  Conditions travel with backups, "Transfer settings from another event" and
+  the registration form export.
 
 ### Changed
 
@@ -27,6 +44,12 @@ Fixes found while bringing the manual up to date with the app.
 
 ### Fixed
 
+- **Deleting a custom field somebody has answered works.** It failed with a
+  server error; the field and its answers are now deleted together, as the
+  manual already said.
+- **Copying settings from another event keeps hidden custom fields hidden.**
+  A field kept off the public form (such as one created by a CSV import)
+  came back on the copy's public form.
 - **Group codes keep accented letters as plain ones.** Müller now gets
   `MULLER-…` instead of `MLLER-…`, García `GARCIA-…`.
 - **Re-importing a people export no longer creates an "Excluded From"
