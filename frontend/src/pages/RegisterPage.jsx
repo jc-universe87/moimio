@@ -147,12 +147,25 @@ function RegisterForm() {
     const updated = { ...formData, [name]: type === 'checkbox' ? checked : value };
     setFormData(updated);
     saveDraft({ formData: updated });
+    if (name === 'date_of_birth') dropHiddenFieldErrors(customValues, value);
   };
 
   const handleCustomChange = (fieldId, value) => {
     // v1.0.4zg: same clearing rule as every other field (2.7.3 of v1.0.4zf).
     clearFieldError(`cf_${fieldId}`);
     setCustomValues(prev => ({ ...prev, [fieldId]: value }));
+    dropHiddenFieldErrors({ ...customValues, [fieldId]: value }, formData.date_of_birth);
+  };
+
+  // v1.0.7: a field that has just been hidden takes its error mark with it,
+  // and the banner too if that was the last one. Otherwise "Which team?"
+  // stays marked after Teamer is switched to No, and the banner points at a
+  // field that is no longer on the page.
+  const dropHiddenFieldErrors = (values, dob) => {
+    const shown = shownFor(values, dob);
+    customFields
+      .filter(cf => !shown.has(cf.id) && fieldErrors[`cf_${cf.id}`])
+      .forEach(cf => clearFieldError(`cf_${cf.id}`));
   };
 
   const updatePref = (idx, field, value) => {
@@ -944,6 +957,12 @@ function RegisterForm() {
                     if (filled && fieldErrs[`cf_${cfId}`]) delete fieldErrs[`cf_${cfId}`];
                   });
                 }
+                // v1.0.7: and drop the mark of any field this change hid.
+                const nextEp = next[idx];
+                const epShownNow = shownFor(nextEp.customValues, nextEp.date_of_birth);
+                customFields.forEach(cf => {
+                  if (!epShownNow.has(cf.id)) delete fieldErrs[`cf_${cf.id}`];
+                });
                 errsCopy[idx] = fieldErrs;
                 setExtraPersonErrors(errsCopy);
               }

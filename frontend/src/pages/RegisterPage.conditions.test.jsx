@@ -5,7 +5,7 @@
  * shows to anyone under 18 on the event's start date. Same rendering and
  * network mocking as RegisterPage.test.jsx.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
@@ -66,6 +66,10 @@ const lastPostBody = () => {
 };
 
 describe('RegisterPage conditional fields', () => {
+  // The form keeps a draft in localStorage. Without this, one test's ticked
+  // consent box is restored into the next, and its own click unticks it.
+  beforeEach(() => { window.localStorage.clear(); });
+
   it('shows "Which team" only once Teamer is Yes', async () => {
     await renderForm();
     expect(teamInput()).toBeNull();
@@ -93,6 +97,21 @@ describe('RegisterPage conditional fields', () => {
     fireEvent.submit(document.querySelector('#register-form'));
     await waitFor(() => expect(teamInput().getAttribute('aria-invalid')).toBe('true'));
     expect(lastPostBody()).toBeNull();
+  });
+
+  it('drops the mark and the banner when the marked field is hidden again', async () => {
+    await renderForm();
+    fillValid();
+    fireEvent.click(teamerRadio(true));
+    fireEvent.submit(document.querySelector('#register-form'));
+    await waitFor(() => expect(teamInput().getAttribute('aria-invalid')).toBe('true'));
+    const banner = () => document.getElementById('register-error-banner').textContent.trim();
+    expect(banner()).not.toBe('');
+    fireEvent.click(teamerRadio(false));
+    await waitFor(() => expect(banner()).toBe(''));
+    // And it does not come back when the field does.
+    fireEvent.click(teamerRadio(true));
+    expect(teamInput().getAttribute('aria-invalid')).toBe('false');
   });
 
   it('shows the consent note, with its link, to someone under 18 on the start date', async () => {
