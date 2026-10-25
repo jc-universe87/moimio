@@ -6,6 +6,29 @@ import { useI18n } from '../hooks/useI18n';
 import { useToast } from '../hooks/useToast';
 
 import TranslatedError from './TranslatedError';
+import FieldConditionEditor, { conditionSummary } from './FieldConditionEditor';
+import { BUILTIN_KINDS, CUSTOM_KINDS, FORMATS, INFO } from '../utils/fieldConditions';
+
+// v1.0.7: info_text is the organiser's text for an info field; show_if is
+// the field's "show only if" rule, or null.
+// text_format is a text field's required format ('' for any text).
+const EMPTY_FIELD = { label: '', field_type: 'text', is_required: false, options: '', show_in_form: true, info_text: '', show_if: null, text_format: '' };
+
+// What the API takes for a field, from the builder's form state.
+const fieldPayload = (f) => {
+  const payload = {
+    label: f.label.trim(), field_type: f.field_type, show_in_form: f.show_in_form,
+    is_required: f.field_type === INFO ? false : f.is_required,
+    show_if: f.show_if,
+  };
+  if (f.field_type === 'select' && f.options.trim()) {
+    payload.options = f.options.split(',').map(o => o.trim()).filter(Boolean);
+  }
+  if (f.field_type === INFO) payload.info_text = f.info_text;
+  if (f.field_type === 'text') payload.text_format = f.text_format || null;
+  return payload;
+};
+
 export default function FormConfigPanel({ eventId, isAdmin }) {
   const [fields, setFields] = useState([]);
   const [customFieldList, setCustomFieldList] = useState([]);
@@ -13,9 +36,9 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
   const [showAddCustom, setShowAddCustom] = useState(false);
-  const [newField, setNewField] = useState({ label: '', field_type: 'text', is_required: false, options: '', show_in_form: true });
+  const [newField, setNewField] = useState({ ...EMPTY_FIELD });
   const [editingFieldId, setEditingFieldId] = useState(null);
-  const [editField, setEditField] = useState({ label: '', field_type: 'text', is_required: false, options: '', show_in_form: true });
+  const [editField, setEditField] = useState({ ...EMPTY_FIELD });
   const [loading, setLoading] = useState(true);
   // v1.0.1e-31: registration-form export/import menu
   const [ioMenuOpen, setIoMenuOpen] = useState(false);
@@ -41,7 +64,31 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
     { value: 'select', label: t('event.field.type.select') },
     { value: 'boolean', label: t('event.field.type.boolean') },
     { value: 'date', label: t('event.field.type.date') },
+    { value: INFO, label: t('event.field.type.info') },
   ];
+  const typeLabel = (type) => FIELD_TYPES.find(ft => ft.value === type)?.label || type;
+  // v1.0.7: what a condition can test. The built-in fields always sit above
+  // the custom ones; email is always on the form, the others only when
+  // switched on (or when a saved rule already uses one, so it still shows).
+  const BUILTIN_LABEL_KEYS = {
+    date_of_birth: 'register.dob', gender: 'register.gender', email: 'register.email',
+    phone: 'register.phone', address: 'register.address', country: 'register.country',
+    church_organisation: 'register.church',
+  };
+  const enabledBuiltins = new Set(['email', ...fields.filter(f => f.is_enabled).map(f => f.field_name)]);
+  const builtinSources = Object.keys(BUILTIN_KINDS).map(name => ({
+    id: name, label: t(BUILTIN_LABEL_KEYS[name]), kind: BUILTIN_KINDS[name], builtin: true,
+  }));
+  const customSources = (list) => list
+    .filter(cf => CUSTOM_KINDS[cf.field_type])
+    .map(cf => ({ id: cf.id, label: cf.label, kind: CUSTOM_KINDS[cf.field_type], choices: cf.options?.choices || [] }));
+  const sourcesFor = (above, rule) => {
+    const used = new Set((rule?.conditions || []).map(c => c.source));
+    return [
+      ...builtinSources.filter(s => enabledBuiltins.has(s.id) || used.has(s.id)),
+      ...customSources(above),
+    ];
+  };
 
   useEffect(() => { loadAll(); }, [eventId]);
 
@@ -144,12 +191,8 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
     e.preventDefault();
     if (!newField.label.trim()) return;
     try {
-      const payload = { label: newField.label.trim(), field_type: newField.field_type, is_required: newField.is_required, show_in_form: newField.show_in_form };
-      if (newField.field_type === 'select' && newField.options.trim()) {
-        payload.options = newField.options.split(',').map(o => o.trim()).filter(Boolean);
-      }
-      await cfApi.create(eventId, payload);
-      setNewField({ label: '', field_type: 'text', is_required: false, options: '', show_in_form: true });
+      await cfApi.create(eventId, fieldPayload(newField));
+      setNewField({ ...EMPTY_FIELD });
       setShowAddCustom(false);
       await loadAll();
     } catch (err) { setError(err); }
@@ -170,18 +213,30 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
       is_required: cf.is_required || false,
       show_in_form: cf.show_in_form !== false,  // default true if undefined (legacy)
       options: cf.options?.choices ? cf.options.choices.join(', ') : '',
+      info_text: cf.options?.text || '',
+      text_format: cf.options?.format || '',
+      show_if: cf.show_if || null,
     });
+  };
+
+  // v1.0.7: move a field one place up or down. The server refuses a move
+  // that would put a field above the field its rule depends on, and says so.
+  const handleMove = async (index, delta) => {
+    const target = index + delta;
+    if (target < 0 || target >= customFieldList.length) return;
+    const ids = customFieldList.map(cf => cf.id);
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    setError(null);
+    try {
+      setCustomFieldList(await cfApi.reorder(eventId, ids));
+    } catch (err) { setError(err); }
   };
 
   const handleUpdateCustom = async (e) => {
     e.preventDefault();
     if (!editField.label.trim()) return;
     try {
-      const payload = { label: editField.label.trim(), field_type: editField.field_type, is_required: editField.is_required, show_in_form: editField.show_in_form };
-      if (editField.field_type === 'select' && editField.options.trim()) {
-        payload.options = editField.options.split(',').map(o => o.trim()).filter(Boolean);
-      }
-      await cfApi.update(eventId, editingFieldId, payload);
+      await cfApi.update(eventId, editingFieldId, fieldPayload(editField));
       setEditingFieldId(null);
       await loadAll();
     } catch (err) { setError(err); }
@@ -307,7 +362,7 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
           <form onSubmit={handleAddCustom}
             className="p-4 space-y-2"
             style={{ borderBottom: '1px solid var(--card-border)' }}>
-            <input type="text" placeholder={`${t('event.field.label')} *`} value={newField.label}
+            <input type="text" placeholder={`${t(newField.field_type === INFO ? 'event.field.info_title' : 'event.field.label')} *`} value={newField.label}
               onChange={(e) => setNewField(p => ({ ...p, label: e.target.value }))} required
               className={inputClass} />
             <div className="grid grid-cols-2 gap-2">
@@ -322,6 +377,7 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
                   {FIELD_TYPES.map(ft => <option key={ft.value} value={ft.value}>{ft.label}</option>)}
                 </select>
               </div>
+              {newField.field_type !== INFO && (
               <div className="flex items-end">
                 <label className="flex items-center gap-1.5 text-xs cursor-pointer pb-1.5"
                   style={{ color: 'var(--text-muted)' }}>
@@ -331,12 +387,39 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
                   {t('event.field.required')}
                 </label>
               </div>
+              )}
             </div>
             {newField.field_type === 'select' && (
               <input type="text" placeholder={t('event.field.options')} value={newField.options}
                 onChange={(e) => setNewField(p => ({ ...p, options: e.target.value }))}
                 className={inputClass} />
             )}
+            {newField.field_type === INFO && (
+              <div>
+                <textarea rows={4} value={newField.info_text} placeholder={t('event.field.info_text')}
+                  aria-label={t('event.field.info_text')}
+                  onChange={e => setNewField(p => ({ ...p, info_text: e.target.value }))}
+                  className={`${inputClass} resize-y`} />
+                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-subtle)' }}>{t('event.field.info_text.hint')}</p>
+              </div>
+            )}
+            {newField.field_type === 'text' && (
+              <div>
+                <label className="block text-[10px] uppercase tracking-caps font-semibold mb-0.5"
+                  style={{ color: 'var(--text-subtle)' }}>
+                  {t('event.field.format')}
+                </label>
+                <select value={newField.text_format} onChange={e => setNewField(p => ({ ...p, text_format: e.target.value }))}
+                  className={inputClass}>
+                  <option value="">{t('event.field.format.any')}</option>
+                  {FORMATS.map(f => <option key={f} value={f}>{t(`event.field.format.${f}`)}</option>)}
+                </select>
+              </div>
+            )}
+            <FieldConditionEditor value={newField.show_if} sources={sourcesFor(customFieldList, newField.show_if)}
+              enabledBuiltins={enabledBuiltins}
+              onChange={rule => setNewField(p => ({ ...p, show_if: rule }))}
+              t={t} inputClass={inputClass} />
             <label className="flex items-center gap-1.5 text-xs cursor-pointer"
               style={{ color: 'var(--text-muted)' }}>
               <input type="checkbox" checked={newField.show_in_form}
@@ -381,6 +464,7 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
                           {FIELD_TYPES.map(ft => <option key={ft.value} value={ft.value}>{ft.label}</option>)}
                         </select>
                       </div>
+                      {editField.field_type !== INFO && (
                       <div className="flex items-end">
                         <label className="flex items-center gap-1.5 text-xs cursor-pointer pb-1.5"
                           style={{ color: 'var(--text-muted)' }}>
@@ -390,12 +474,39 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
                           {t('event.field.required')}
                         </label>
                       </div>
+                      )}
                     </div>
                     {editField.field_type === 'select' && (
                       <input type="text" placeholder={t('event.field.options')} value={editField.options}
                         onChange={e => setEditField(p => ({ ...p, options: e.target.value }))}
                         className={inputClass} />
                     )}
+                    {editField.field_type === INFO && (
+                      <div>
+                        <textarea rows={4} value={editField.info_text} placeholder={t('event.field.info_text')}
+                          aria-label={t('event.field.info_text')}
+                          onChange={e => setEditField(p => ({ ...p, info_text: e.target.value }))}
+                          className={`${inputClass} resize-y`} />
+                        <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-subtle)' }}>{t('event.field.info_text.hint')}</p>
+                      </div>
+                    )}
+                    {editField.field_type === 'text' && (
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-caps font-semibold mb-0.5"
+                          style={{ color: 'var(--text-subtle)' }}>
+                          {t('event.field.format')}
+                        </label>
+                        <select value={editField.text_format} onChange={e => setEditField(p => ({ ...p, text_format: e.target.value }))}
+                          className={inputClass}>
+                          <option value="">{t('event.field.format.any')}</option>
+                          {FORMATS.map(f => <option key={f} value={f}>{t(`event.field.format.${f}`)}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    <FieldConditionEditor value={editField.show_if} sources={sourcesFor(customFieldList.slice(0, i), editField.show_if)}
+                      enabledBuiltins={enabledBuiltins}
+                      onChange={rule => setEditField(p => ({ ...p, show_if: rule }))}
+                      t={t} inputClass={inputClass} />
                     {/* v0.86 #16: show_in_form toggle. Default true for fields
                         created via this panel; false for fields auto-created
                         by CSV import. Admins can flip it either way here. */}
@@ -427,8 +538,14 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
                           color: 'var(--text-subtle)',
                           background: 'rgba(0,0,0,0.05)',
                         }}>
-                        {cf.field_type}
+                        {typeLabel(cf.field_type)}
                       </span>
+                      {cf.field_type === 'text' && cf.options?.format && (
+                        <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded"
+                          style={{ color: 'var(--text-subtle)', background: 'rgba(0,0,0,0.05)' }}>
+                          {t(`event.field.format.${cf.options.format}`)}
+                        </span>
+                      )}
                       {cf.is_required && (
                         <span className="ml-1 text-[10px]" style={{ color: 'var(--alert-burgundy)' }}>
                           {t('common.required')}
@@ -451,9 +568,28 @@ export default function FormConfigPanel({ eventId, isAdmin }) {
                           {cf.options.choices.join(', ')}
                         </span>
                       )}
+                      {/* v1.0.7: the rule, in words. */}
+                      {cf.show_if && (
+                        <span className="block text-[11px] mt-0.5" style={{ color: 'var(--io-accent)' }}>
+                          {conditionSummary(cf.show_if, [...builtinSources, ...customSources(customFieldList)], t)}
+                        </span>
+                      )}
+                      {cf.field_type === INFO && cf.options?.text && (
+                        <span className="block text-[11px] mt-0.5 truncate" style={{ color: 'var(--text-subtle)' }}>
+                          {cf.options.text}
+                        </span>
+                      )}
                     </div>
                     {isAdmin && (
                       <div className="flex items-center gap-0.5 shrink-0">
+                        <button type="button" onClick={() => handleMove(i, -1)} disabled={i === 0}
+                          title={t('event.field.move_up')} aria-label={t('event.field.move_up')}
+                          className="w-7 h-7 flex items-center justify-center rounded-card text-xs hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-30"
+                          style={{ color: 'var(--text-muted)' }}>↑</button>
+                        <button type="button" onClick={() => handleMove(i, 1)} disabled={i === customFieldList.length - 1}
+                          title={t('event.field.move_down')} aria-label={t('event.field.move_down')}
+                          className="w-7 h-7 flex items-center justify-center rounded-card text-xs hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-30"
+                          style={{ color: 'var(--text-muted)' }}>↓</button>
                         <EditIconButton onClick={() => handleEditCustom(cf)} title={t('common.edit')} />
                         <DeleteIconButton onClick={() => handleDeleteCustom(cf.id)} title={t('common.delete')} />
                       </div>

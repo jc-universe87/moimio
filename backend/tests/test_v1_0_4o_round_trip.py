@@ -399,6 +399,15 @@ async def _build(db, extra_notes: bool = False) -> dict:
         db.add(cf)
         cfs[label] = cf
     await db.flush()
+    # v1.0.7: one rule of each shape. The second names the first by id, so
+    # a restore that copied it without translating would point back into
+    # the original event.
+    cfs["T-shirt size"].show_if = {"match": "all", "conditions": [
+        {"source": "date_of_birth", "op": "age_under", "value": 18}]}
+    cfs["Years attending"].show_if = {"match": "any", "conditions": [
+        {"source": "gender", "op": "one_of", "value": ["female"]},
+        {"source": str(cfs["T-shirt size"].id), "op": "one_of", "value": ["M"]}]}
+    await db.flush()
 
     db.add(CustomFieldValue(participant_id=people["anna@test.local"].id,
                             field_id=cfs["T-shirt size"].id, value="M"))
@@ -906,6 +915,17 @@ async def test_2_round_trip_is_faithful(db):
             )
         return out
 
+    def expect_show_if(rule):
+        if not rule:
+            return rule
+        labels = {str(c.id): c.label for c in before["custom_field_definitions"].values()}
+
+        def one(c):
+            if c["source"] not in labels:
+                return c  # a built-in field: nothing to translate
+            return {**c, "source": str(after["custom_field_definitions"][labels[c["source"]]].id)}
+        return {**rule, "conditions": [one(c) for c in rule["conditions"]]}
+
     def expect_settings(value):
         if not isinstance(value, dict):
             return value
@@ -1032,6 +1052,8 @@ async def test_2_round_trip_is_faithful(db):
             lambda r: after["participants"][before_email(r.participant_id)].id,
         ("custom_field_values", "field_id"):
             lambda r: after["custom_field_definitions"][before_cf(r.field_id)].id,
+        ("custom_field_definitions", "show_if"):
+            lambda r: expect_show_if(r.show_if),
         ("participant_preference_requests", "participant_id"):
             lambda r: after["participants"][before_email(r.participant_id)].id,
     }

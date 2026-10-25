@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { cfSortValue } from '../utils/customFieldSort';
+import { INFO, isColumnField } from '../utils/fieldConditions';
 import { normalizeSearch as norm } from '../services/searchNormalize';
 import { participants as participantsApi, customFields as cfApi, getToken } from '../services/api';
 import { useDateFormat } from '../hooks/useDateFormat';
@@ -297,6 +298,31 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
     cfApi.list(eventId).then(setCustomFieldDefs).catch(() => {});
   }, [eventId]);
 
+  // v1.0.7: an info text with a rule ("Parental consent" for under-18s) is
+  // ticked in the column picker the first time this user sees it. Which
+  // ones they have already been shown is remembered, so a column they
+  // switched off stays off.
+  const seenInfoKey = eventId && userId ? `moimio_people_info_cols_seen_${userId}_${eventId}` : null;
+  useEffect(() => {
+    const infoCols = customFieldDefs.filter(cf => cf.field_type === INFO && cf.show_if).map(cf => `cf_${cf.id}`);
+    if (!infoCols.length) return;
+    let seen = [];
+    try { seen = JSON.parse((seenInfoKey && localStorage.getItem(seenInfoKey)) || '[]'); } catch {}
+    const fresh = infoCols.filter(id => !seen.includes(id));
+    if (!fresh.length) return;
+    setVisibleCols(prev => {
+      const next = new Set(prev);
+      fresh.forEach(id => next.add(id));
+      if (colsStorageKey) {
+        try { localStorage.setItem(colsStorageKey, JSON.stringify([...next])); } catch {}
+      }
+      return next;
+    });
+    if (seenInfoKey) {
+      try { localStorage.setItem(seenInfoKey, JSON.stringify([...seen, ...fresh])); } catch {}
+    }
+  }, [customFieldDefs, seenInfoKey, colsStorageKey]);
+
   // Build available columns: built-ins that have data + all custom fields
   const availableColumns = useMemo(() => {
     const dataFieldIds = new Set();
@@ -310,7 +336,9 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
       col.always || col.default || !col.field || dataFieldIds.has(col.id)
     );
 
-    const customs = customFieldDefs.map(cf => ({
+    // v1.0.7: an info text without a rule gets no column (it applies to
+    // everyone and stores nothing).
+    const customs = customFieldDefs.filter(isColumnField).map(cf => ({
       id: `cf_${cf.id}`,
       label: cf.label,
       cfId: cf.id,
@@ -855,6 +883,13 @@ export default function PeopleTable({ eventId, userId, participantList, noteCoun
       if (!cfDef) {
         const val = p.custom_fields?.[col.cfId];
         return <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{val || '—'}</span>;
+      }
+      // v1.0.7: an info text's mark is worked out from the person's answers
+      // and date of birth, so it is shown, never edited.
+      if (cfDef.field_type === INFO) {
+        return p.custom_fields?.[cfDef.id]
+          ? <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('field.info.applies')}</span>
+          : <span className="text-xs" style={{ color: 'var(--text-subtle)' }}>—</span>;
       }
       return renderEditableCustomField(p, cfDef);
     }

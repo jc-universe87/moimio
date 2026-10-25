@@ -176,6 +176,11 @@ async def export_participants_csv(
         .order_by(CustomFieldDefinition.sort_order)
     )
     custom_fields: list[CustomFieldDefinition] = list(cf_result.scalars().all())
+    # v1.0.7: an info text without a rule applies to everyone and stores
+    # nothing, so a column for it would only ever be empty.
+    custom_fields = [
+        cf for cf in custom_fields if cf.field_type != "info" or cf.show_if is not None
+    ]
 
     # Header — fixed columns first, then a marks column, then custom
     # fields, then message. Allocation columns are deliberately dropped

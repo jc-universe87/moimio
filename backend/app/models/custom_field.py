@@ -23,7 +23,9 @@ class CustomFieldDefinition(Base):
     label: Mapped[str] = mapped_column(String(255), nullable=False)
     field_type: Mapped[str] = mapped_column(
         String(20), nullable=False, default="text"
-    )  # text | number | select | boolean | date
+    )  # text | number | select | boolean | date | info
+    # select: {"choices": [...]}. info: {"text": "..."}, the organiser's
+    # text, which nobody fills in.
     options: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     is_required: Mapped[bool] = mapped_column(default=False)
     # v0.85 #16: gates whether this field appears on the PUBLIC registration
@@ -36,11 +38,20 @@ class CustomFieldDefinition(Base):
     # setup UI later if they want it on the form too.
     show_in_form: Mapped[bool] = mapped_column(default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # v1.0.7: shown on the form only when an earlier answer matches.
+    # None means always shown. Shapes and rules: services/field_conditions.py.
+    show_if: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
-    values = relationship("CustomFieldValue", back_populates="field_definition", lazy="selectin")
+    # v1.0.7: deleting a field deletes its answers. Without the cascade the
+    # ORM tried to blank their field_id, which is NOT NULL, so deleting any
+    # field somebody had answered failed with a server error.
+    values = relationship(
+        "CustomFieldValue", back_populates="field_definition", lazy="selectin",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return f"<CustomFieldDefinition {self.label} ({self.field_type})>"

@@ -16,6 +16,9 @@ from app.core.urls import get_app_base_url
 from app.models.user import User, UserRole
 from app.models.participant import RegistrationStatus
 from app.models.custom_field import CustomFieldDefinition
+from app.services.field_conditions import (
+    filter_answers, format_errors, load_defs, person_of, reference_date,
+)
 from app.schemas.participant import (
     ParticipantRegister, ParticipantUpdate, ParticipantResponse,
     GroupCodeUpdate, CheckInRequest,
@@ -124,6 +127,20 @@ async def public_register(
     # Check if event requires email confirmation
     event_settings = event.settings or {}
     require_confirmation = event_settings.get("require_email_confirmation", False)
+
+    # v1.0.7: answers must fit their field's format (phone, email, digits),
+    # checked on what will actually be stored, so a hidden field's leftover
+    # answer can never block a registration.
+    defs = await load_defs(db, event_id)
+    kept = filter_answers(
+        defs, data.custom_fields, person_of(data), reference_date(event.start_date),
+    )
+    bad = format_errors(defs, kept, data.phone)
+    if bad:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"key": "errors.validation.summary", "params": {}, "fields": bad},
+        )
 
     participant = await register_participant(
         db, event_id, data, require_confirmation=require_confirmation

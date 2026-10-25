@@ -79,9 +79,10 @@ Todo formulário também tem um campo opcional **Mensagem aos organizadores** (p
 Para o que os campos padrão não cobrem, clique em **+ Adicionar campo**, em **Campos personalizados**. Escolha:
 
 - **Nome do campo**: o que a pessoa vê ("Tamanho da camiseta", "Você já veio antes?").
-- **Tipo**: **Texto**, **Número**, **Lista suspensa**, **Sim/Não** ou **Data**.
+- **Tipo**: **Texto**, **Número**, **Lista suspensa**, **Sim/Não**, **Data** ou **Texto informativo**.
 - **Obrigatório**: se o campo precisa ser preenchido.
 - **Opções**: para **Lista suspensa**, as alternativas separadas por vírgula (por exemplo, `S, M, L, XL`).
+- **Formato**: para **Texto**, opcionalmente **Número de telefone**, **Endereço de e-mail** ou **Somente dígitos**. O formulário então recusa uma resposta que não se encaixe, no idioma de quem se inscreve. A verificação é propositalmente flexível: um número de telefone precisa ter de 6 a 15 dígitos e pode conter espaços, `+`, `-`, `/` e parênteses. O campo padrão **Telefone** é sempre verificado assim.
 - **Mostrar no formulário de registro**: desmarque para um campo que só a sua equipe preenche (ele continua aparecendo na tabela Participantes).
 
 Clique em **Adicionar campo personalizado** para salvar.
@@ -97,6 +98,28 @@ Campos personalizados comuns:
 Os campos personalizados pertencem a um único evento: adicionar "Tamanho da camiseta" aqui não o adiciona aos seus outros eventos. Você pode editar ou excluir um campo depois que as inscrições começaram, mas **excluir um campo também exclui todas as respostas já dadas a ele**.
 
 > **Reaproveitar um formulário.** O menu **⋯** no topo do cartão tem **Exportar formulário** e **Importar formulário**, para você salvar um formulário em um arquivo e carregá-lo em outro evento (ou em outra instalação do Moimio). A importação nunca duplica campos que você já tem.
+
+#### Textos informativos
+
+Um **Texto informativo** é um aviso seu no formulário, como instruções de como chegar ou um lembrete. Ninguém preenche, então ele não tem a caixa **Obrigatório**. Dê a ele um título e o texto. As quebras de linha são mantidas. Para um link, cole o endereço da web ou escreva `[texto do link](https://example.org/formulario.pdf)` para mostrar suas próprias palavras. Os links abrem em uma nova aba.
+
+#### Mostrar um campo só quando ele se aplica
+
+Marque **Mostrar somente se…** em um campo para que ele apareça só quando as condições dele forem atendidas. Cada condição verifica um campo:
+
+- um campo padrão: **Data de nascimento** (a idade é menor que, pelo menos ou exatamente um número de anos, calculada na data de início do evento, ou no dia do registro se o evento não tiver data de início), **Gênero**, **E-mail**, **Telefone**, **Endereço**, **País** ou **Igreja / Organização**. Os campos padrão ficam sempre acima dos seus campos personalizados, então qualquer campo personalizado pode usá-los. Exceto o e-mail, que está sempre no formulário, eles precisam estar ativados acima.
+- um campo personalizado acima deste: **Sim/Não** (é Sim ou Não), **Lista suspensa** (é uma, ou não é nenhuma, das opções marcadas), **Texto** (é exatamente, contém, não contém), **Número** (é exatamente, é maior que, é menor que) ou **Data** (é antes de, é depois de, é em).
+- qualquer campo também pode ser verificado com **está vazio** ou **está preenchido**. Exemplo: "Telefone está vazio" mostra "Como mais podemos falar com você?".
+
+As comparações de texto ignoram maiúsculas e espaços extras, então "Deutschland" corresponde a " deutschland". **Contém** também encontra partes de palavras: "Igreja" corresponde a "Igrejas". Exceto **está vazio**, uma condição só é atendida depois que o campo foi respondido.
+
+Clique em **+ Adicionar condição** para incluir mais, e escolha **Mostrar se todas forem verdadeiras** ou **Mostrar se pelo menos uma for verdadeira**. Exemplo: de 12 a 17 anos são "a idade é pelo menos 12" e "a idade é menor que 18", todas verdadeiras.
+
+Um campo oculto nunca é obrigatório, e uma resposta digitada antes de o campo voltar a ficar oculto não é salva. Em uma inscrição familiar, cada pessoa adicional é verificada separadamente: uma jovem de 15 anos vê o aviso para menores de 18, o pai dela não.
+
+Um **Texto informativo** com condição também ganha uma coluna em **Participantes** (marcada desde o início) e no **Check-in** (ative em **Colunas**). Ela mostra **Aplica-se** para todas as pessoas a quem o aviso se destinava, para a recepção ver quem precisa trazer, por exemplo, uma autorização assinada. Se você corrigir a data de nascimento de alguém ou mudar a data de início do evento, a coluna acompanha.
+
+Use **↑** e **↓** para mudar a ordem dos seus campos personalizados. Um campo só pode depender de um campo acima dele, então uma mudança de ordem que quebraria isso é recusada com uma mensagem. Pelo mesmo motivo, um campo do qual outro depende só pode ser excluído depois que essa condição for removida.
 
 ### Códigos de grupo: famílias e amigos juntos
 

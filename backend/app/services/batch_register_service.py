@@ -4,13 +4,17 @@ import csv
 import io
 import re
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import select, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.custom_field import CustomFieldDefinition
+from app.models.event import Event
 from app.models.participant import Participant
+from app.services.field_conditions import (
+    BUILTIN_KINDS, INFO, field_format, fits_format, ordered, reference_date, rule_met,
+)
 
 # Fields that appear in every event's CSV template (fixed columns)
 FIXED_COLUMNS = [
@@ -318,6 +322,7 @@ def _validate_row(
     existing_emails: set[str],
     *,
     dob_format: str = "eu",  # v1.0.0o
+    ref_date: date | None = None,  # v1.0.7: the event's start date
 ) -> dict:
     """
     Validate a single CSV row.
@@ -402,8 +407,21 @@ def _validate_row(
         warnings.append("gdpr_consent_false")
 
     # ── Custom fields ─────────────────────────────────────────────────────────
+    # v1.0.7: in form order, with the form's rules. An info text is never
+    # an answer, so its column is ignored. A field whose rule does not apply
+    # to this row is ignored too, required or not, exactly as the form
+    # would not have shown it.
     custom_data: dict[str, str] = {}
-    for cf in custom_fields:
+    source_types = {str(cf.id): cf.field_type for cf in custom_fields}
+    person = {name: data.get(name) for name in BUILTIN_KINDS}
+    for cf in ordered(custom_fields):
+        if cf.field_type == INFO:
+            continue
+        if not rule_met(
+            cf.show_if, answers=custom_data, source_types=source_types,
+            person=person, ref_date=reference_date(ref_date),
+        ):
+            continue
         col_key = f"cf:{cf.id}"  # CSV column header format: cf:<uuid>
         raw_val = raw.get(col_key, "").strip()
 
@@ -438,6 +456,11 @@ def _validate_row(
             if options and raw_val not in options:
                 errors.append(f"invalid_option:{cf.label}:{raw_val}")
                 continue
+
+        # v1.0.7: a text field with a format (phone, email, digits).
+        elif not fits_format(field_format(cf), raw_val):
+            errors.append(f"invalid_format:{cf.label}")
+            continue
 
         custom_data[str(cf.id)] = raw_val
 
@@ -477,6 +500,9 @@ async def parse_csv(
         .order_by(CustomFieldDefinition.sort_order)
     )
     custom_fields: list[CustomFieldDefinition] = list(result.scalars().all())
+    event_start = (await db.execute(
+        select(Event.start_date).where(Event.id == event_id)
+    )).scalar_one_or_none()
 
     # Load existing participant emails for duplicate detection
     email_result = await db.execute(
@@ -527,7 +553,7 @@ async def parse_csv(
             continue
         validated = _validate_row(
             row_num, remapped, custom_fields, seen_emails, existing_emails,
-            dob_format=dob_format,
+            dob_format=dob_format, ref_date=event_start,
         )
         rows.append(validated)
         # Capture this row's values for unknown columns; the commit
@@ -582,6 +608,8 @@ def generate_template(custom_fields: list[CustomFieldDefinition]) -> str:
     template demonstrates.
     """
     output = io.StringIO()
+    # v1.0.7: an info text is nothing anybody fills in, so it has no column.
+    custom_fields = [cf for cf in custom_fields if cf.field_type != INFO]
     cf_columns = [f"cf:{cf.id}" for cf in custom_fields]
     fieldnames = FIXED_COLUMNS + cf_columns
 

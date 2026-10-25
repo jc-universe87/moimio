@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { cfSortValue } from '../utils/customFieldSort';
+import { INFO, isColumnField } from '../utils/fieldConditions';
 import { normalizeSearch as norm } from '../services/searchNormalize';
 import { participants as participantsApi, checkin as checkinApi, customFields as cfApi } from '../services/api';
 import { useDateFormat } from '../hooks/useDateFormat';
@@ -178,7 +179,11 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
 
   // Custom reg fields: show all that are defined for this event, regardless
   // of whether any participant has supplied a value yet.
-  const availableCfCols = useMemo(() => customFieldDefs, [customFieldDefs]);
+  // v1.0.7: an info text without a rule says nothing about anybody, so it
+  // gets no column. One with a rule does, off until the desk switches it on.
+  const availableCfCols = useMemo(() => customFieldDefs.filter(isColumnField), [customFieldDefs]);
+  // An info text's stored value is its "applies" mark, not an answer.
+  const cfDisplay = (cf, val) => (cf.field_type === INFO ? t('field.info.applies') : val);
 
   const handleAddField = async (e) => {
     e.preventDefault();
@@ -780,7 +785,7 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
                     if (col.regCol) return <td key={col.id} className="px-4 py-2">{renderRegCell(p, col.regCol)}</td>;
                     if (col.cfField) return (
                       <td key={col.id} className="px-4 py-2">
-                        <span className="text-muted text-xs">{p.custom_fields?.[col.cfField.id] || '—'}</span>
+                        <span className="text-muted text-xs">{p.custom_fields?.[col.cfField.id] ? cfDisplay(col.cfField, p.custom_fields[col.cfField.id]) : '—'}</span>
                       </td>
                     );
                     if (col.id === 'notes') return (
@@ -996,7 +1001,7 @@ export default function CheckInPanel({ eventId, userId, participantList, isAdmin
                           style={{ color: 'var(--text-subtle)' }}>
                           {cf.label}:
                         </span>
-                        <span>{val}</span>
+                        <span>{cfDisplay(cf, val)}</span>
                       </span>
                     );
                   })}

@@ -11,6 +11,7 @@ from app.models.user import UserRole
 from app.models.user_preferences import UserPreferences
 from app.schemas.event import EventCreate, EventUpdate, FieldConfigItem
 from app.services.allocation_service import create_default_categories
+from app.services.field_conditions import refresh_event_info_marks, remap_rule
 from app.services.webhook_service import queue_event
 
 # Default optional fields that can be toggled per event
@@ -161,10 +162,15 @@ async def update_event(db: AsyncSession, event: Event, data: EventUpdate) -> Eve
         if touched_reg and "registration_confirmed" not in update_data:
             update_data["registration_confirmed"] = False
 
+    start_changed = "start_date" in update_data and update_data["start_date"] != event.start_date
     for key, value in update_data.items():
         setattr(event, key, value)
     db.add(event)
     await db.flush()
+    # v1.0.7: "under 18" is counted on the start date, so moving it can
+    # change who an info text applies to.
+    if start_changed:
+        await refresh_event_info_marks(db, event.id)
     await db.refresh(event)
     return event
 
@@ -407,14 +413,22 @@ async def duplicate_event_config(
         cf_res = await db.execute(
             select(CustomFieldDefinition).where(CustomFieldDefinition.event_id == source_event_id)
         )
-        for cf in cf_res.scalars().all():
+        # v1.0.7: rules name their source field by id, so each copy gets its
+        # id up front and the rules are pointed at the copies.
+        source_cfs = list(cf_res.scalars().all())
+        cf_id_map = {str(cf.id): uuid.uuid4() for cf in source_cfs}
+        for cf in source_cfs:
             db.add(CustomFieldDefinition(
+                id=cf_id_map[str(cf.id)],
                 event_id=dest_event_id,
                 label=cf.label,
                 field_type=cf.field_type,
                 options=cf.options,
                 is_required=cf.is_required,
                 sort_order=cf.sort_order,
+                # A field kept off the public form stays off it in the copy.
+                show_in_form=cf.show_in_form,
+                show_if=remap_rule(cf.show_if, cf_id_map),
             ))
 
     # ─── Allocation categories + units ────────────────────────────────
