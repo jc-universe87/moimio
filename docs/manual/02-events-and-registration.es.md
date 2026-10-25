@@ -109,11 +109,11 @@ Marca **Mostrar solo si…** en un campo para que aparezca solo cuando se cumpla
 
 - un campo estándar: **Fecha de nacimiento** (la edad es menor de, al menos o exactamente un número de años, calculada en la fecha de inicio del evento, o el día del registro si el evento no tiene fecha de inicio), **Género**, **Correo electrónico**, **Teléfono**, **Dirección**, **País** o **Iglesia / organización**. Los campos estándar siempre están encima de tus campos personalizados, así que cualquier campo personalizado puede usarlos. Salvo el correo electrónico, que siempre está en el formulario, tienen que estar activados arriba.
 - un campo personalizado que esté arriba: **Sí/No** (es Sí o No), **Lista desplegable** (es uno de, o no es ninguno de, las opciones que marques), **Texto** (es exactamente, contiene, no contiene), **Número** (es exactamente, es mayor que, es menor que) o **Fecha** (es antes del, es después del, es el).
-- cualquier campo también se puede comprobar con **está vacío** o **está rellenado**. Ejemplo: «Teléfono está vacío» muestra «¿Cómo podemos contactarte si no?».
+- cualquier campo también se puede comprobar con **está vacío** o **está completado**. Ejemplo: «Teléfono está vacío» muestra «¿Cómo podemos contactarte si no?».
 
 Las comparaciones de texto ignoran mayúsculas y espacios de más, así que «Deutschland» coincide con « deutschland». **Contiene** también encuentra partes de palabras: «Iglesia» coincide con «Iglesias». Salvo **está vacío**, una condición solo se cumple cuando el campo ya tiene respuesta.
 
-Haz clic en **+ Añadir condición** para añadir más, y elige **Mostrar si se cumplen todas** o **Mostrar si se cumple al menos una**. Ejemplo: de 12 a 17 años son «la edad es al menos 12» y «la edad es menor de 18», y deben cumplirse todas.
+Haz clic en **+ Añadir condición** para añadir más, y elige **Mostrar solo si se cumplen todas las condiciones** o **Mostrar si se cumple al menos una condición**. Ejemplo: de 12 a 17 años son «la edad es de al menos 12» y «la edad es inferior a 18», y deben cumplirse todas.
 
 Un campo oculto nunca es obligatorio, y una respuesta escrita antes de que el campo volviera a ocultarse no se guarda. En una inscripción familiar, cada persona adicional se comprueba por separado: una chica de 15 años ve la nota para menores de 18, su padre no.
 

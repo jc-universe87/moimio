@@ -113,7 +113,7 @@ Tick **Show only if…** on a field to show it only when its conditions are met.
 
 Text comparisons ignore capital letters and extra spaces, so "Deutschland" matches " deutschland". **Contains** also matches inside words: "Kirche" matches "Kirchengemeinde". Apart from **is empty**, a condition is only met once the field has been answered.
 
-Click **+ Add condition** for more than one, then choose **Show if all of these are true** or **Show if any one of these is true**. Example: ages 12 to 17 are "age is at least 12" and "age is under 18", with all of them true.
+Click **+ Add condition** for more than one, then choose **Show only if all conditions are met** or **Show if at least one condition is met**. Example: ages 12 to 17 are "age is at least 12" and "age is under 18", with all of them true.
 
 A hidden field is never required, and an answer typed before the field was hidden again is not saved. Each extra person on a family registration is checked on their own: a 15-year-old sees the note for under-18s, their parent does not.
 

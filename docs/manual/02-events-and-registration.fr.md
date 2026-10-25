@@ -113,7 +113,7 @@ Cochez **Afficher uniquement si…** sur un champ pour qu’il n’apparaisse qu
 
 Les comparaisons de texte ignorent les majuscules et les espaces en trop : « Deutschland » correspond donc à « deutschland ». **Contient** trouve aussi des parties de mots : « Église » correspond à « Églises ». Sauf **est vide**, une condition n’est remplie qu’une fois le champ renseigné.
 
-Cliquez sur **+ Ajouter une condition** pour en ajouter d’autres, puis choisissez **Afficher si toutes sont remplies** ou **Afficher si au moins une est remplie**. Exemple : de 12 à 17 ans, c’est « l’âge est d’au moins 12 » et « l’âge est inférieur à 18 », toutes remplies.
+Cliquez sur **+ Ajouter une condition** pour en ajouter d’autres, puis choisissez **Afficher seulement si toutes les conditions sont remplies** ou **Afficher si au moins une condition est remplie**. Exemple : de 12 à 17 ans, c’est « l’âge est d’au moins 12 » et « l’âge est inférieur à 18 », toutes remplies.
 
 Un champ masqué n’est jamais obligatoire, et une réponse saisie avant que le champ ne soit de nouveau masqué n’est pas enregistrée. Dans une inscription familiale, chaque personne supplémentaire est vérifiée séparément : une jeune de 15 ans voit la note destinée aux mineurs, son père non.
 

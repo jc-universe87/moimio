@@ -113,7 +113,7 @@ Marque **Mostrar somente se…** em um campo para que ele apareça só quando as
 
 As comparações de texto ignoram maiúsculas e espaços extras, então "Deutschland" corresponde a " deutschland". **Contém** também encontra partes de palavras: "Igreja" corresponde a "Igrejas". Exceto **está vazio**, uma condição só é atendida depois que o campo foi respondido.
 
-Clique em **+ Adicionar condição** para incluir mais, e escolha **Mostrar se todas forem verdadeiras** ou **Mostrar se pelo menos uma for verdadeira**. Exemplo: de 12 a 17 anos são "a idade é pelo menos 12" e "a idade é menor que 18", todas verdadeiras.
+Clique em **+ Adicionar condição** para incluir mais, e escolha **Mostrar somente se todas as condições forem atendidas** ou **Mostrar se pelo menos uma condição for atendida**. Exemplo: de 12 a 17 anos são "a idade é de pelo menos 12" e "a idade é inferior a 18", todas verdadeiras.
 
 Um campo oculto nunca é obrigatório, e uma resposta digitada antes de o campo voltar a ficar oculto não é salva. Em uma inscrição familiar, cada pessoa adicional é verificada separadamente: uma jovem de 15 anos vê o aviso para menores de 18, o pai dela não.
 
