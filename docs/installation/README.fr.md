@@ -95,4 +95,4 @@ Vous venez du service hébergé ou d’un autre serveur ? Voir [Moving a worksp
 
 Ensuite, le [manuel d’utilisation](../manual/README.fr.md) explique comment organiser concrètement un événement : créer des événements, paramétrer les inscriptions, lancer le moteur de répartition, faire le check-in, exporter les listes.
 
-Si vous rencontrez des problèmes pendant l’installation, les sections de dépannage en bas de chaque guide couvrent les pannes courantes. Pour tout ce qui sort de l’ordinaire, [ouvrez un rapport de bug](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md).
+Si vous rencontrez des problèmes pendant l’installation, les sections de dépannage en bas de chaque guide couvrent les pannes courantes. Pour tout ce qui sort de l’ordinaire, [ouvrez un rapport de bug](https://github.com/pistio/moimio/issues/new?template=bug_report.md).

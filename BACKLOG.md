@@ -3648,7 +3648,7 @@ on:
 ```
 
 It logs in to GHCR (`:65-70`), builds `./backend` and `./frontend` (`:55-59`,
-`:90-93`) and pushes to `ghcr.io/jc-universe87/moimio-backend` and
+`:90-93`) and pushes to `ghcr.io/pistio/moimio-backend` and
 `-frontend` (`:14-15`). Tagging rules (`:81-83`): `sha-<short>` on every push,
 `main` on a push to main, and **the tag's own name on a `v*` tag push.** A
 `checks` job gates it (`:38-49`), running the i18n validator and the
@@ -4841,7 +4841,7 @@ non-markers: `package.json` `"version": "0.1.0"` (unread), `SECURITY.md:78`
 **Severity:** Low for hosted, medium for a self-hoster using the file directly.
 
 **What is wrong.** `backend/deploy/production.yml:51` and `:118` pin
-`ghcr.io/jc-universe87/moimio-backend:v1.0.5` and `…-frontend:v1.0.5`, after
+`ghcr.io/pistio/moimio-backend:v1.0.5` and `…-frontend:v1.0.5`, after
 v1.0.6 shipped. The file's own comment (`:22-24`) says the pins match "the CE
 release this template was bundled with". The pin was last bumped in the
 `v1.0.5` release commit and is not among the markers `scripts/bump-version.py`

@@ -58,4 +58,4 @@ Drei Stellen, an denen du nachsehen kannst:
 - **[Glossar](../glossary.md)** (auf Englisch) – Erklärungen Moimio-spezifischer Begriffe (Cluster, Markierung, Gruppencode usw.).
 - **Die automatisch erzeugte API-Dokumentation** unter `http://localhost:6121/docs` (oder wo auch immer dein Backend läuft) – für Entwickler, die gegen die API programmieren.
 
-Wenn nichts davon hilft, [eröffne ein Issue](https://github.com/jc-universe87/moimio/issues/new?template=feature_request.md) – „Das Handbuch hat X nicht erklärt“ ist ein völlig berechtigter Wunsch und genau die Art Rückmeldung, die die Doku besser macht.
+Wenn nichts davon hilft, [eröffne ein Issue](https://github.com/pistio/moimio/issues/new?template=feature_request.md) – „Das Handbuch hat X nicht erklärt“ ist ein völlig berechtigter Wunsch und genau die Art Rückmeldung, die die Doku besser macht.

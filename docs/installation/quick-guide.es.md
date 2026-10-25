@@ -31,7 +31,7 @@ Si `docker compose version` falla, tienes el antiguo Compose independiente. Inst
 ## 1. Clonar y configurar
 
 ```bash
-git clone https://github.com/jc-universe87/moimio.git
+git clone https://github.com/pistio/moimio.git
 cd moimio
 cp .env.example .env
 ```
@@ -197,7 +197,7 @@ Las migraciones se ejecutan automáticamente al arrancar el backend: no hace fal
 
 ### Imágenes de contenedor
 
-Esta guía construye las imágenes a partir del código fuente. Cada versión se publica también como `ghcr.io/jc-universe87/moimio-backend:<tag>` y `ghcr.io/jc-universe87/moimio-frontend:<tag>` (por ejemplo, `v1.0.6`). Si las usas, fija siempre una etiqueta de versión: `:latest` está congelada en v1.0.6, ya no avanza y no tiene soporte. `backend/deploy/production.yml` es la plantilla del servicio alojado, no un archivo compose para instalaciones propias; usa el `docker-compose.yml` de la raíz.
+Esta guía construye las imágenes a partir del código fuente. Cada versión se publica también como `ghcr.io/pistio/moimio-backend:<tag>` y `ghcr.io/pistio/moimio-frontend:<tag>` (por ejemplo, `v1.0.6`). Si las usas, fija siempre una etiqueta de versión: `:latest` está congelada en v1.0.6, ya no avanza y no tiene soporte. `backend/deploy/production.yml` es la plantilla del servicio alojado, no un archivo compose para instalaciones propias; usa el `docker-compose.yml` de la raíz.
 
 ---
 
@@ -301,7 +301,7 @@ El contenedor del frontend sirve la página y redirige `/api/*` al contenedor de
 `POSTGRES_PASSWORD` se cambió después de crear por primera vez el volumen de la base de datos; Postgres conserva la original. Vuelve a poner la contraseña antigua en `.env` o cámbiala dentro de la base de datos (`docker compose exec db psql -U moimio -c "ALTER USER moimio PASSWORD '<new>'"`) y reinicia.
 
 **Cualquier otra cosa.**
-Abre un [informe de error](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md) con los registros pertinentes (oculta antes cualquier dato de participantes).
+Abre un [informe de error](https://github.com/pistio/moimio/issues/new?template=bug_report.md) con los registros pertinentes (oculta antes cualquier dato de participantes).
 
 ---
 

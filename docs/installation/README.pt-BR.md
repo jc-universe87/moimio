@@ -95,4 +95,4 @@ Está vindo do serviço hospedado ou de outro servidor? Veja [Moving a workspace
 
 A partir daí, o [Manual do usuário](../manual/README.pt-BR.md) mostra como organizar um evento na prática: criar eventos, configurar as inscrições, rodar o motor de atribuição, fazer o check-in, exportar listas.
 
-Se você tiver problemas na instalação, as seções de solução de problemas no fim de cada guia tratam das falhas mais comuns. Para qualquer coisa mais estranha que isso, [abra um relatório de bug](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md).
+Se você tiver problemas na instalação, as seções de solução de problemas no fim de cada guia tratam das falhas mais comuns. Para qualquer coisa mais estranha que isso, [abra um relatório de bug](https://github.com/pistio/moimio/issues/new?template=bug_report.md).

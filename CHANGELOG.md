@@ -8,8 +8,10 @@ This is the public, user-facing changelog. Detailed per-development-iteration hi
 
 ---
 
-## [Unreleased]
-Fixes found while bringing the manual up to date with the app.
+## [1.0.7] — 2026-10-25
+Registration fields that show only when they apply, info texts for
+registrants, checked phone numbers, and fields you can reorder. Plus the
+fixes found while bringing the manual up to date with the app.
 
 ### Added
 
@@ -85,6 +87,19 @@ Fixes found while bringing the manual up to date with the app.
   applies; raise it if many people register over one Wi-Fi at once.
 - **`VITE_API_URL` is gone** from `.env.example` and `docker-compose.yml`.
   Nothing read it. You can delete the line from your `.env`.
+- **The images have a new address: `ghcr.io/pistio/moimio-backend` and
+  `ghcr.io/pistio/moimio-frontend`.** The GitHub account behind Moimio is now
+  `pistio`, and the old `ghcr.io/jc-universe87/…` names no longer answer, for
+  any version. If you run the ready-made images, change the two `image:` lines
+  in your compose file (as in `backend/deploy/production.yml`) before you
+  upgrade. If you build from source, point your clone at
+  `https://github.com/pistio/moimio.git` with `git remote set-url origin`.
+- **One database change applies itself** on the first start of the new image
+  (a "show only if" rule on each custom field). Nothing to run by hand; take
+  your usual backup first, as with any upgrade.
+- **The public form now checks phone numbers.** An answer with letters in it,
+  such as "ring my mum" or "0171 2345678 (mobile)", is refused with a message
+  in the registrant's language. Imports and edits in People are not checked.
 
 ## [1.0.6] — 2026-09-19
 A link to your own privacy notice on the registration form, and a legal notice

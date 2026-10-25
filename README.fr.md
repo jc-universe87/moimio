@@ -155,7 +155,7 @@ Installez **Moimio CE** (Community Edition, ce dépôt) sur un petit serveur lou
 Il vous faut une machine avec [Docker](https://docs.docker.com/get-docker/) et Docker Compose.
 
 ```bash
-git clone https://github.com/jc-universe87/moimio.git
+git clone https://github.com/pistio/moimio.git
 cd moimio
 cp .env.example .env        # puis modifiez SECRET_KEY et POSTGRES_PASSWORD
 docker compose up -d --build
@@ -179,7 +179,7 @@ Pour le HTTPS, l’e-mail, les sauvegardes et la sécurisation, suivez le **[gui
 ./upgrade.sh v1.0.6    # ou passer à une version précise (voir CHANGELOG.md)
 ```
 
-**Images de conteneur.** Chaque version est publiée sous `ghcr.io/jc-universe87/moimio-backend:<version>` et `ghcr.io/jc-universe87/moimio-frontend:<version>`, par exemple `v1.0.6`. Fixez toujours une version. Le tag `:latest` est figé sur v1.0.6, n’évolue plus et n’est pas pris en charge.
+**Images de conteneur.** Chaque version est publiée sous `ghcr.io/pistio/moimio-backend:<version>` et `ghcr.io/pistio/moimio-frontend:<version>`, par exemple `v1.0.6`. Fixez toujours une version. Le tag `:latest` est figé sur v1.0.6, n’évolue plus et n’est pas pris en charge.
 
 </details>
 
@@ -225,13 +225,13 @@ Pour en savoir plus : [Conformité RGPD](docs/gdpr-compliance.md) (en anglais).
 
 Tickets, idées et pull requests sont les bienvenus, de la part de tout le monde.
 
-- **Vous avez trouvé un bug ou vous avez une idée ?** [Ouvrez un ticket](https://github.com/jc-universe87/moimio/issues/new/choose). Les modèles vous guideront.
+- **Vous avez trouvé un bug ou vous avez une idée ?** [Ouvrez un ticket](https://github.com/pistio/moimio/issues/new/choose). Les modèles vous guideront.
 - **« Le manuel n’explique pas X »** est aussi un très bon ticket.
 - **Vous voulez proposer du code ?** Lisez d’abord [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Vous savez traduire ?** Consultez [TRANSLATION_RULE.md](TRANSLATION_RULE.md).
 
 Ce projet suit un [code de conduite](CODE_OF_CONDUCT.md). Pour tout problème de conduite : `contact@moimio.app`.
-Problèmes de sécurité : merci d’utiliser le [signalement privé de vulnérabilités](https://github.com/jc-universe87/moimio/security/advisories/new) (voir [SECURITY.md](SECURITY.md)), et non un ticket public.
+Problèmes de sécurité : merci d’utiliser le [signalement privé de vulnérabilités](https://github.com/pistio/moimio/security/advisories/new) (voir [SECURITY.md](SECURITY.md)), et non un ticket public.
 
 <details>
 <summary><b>Pile technique</b></summary>
@@ -255,7 +255,7 @@ Problèmes de sécurité : merci d’utiliser le [signalement privé de vulnér
 Moimio CE est développé et maintenu par une seule personne sur son temps libre, et il est gratuit pour toujours. S’il épargne à votre équipe un week-end de tableurs, pensez à dire merci :
 
 <p>
-  <a href="https://github.com/sponsors/jc-universe87"><img src="https://img.shields.io/badge/GitHub%20Sponsors-♥-ea4aaa?logo=github" alt="GitHub Sponsors"></a>
+  <a href="https://github.com/sponsors/pistio"><img src="https://img.shields.io/badge/GitHub%20Sponsors-♥-ea4aaa?logo=github" alt="GitHub Sponsors"></a>
   <a href="https://ko-fi.com/pistio"><img src="https://img.shields.io/badge/Ko--fi-support-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 </p>
 
@@ -263,7 +263,7 @@ Moimio CE est développé et maintenu par une seule personne sur son temps libre
 
 ## 🔗 Liens
 
-[Produit hébergé](https://moimio.app) · [Code source](https://github.com/jc-universe87/moimio) · [Tickets](https://github.com/jc-universe87/moimio/issues) · [Journal des modifications](CHANGELOG.md)
+[Produit hébergé](https://moimio.app) · [Code source](https://github.com/pistio/moimio) · [Tickets](https://github.com/pistio/moimio/issues) · [Journal des modifications](CHANGELOG.md)
 
 ## 📄 Licence
 

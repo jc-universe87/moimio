@@ -218,7 +218,7 @@ Este passo é igual, seja no VPS ou na hospedagem própria. O terminal em que vo
 ### 4.1 Baixe o código
 
 ```bash
-git clone https://github.com/jc-universe87/moimio.git
+git clone https://github.com/pistio/moimio.git
 cd moimio
 ```
 
@@ -511,7 +511,7 @@ No servidor: `sudo systemctl status cloudflared` mostra se o conector está roda
 O DNS pode ainda não ter se propagado. Espere 5 minutos e tente de novo. Ou o Caddy ainda não obteve o certificado: `sudo systemctl status caddy` mostra o que ele está fazendo. Os logs ficam em `journalctl -u caddy`.
 
 **Qualquer coisa mais estranha que isso.**
-Abra um [relatório de bug](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md). Inclua:
+Abra um [relatório de bug](https://github.com/pistio/moimio/issues/new?template=bug_report.md). Inclua:
 - O que você estava tentando fazer.
 - O que de fato apareceu (a mensagem de erro exata).
 - O que `docker compose logs --tail=50 backend` mostra.

@@ -95,4 +95,4 @@ Moving from the hosted service or another server? See [Moving a workspace to you
 
 From there, the [User Manual](../manual/README.md) walks through actually running an event: creating events, configuring registration, running the allocation engine, doing check-in, exporting rosters.
 
-If you hit problems during installation, the troubleshooting sections at the bottom of each guide cover the common failures. Anything weirder than that, [open a bug report](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md).
+If you hit problems during installation, the troubleshooting sections at the bottom of each guide cover the common failures. Anything weirder than that, [open a bug report](https://github.com/pistio/moimio/issues/new?template=bug_report.md).

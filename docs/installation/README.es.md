@@ -95,4 +95,4 @@ Dos cosas que conviene hacer pronto:
 
 A partir de ahí, el [Manual de usuario](../manual/README.es.md) explica cómo organizar un evento: crear eventos, preparar las inscripciones, ejecutar el motor de asignación, hacer el check-in y exportar listas.
 
-Si tienes problemas durante la instalación, las secciones de solución de problemas al final de cada guía cubren los fallos más comunes. Para cualquier cosa más rara, [abre un informe de error](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md).
+Si tienes problemas durante la instalación, las secciones de solución de problemas al final de cada guía cubren los fallos más comunes. Para cualquier cosa más rara, [abre un informe de error](https://github.com/pistio/moimio/issues/new?template=bug_report.md).
