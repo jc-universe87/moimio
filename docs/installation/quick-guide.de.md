@@ -31,7 +31,7 @@ Schlägt `docker compose version` fehl, hast du das alte eigenständige Compose.
 ## 1. Klonen und konfigurieren
 
 ```bash
-git clone https://github.com/jc-universe87/moimio.git
+git clone https://github.com/pistio/moimio.git
 cd moimio
 cp .env.example .env
 ```
@@ -197,7 +197,7 @@ Migrationen laufen automatisch beim Start des Backends – kein manueller Schrit
 
 ### Container-Images
 
-Diese Anleitung baut die Images aus dem Quellcode. Jede Version wird außerdem als `ghcr.io/jc-universe87/moimio-backend:<tag>` und `ghcr.io/jc-universe87/moimio-frontend:<tag>` veröffentlicht (zum Beispiel `v1.0.6`). Wenn du sie nutzt, leg immer einen festen Versions-Tag fest: `:latest` ist bei v1.0.6 eingefroren, bewegt sich nicht mehr und wird nicht unterstützt. `backend/deploy/production.yml` ist die Vorlage des gehosteten Dienstes, keine Compose-Datei zum Selbsthosten; nimm die `docker-compose.yml` im Stammverzeichnis.
+Diese Anleitung baut die Images aus dem Quellcode. Jede Version wird außerdem als `ghcr.io/pistio/moimio-backend:<tag>` und `ghcr.io/pistio/moimio-frontend:<tag>` veröffentlicht (zum Beispiel `v1.0.6`). Wenn du sie nutzt, leg immer einen festen Versions-Tag fest: `:latest` ist bei v1.0.6 eingefroren, bewegt sich nicht mehr und wird nicht unterstützt. `backend/deploy/production.yml` ist die Vorlage des gehosteten Dienstes, keine Compose-Datei zum Selbsthosten; nimm die `docker-compose.yml` im Stammverzeichnis.
 
 ---
 
@@ -301,7 +301,7 @@ Der Frontend-Container liefert die Seite aus und leitet `/api/*` an den Backend-
 `POSTGRES_PASSWORD` wurde geändert, nachdem das Datenbank-Volume zum ersten Mal angelegt wurde; Postgres behält das ursprüngliche. Trag das alte Passwort wieder in `.env` ein oder ändere es in der Datenbank (`docker compose exec db psql -U moimio -c "ALTER USER moimio PASSWORD '<new>'"`) und starte neu.
 
 **Alles andere.**
-Eröffne einen [Fehlerbericht](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md) mit den relevanten Logs (unkenntlich machen, was Teilnehmerdaten enthält).
+Eröffne einen [Fehlerbericht](https://github.com/pistio/moimio/issues/new?template=bug_report.md) mit den relevanten Logs (unkenntlich machen, was Teilnehmerdaten enthält).
 
 ---
 

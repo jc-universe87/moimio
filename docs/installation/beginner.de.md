@@ -220,7 +220,7 @@ Dieser Schritt ist gleich, egal ob du einen VPS nutzt oder selbst hostest. Das T
 ### 4.1 Den Code holen
 
 ```bash
-git clone https://github.com/jc-universe87/moimio.git
+git clone https://github.com/pistio/moimio.git
 cd moimio
 ```
 
@@ -513,7 +513,7 @@ Auf dem Server: `sudo systemctl status cloudflared` zeigt, ob der Connector läu
 Die DNS-Änderung hat sich vielleicht noch nicht verbreitet. Warte 5 Minuten und versuch es erneut. Oder Caddy hat das Zertifikat noch nicht geholt – `sudo systemctl status caddy` zeigt, was es gerade tut. Logs findest du in `journalctl -u caddy`.
 
 **Alles, was noch seltsamer ist.**
-Eröffne einen [Fehlerbericht](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md). Gib an:
+Eröffne einen [Fehlerbericht](https://github.com/pistio/moimio/issues/new?template=bug_report.md). Gib an:
 - Was du tun wolltest.
 - Was du tatsächlich gesehen hast (die genaue Fehlermeldung).
 - Was `docker compose logs --tail=50 backend` anzeigt.

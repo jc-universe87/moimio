@@ -31,7 +31,7 @@ If `docker compose version` fails, you have the legacy standalone Compose. Insta
 ## 1. Clone and configure
 
 ```bash
-git clone https://github.com/jc-universe87/moimio.git
+git clone https://github.com/pistio/moimio.git
 cd moimio
 cp .env.example .env
 ```
@@ -197,7 +197,7 @@ Migrations run automatically on backend startup — no manual `alembic upgrade h
 
 ### Container images
 
-This guide builds the images from source. Each release is also published as `ghcr.io/jc-universe87/moimio-backend:<tag>` and `ghcr.io/jc-universe87/moimio-frontend:<tag>` (for example `v1.0.6`). If you use them, always pin a version tag: `:latest` is frozen at v1.0.6, no longer moves, and is not supported. `backend/deploy/production.yml` is the hosted service's template, not a self-hosting compose file; use the root `docker-compose.yml`.
+This guide builds the images from source. Each release is also published as `ghcr.io/pistio/moimio-backend:<tag>` and `ghcr.io/pistio/moimio-frontend:<tag>` (for example `v1.0.6`). If you use them, always pin a version tag: `:latest` is frozen at v1.0.6, no longer moves, and is not supported. `backend/deploy/production.yml` is the hosted service's template, not a self-hosting compose file; use the root `docker-compose.yml`.
 
 ---
 
@@ -301,7 +301,7 @@ The frontend container serves the page and proxies `/api/*` to the backend conta
 `POSTGRES_PASSWORD` was changed after the database volume was first created; Postgres keeps the original. Put the old password back in `.env`, or change it inside the database (`docker compose exec db psql -U moimio -c "ALTER USER moimio PASSWORD '<new>'"`) and restart.
 
 **Anything else.**
-Open a [bug report](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md) with the relevant logs (mask any participant data first).
+Open a [bug report](https://github.com/pistio/moimio/issues/new?template=bug_report.md) with the relevant logs (mask any participant data first).
 
 ---
 

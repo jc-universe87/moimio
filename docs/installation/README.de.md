@@ -95,4 +95,4 @@ Du ziehst vom gehosteten Dienst oder von einem anderen Server um? Siehe [Moving 
 
 Danach erklärt das [Benutzerhandbuch](../manual/README.de.md), wie du tatsächlich ein Event durchführst: Events anlegen, die Anmeldung einrichten, die Zuweisungs-Engine starten, den Check-in machen, Listen exportieren.
 
-Wenn bei der Installation Probleme auftreten, decken die Abschnitte zur Fehlerbehebung am Ende jeder Anleitung die häufigsten Fehler ab. Für alles, was darüber hinausgeht, [eröffne einen Fehlerbericht](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md).
+Wenn bei der Installation Probleme auftreten, decken die Abschnitte zur Fehlerbehebung am Ende jeder Anleitung die häufigsten Fehler ab. Für alles, was darüber hinausgeht, [eröffne einen Fehlerbericht](https://github.com/pistio/moimio/issues/new?template=bug_report.md).

@@ -58,4 +58,4 @@
 - **[용어집(영문)](../glossary.md)**: Moimio 고유 용어(클러스터, 마크, 그룹 코드 등)의 정의.
 - `http://localhost:6121/docs`(또는 백엔드가 있는 주소)의 **자동 생성 API 문서**: API로 개발하는 개발자용.
 
-그래도 해결되지 않으면 [이슈를 등록하세요](https://github.com/jc-universe87/moimio/issues/new?template=feature_request.md). "설명서에 X가 없어요"도 훌륭한 기능 요청이며, 문서를 더 좋게 만드는 피드백입니다.
+그래도 해결되지 않으면 [이슈를 등록하세요](https://github.com/pistio/moimio/issues/new?template=feature_request.md). "설명서에 X가 없어요"도 훌륭한 기능 요청이며, 문서를 더 좋게 만드는 피드백입니다.

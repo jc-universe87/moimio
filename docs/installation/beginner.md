@@ -218,7 +218,7 @@ This is the same regardless of whether you went VPS or self-hosted. The terminal
 ### 4.1 Get the code
 
 ```bash
-git clone https://github.com/jc-universe87/moimio.git
+git clone https://github.com/pistio/moimio.git
 cd moimio
 ```
 
@@ -511,7 +511,7 @@ On the server: `sudo systemctl status cloudflared` shows whether the connector i
 DNS may not have propagated yet. Wait 5 minutes and retry. Or Caddy hasn't fetched the certificate — `sudo systemctl status caddy` shows what it's doing. Logs in `journalctl -u caddy`.
 
 **Anything weirder than that.**
-Open a [bug report](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md). Include:
+Open a [bug report](https://github.com/pistio/moimio/issues/new?template=bug_report.md). Include:
 - What you were trying to do.
 - What you actually saw (the exact error message).
 - What `docker compose logs --tail=50 backend` shows.

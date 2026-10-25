@@ -87,6 +87,13 @@ fixes found while bringing the manual up to date with the app.
   applies; raise it if many people register over one Wi-Fi at once.
 - **`VITE_API_URL` is gone** from `.env.example` and `docker-compose.yml`.
   Nothing read it. You can delete the line from your `.env`.
+- **The images have a new address: `ghcr.io/pistio/moimio-backend` and
+  `ghcr.io/pistio/moimio-frontend`.** The GitHub account behind Moimio is now
+  `pistio`, and the old `ghcr.io/jc-universe87/…` names no longer answer, for
+  any version. If you run the ready-made images, change the two `image:` lines
+  in your compose file (as in `backend/deploy/production.yml`) before you
+  upgrade. If you build from source, point your clone at
+  `https://github.com/pistio/moimio.git` with `git remote set-url origin`.
 - **One database change applies itself** on the first start of the new image
   (a "show only if" rule on each custom field). Nothing to run by hand; take
   your usual backup first, as with any upgrade.

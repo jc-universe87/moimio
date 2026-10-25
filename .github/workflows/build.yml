@@ -11,8 +11,8 @@ name: Build and publish container images
 # over convenience — locked during SaaS scoping discussions.
 #
 # Builds two images per run via matrix:
-#   - ghcr.io/jc-universe87/moimio-backend
-#   - ghcr.io/jc-universe87/moimio-frontend
+#   - ghcr.io/pistio/moimio-backend
+#   - ghcr.io/pistio/moimio-frontend
 
 on:
   push:
@@ -73,8 +73,8 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          # Image name pattern: ghcr.io/jc-universe87/moimio-<component>
-          # github.repository is "jc-universe87/moimio" → image becomes
+          # Image name pattern: ghcr.io/pistio/moimio-<component>
+          # github.repository is "pistio/moimio" → image becomes
           # "moimio-backend" / "moimio-frontend".
           images: ${{ env.REGISTRY }}/${{ env.REPO }}-${{ matrix.component.name }}
           # Tagging strategy:

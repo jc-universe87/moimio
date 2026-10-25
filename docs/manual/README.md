@@ -58,4 +58,4 @@ Three places to look:
 - **[Glossary](../glossary.md)** — definitions of Moimio-specific terms (cluster, mark, group code, etc.).
 - **The auto-generated API documentation** at `http://localhost:6121/docs` (or wherever your backend lives) — for developers building against the API.
 
-If none of those help, [open an issue](https://github.com/jc-universe87/moimio/issues/new?template=feature_request.md) — "the manual didn't cover X" is a perfectly valid feature request and the kind of feedback that makes the docs better.
+If none of those help, [open an issue](https://github.com/pistio/moimio/issues/new?template=feature_request.md) — "the manual didn't cover X" is a perfectly valid feature request and the kind of feedback that makes the docs better.
