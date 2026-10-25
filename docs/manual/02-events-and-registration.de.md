@@ -113,7 +113,7 @@ Hake bei einem Feld **Nur anzeigen, wenn…** an, damit es nur erscheint, wenn s
 
 Textvergleiche ignorieren Groß- und Kleinschreibung und überzählige Leerzeichen, „Deutschland“ passt also auch zu „ deutschland“. **Enthält** findet auch Wortteile: „Kirche“ passt zu „Kirchengemeinde“. Außer **ist leer** ist eine Bedingung erst erfüllt, wenn das Feld beantwortet ist.
 
-Mit **+ Bedingung hinzufügen** kommen weitere Bedingungen dazu. Dann wählst du **Anzeigen, wenn alle zutreffen** oder **Anzeigen, wenn mindestens eine zutrifft**. Beispiel: 12 bis 17 Jahre sind „Alter ist mindestens 12“ und „Alter ist unter 18“, und alle müssen zutreffen.
+Mit **+ Bedingung hinzufügen** kommen weitere Bedingungen dazu. Dann wählst du **Nur anzeigen, wenn alle Bedingungen erfüllt sind** oder **Anzeigen, wenn mindestens eine Bedingung erfüllt ist**. Beispiel: 12 bis 17 Jahre sind „Alter beträgt mindestens 12“ und „Alter liegt unter 18“, und alle müssen zutreffen.
 
 Ein ausgeblendetes Feld ist nie Pflicht, und eine Antwort, die eingetippt wurde, bevor das Feld wieder verschwand, wird nicht gespeichert. Bei einer Familienanmeldung wird jede weitere Person für sich geprüft: Eine 15-Jährige sieht den Hinweis für Minderjährige, ihr Vater nicht.
 
