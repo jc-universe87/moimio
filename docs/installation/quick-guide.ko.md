@@ -31,7 +31,7 @@ docker compose version    # → Docker Compose version v2.x.x
 ## 1. 내려받기와 설정
 
 ```bash
-git clone https://github.com/jc-universe87/moimio.git
+git clone https://github.com/pistio/moimio.git
 cd moimio
 cp .env.example .env
 ```
@@ -197,7 +197,7 @@ Dockerfile이 바뀌었을 때(새 의존성, 글꼴 설치 등)는 `--no-cache`
 
 ### 컨테이너 이미지
 
-이 가이드는 소스 코드로 이미지를 빌드합니다. 각 릴리스는 `ghcr.io/jc-universe87/moimio-backend:<tag>`와 `ghcr.io/jc-universe87/moimio-frontend:<tag>`(예: `v1.0.6`)로도 게시됩니다. 이 이미지를 쓴다면 항상 버전 태그를 고정하세요. `:latest`는 v1.0.6에 멈춰 있어 더 이상 갱신되지 않으며 지원되지 않습니다. `backend/deploy/production.yml`은 호스팅 서비스용 템플릿이지 직접 설치용 compose 파일이 아닙니다. 최상위의 `docker-compose.yml`을 쓰세요.
+이 가이드는 소스 코드로 이미지를 빌드합니다. 각 릴리스는 `ghcr.io/pistio/moimio-backend:<tag>`와 `ghcr.io/pistio/moimio-frontend:<tag>`(예: `v1.0.6`)로도 게시됩니다. 이 이미지를 쓴다면 항상 버전 태그를 고정하세요. `:latest`는 v1.0.6에 멈춰 있어 더 이상 갱신되지 않으며 지원되지 않습니다. `backend/deploy/production.yml`은 호스팅 서비스용 템플릿이지 직접 설치용 compose 파일이 아닙니다. 최상위의 `docker-compose.yml`을 쓰세요.
 
 ---
 
@@ -301,7 +301,7 @@ Alembic 마이그레이션이 실행되지 않았습니다. `docker compose logs
 데이터베이스 볼륨이 처음 만들어진 뒤에 `POSTGRES_PASSWORD`를 바꿨습니다. Postgres는 원래 비밀번호를 유지합니다. `.env`에 예전 비밀번호를 다시 넣거나, 데이터베이스 안에서 비밀번호를 바꾸고(`docker compose exec db psql -U moimio -c "ALTER USER moimio PASSWORD '<new>'"`) 다시 시작하세요.
 
 **그 밖의 문제.**
-관련 로그를 붙여 [버그를 신고하세요](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md)(참가자 데이터는 먼저 가려 주세요).
+관련 로그를 붙여 [버그를 신고하세요](https://github.com/pistio/moimio/issues/new?template=bug_report.md)(참가자 데이터는 먼저 가려 주세요).
 
 ---
 

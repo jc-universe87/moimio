@@ -155,7 +155,7 @@ Moimio를 사용하는 방법은 두 가지입니다. **두 방법 모두 같은
 [Docker](https://docs.docker.com/get-docker/)와 Docker Compose가 설치된 기기가 필요합니다.
 
 ```bash
-git clone https://github.com/jc-universe87/moimio.git
+git clone https://github.com/pistio/moimio.git
 cd moimio
 cp .env.example .env        # then change SECRET_KEY and POSTGRES_PASSWORD
 docker compose up -d --build
@@ -179,7 +179,7 @@ HTTPS, 이메일, 백업, 보안 강화는 [**빠른 설치 가이드**](docs/in
 ./upgrade.sh v1.0.6    # or move to a specific version (see CHANGELOG.md)
 ```
 
-**컨테이너 이미지.** 각 릴리스는 `ghcr.io/jc-universe87/moimio-backend:<version>`와 `ghcr.io/jc-universe87/moimio-frontend:<version>`(예: `v1.0.6`)으로 게시됩니다. 항상 버전을 고정하세요. `:latest` 태그는 v1.0.6에 멈춰 있어 더 이상 갱신되지 않으며 지원되지 않습니다.
+**컨테이너 이미지.** 각 릴리스는 `ghcr.io/pistio/moimio-backend:<version>`와 `ghcr.io/pistio/moimio-frontend:<version>`(예: `v1.0.6`)으로 게시됩니다. 항상 버전을 고정하세요. `:latest` 태그는 v1.0.6에 멈춰 있어 더 이상 갱신되지 않으며 지원되지 않습니다.
 
 </details>
 
@@ -225,13 +225,13 @@ HTTPS, 이메일, 백업, 보안 강화는 [**빠른 설치 가이드**](docs/in
 
 이슈, 아이디어, 풀 리퀘스트 모두 누구에게서든 환영합니다.
 
-- **버그를 발견했거나 아이디어가 있으신가요?** [이슈를 등록하세요](https://github.com/jc-universe87/moimio/issues/new/choose). 템플릿이 안내해 드립니다.
+- **버그를 발견했거나 아이디어가 있으신가요?** [이슈를 등록하세요](https://github.com/pistio/moimio/issues/new/choose). 템플릿이 안내해 드립니다.
 - **"설명서에 X에 대한 설명이 없어요"** 같은 이슈도 얼마든지 좋습니다.
 - **코드를 보내고 싶으신가요?** 먼저 [CONTRIBUTING.md](CONTRIBUTING.md)를 읽어 주세요.
 - **번역을 도와주실 수 있나요?** [TRANSLATION_RULE.md](TRANSLATION_RULE.md)를 참고하세요.
 
 이 프로젝트는 [행동 강령(영문)](CODE_OF_CONDUCT.md)을 따릅니다. 행동 강령 관련 문의: `contact@moimio.app`.
-보안 문제는 공개 이슈가 아니라 [비공개 취약점 신고](https://github.com/jc-universe87/moimio/security/advisories/new)를 이용해 주세요([SECURITY.md](SECURITY.md) 참고).
+보안 문제는 공개 이슈가 아니라 [비공개 취약점 신고](https://github.com/pistio/moimio/security/advisories/new)를 이용해 주세요([SECURITY.md](SECURITY.md) 참고).
 
 <details>
 <summary><b>기술 스택</b></summary>
@@ -255,7 +255,7 @@ HTTPS, 이메일, 백업, 보안 강화는 [**빠른 설치 가이드**](docs/in
 Moimio CE는 한 사람이 여가 시간에 만들고 관리하며, 영원히 무료입니다. 여러분의 팀이 스프레드시트와 씨름하던 주말을 아낄 수 있었다면 감사의 마음을 전해 주세요.
 
 <p>
-  <a href="https://github.com/sponsors/jc-universe87"><img src="https://img.shields.io/badge/GitHub%20Sponsors-♥-ea4aaa?logo=github" alt="GitHub Sponsors"></a>
+  <a href="https://github.com/sponsors/pistio"><img src="https://img.shields.io/badge/GitHub%20Sponsors-♥-ea4aaa?logo=github" alt="GitHub Sponsors"></a>
   <a href="https://ko-fi.com/pistio"><img src="https://img.shields.io/badge/Ko--fi-support-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
 </p>
 
@@ -263,7 +263,7 @@ Moimio CE는 한 사람이 여가 시간에 만들고 관리하며, 영원히 �
 
 ## 🔗 링크
 
-[호스팅 서비스](https://moimio.app) · [소스 코드](https://github.com/jc-universe87/moimio) · [이슈](https://github.com/jc-universe87/moimio/issues) · [변경 이력(영문)](CHANGELOG.md)
+[호스팅 서비스](https://moimio.app) · [소스 코드](https://github.com/pistio/moimio) · [이슈](https://github.com/pistio/moimio/issues) · [변경 이력(영문)](CHANGELOG.md)
 
 ## 📄 라이선스
 

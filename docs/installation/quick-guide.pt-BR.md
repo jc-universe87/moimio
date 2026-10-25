@@ -31,7 +31,7 @@ Se `docker compose version` falhar, você está com o Compose antigo e avulso. I
 ## 1. Clone e configure
 
 ```bash
-git clone https://github.com/jc-universe87/moimio.git
+git clone https://github.com/pistio/moimio.git
 cd moimio
 cp .env.example .env
 ```
@@ -197,7 +197,7 @@ O `deploy.sh`, na raiz do repositório, é outra ferramenta: ele substitui a ins
 
 ### Imagens de contêiner
 
-Este guia monta as imagens a partir do código-fonte. Cada versão também é publicada como `ghcr.io/jc-universe87/moimio-backend:<tag>` e `ghcr.io/jc-universe87/moimio-frontend:<tag>` (por exemplo, `v1.0.6`). Se você usá-las, sempre fixe uma tag de versão: `:latest` está congelada na v1.0.6, não é mais atualizada e não tem suporte. O `backend/deploy/production.yml` é o modelo do serviço hospedado, não um arquivo compose para hospedagem própria; use o `docker-compose.yml` da raiz.
+Este guia monta as imagens a partir do código-fonte. Cada versão também é publicada como `ghcr.io/pistio/moimio-backend:<tag>` e `ghcr.io/pistio/moimio-frontend:<tag>` (por exemplo, `v1.0.6`). Se você usá-las, sempre fixe uma tag de versão: `:latest` está congelada na v1.0.6, não é mais atualizada e não tem suporte. O `backend/deploy/production.yml` é o modelo do serviço hospedado, não um arquivo compose para hospedagem própria; use o `docker-compose.yml` da raiz.
 
 ---
 
@@ -301,7 +301,7 @@ O contêiner do frontend serve a página e repassa `/api/*` para o contêiner do
 A `POSTGRES_PASSWORD` foi alterada depois que o volume do banco de dados foi criado; o Postgres mantém a senha original. Coloque a senha antiga de volta no `.env` ou altere-a dentro do banco de dados (`docker compose exec db psql -U moimio -c "ALTER USER moimio PASSWORD '<new>'"`) e reinicie.
 
 **Qualquer outra coisa.**
-Abra um [relatório de bug](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md) com os logs relevantes (oculte antes qualquer dado de participante).
+Abra um [relatório de bug](https://github.com/pistio/moimio/issues/new?template=bug_report.md) com os logs relevantes (oculte antes qualquer dado de participante).
 
 ---
 

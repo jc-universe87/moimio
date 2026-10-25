@@ -198,15 +198,15 @@ The user manual itself is currently English-only; community translations are wel
 
 ### What if I find a bug?
 
-[Open a bug report](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md). The template asks for the information needed to reproduce.
+[Open a bug report](https://github.com/pistio/moimio/issues/new?template=bug_report.md). The template asks for the information needed to reproduce.
 
 ### What if I have a feature idea?
 
-[Open a feature request](https://github.com/jc-universe87/moimio/issues/new?template=feature_request.md). Even better: describe a real workflow that's hard or impossible today, and let the discussion shape the solution.
+[Open a feature request](https://github.com/pistio/moimio/issues/new?template=feature_request.md). Even better: describe a real workflow that's hard or impossible today, and let the discussion shape the solution.
 
 ### Can I get paid support?
 
-Not currently. Moimio is built and maintained by one person in spare time. If you're a church or organisation that depends on the product and wants prioritised support or feature development, [GitHub Sponsors](https://github.com/sponsors/jc-universe87) is a way to express that.
+Not currently. Moimio is built and maintained by one person in spare time. If you're a church or organisation that depends on the product and wants prioritised support or feature development, [GitHub Sponsors](https://github.com/sponsors/pistio) is a way to express that.
 
 ### Is there a community forum?
 

@@ -58,4 +58,4 @@ Trois endroits où chercher :
 - **[Glossaire](../glossary.md)** (en anglais) : définitions des termes propres à Moimio (cluster, marque, code de groupe, etc.).
 - **La documentation de l’API générée automatiquement** sur `http://localhost:6121/docs` (ou à l’adresse de votre backend) : pour les développeurs qui utilisent l’API.
 
-Si rien de tout cela ne vous aide, [ouvrez un ticket](https://github.com/jc-universe87/moimio/issues/new?template=feature_request.md) : « le manuel n’explique pas X » est une demande d’amélioration tout à fait valable, et c’est exactement le genre de retour qui fait progresser la documentation.
+Si rien de tout cela ne vous aide, [ouvrez un ticket](https://github.com/pistio/moimio/issues/new?template=feature_request.md) : « le manuel n’explique pas X » est une demande d’amélioration tout à fait valable, et c’est exactement le genre de retour qui fait progresser la documentation.

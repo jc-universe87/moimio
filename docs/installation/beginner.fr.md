@@ -218,7 +218,7 @@ Cette étape est la même, que vous ayez choisi un VPS ou l’auto-hébergement.
 ### 4.1 Récupérer le code
 
 ```bash
-git clone https://github.com/jc-universe87/moimio.git
+git clone https://github.com/pistio/moimio.git
 cd moimio
 ```
 
@@ -511,7 +511,7 @@ Sur le serveur : `sudo systemctl status cloudflared` indique si le connecteur t
 Le DNS ne s’est peut-être pas encore propagé. Attendez 5 minutes et réessayez. Ou bien Caddy n’a pas obtenu le certificat : `sudo systemctl status caddy` montre ce qu’il fait. Journaux dans `journalctl -u caddy`.
 
 **Tout ce qui sort de l’ordinaire.**
-Ouvrez un [rapport de bug](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md). Indiquez :
+Ouvrez un [rapport de bug](https://github.com/pistio/moimio/issues/new?template=bug_report.md). Indiquez :
 - Ce que vous essayiez de faire.
 - Ce que vous avez réellement vu (le message d’erreur exact).
 - Ce qu’affiche `docker compose logs --tail=50 backend`.

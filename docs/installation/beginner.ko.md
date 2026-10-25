@@ -218,7 +218,7 @@ VPS든 직접 호스팅이든 이 단계는 같습니다. 지금 쓰는 터미�
 ### 4.1 코드 내려받기
 
 ```bash
-git clone https://github.com/jc-universe87/moimio.git
+git clone https://github.com/pistio/moimio.git
 cd moimio
 ```
 
@@ -511,7 +511,7 @@ Moimio를 처음 시작한 뒤에 `.env`의 데이터베이스 비밀번호를 �
 DNS가 아직 퍼지지 않았을 수 있습니다. 5분 기다렸다가 다시 시도하세요. 또는 Caddy가 아직 인증서를 받지 못했을 수 있습니다. `sudo systemctl status caddy`로 진행 상황을 보세요. 로그는 `journalctl -u caddy`에 있습니다.
 
 **그보다 이상한 문제.**
-[버그를 신고하세요](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md). 다음을 포함해 주세요.
+[버그를 신고하세요](https://github.com/pistio/moimio/issues/new?template=bug_report.md). 다음을 포함해 주세요.
 - 하려던 일.
 - 실제로 본 것(정확한 오류 메시지).
 - `docker compose logs --tail=50 backend`의 출력.

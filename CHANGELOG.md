@@ -1583,8 +1583,8 @@ Container Registry. No runtime behaviour change.
 - `.github/workflows/build.yml` — GitHub Actions workflow that:
   - Builds both `backend` and `frontend` Docker images in parallel
     via matrix on every push to `main`
-  - Pushes to `ghcr.io/jc-universe87/moimio-backend` and
-    `ghcr.io/jc-universe87/moimio-frontend` with commit-SHA tags
+  - Pushes to `ghcr.io/pistio/moimio-backend` and
+    `ghcr.io/pistio/moimio-frontend` with commit-SHA tags
     (e.g. `sha-abc1234`)
   - Additionally tags with the version name (e.g. `v1.0.0j`) when a
     `v*` git tag is pushed

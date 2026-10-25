@@ -95,4 +95,4 @@ Moimio가 실행되면 브라우저에 자동으로 **초기 설정** 화면이 
 
 그다음에는 [사용 설명서](../manual/README.ko.md)가 실제 행사 운영을 안내합니다. 행사 만들기, 등록 설정, 배정 엔진 실행, 체크인, 명단 내보내기까지 다룹니다.
 
-설치 중 문제가 생기면 각 가이드 끝의 문제 해결 섹션에서 흔한 오류를 다룹니다. 그보다 이상한 문제라면 [버그를 신고하세요](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md).
+설치 중 문제가 생기면 각 가이드 끝의 문제 해결 섹션에서 흔한 오류를 다룹니다. 그보다 이상한 문제라면 [버그를 신고하세요](https://github.com/pistio/moimio/issues/new?template=bug_report.md).

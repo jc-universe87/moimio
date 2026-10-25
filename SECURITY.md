@@ -6,9 +6,9 @@ Thank you for helping keep Moimio CE and its users safe.
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-The preferred channel is **[GitHub's private vulnerability reporting](https://github.com/jc-universe87/moimio/security/advisories/new)**. This is a private, two-way conversation between you and the maintainers, hosted by GitHub. To submit a report:
+The preferred channel is **[GitHub's private vulnerability reporting](https://github.com/pistio/moimio/security/advisories/new)**. This is a private, two-way conversation between you and the maintainers, hosted by GitHub. To submit a report:
 
-1. Go to the [Security tab](https://github.com/jc-universe87/moimio/security) of the Moimio repository.
+1. Go to the [Security tab](https://github.com/pistio/moimio/security) of the Moimio repository.
 2. Click **Report a vulnerability**.
 3. Fill in the form with as much detail as you can.
 
@@ -48,7 +48,7 @@ We follow **coordinated disclosure**:
 - We work with you to understand and reproduce the issue.
 - We develop and test a fix.
 - We release the fix (typically as a patch version, e.g. `1.0.x`).
-- We publish a [GitHub Security Advisory](https://github.com/jc-universe87/moimio/security/advisories) crediting the reporter (unless you ask to remain anonymous).
+- We publish a [GitHub Security Advisory](https://github.com/pistio/moimio/security/advisories) crediting the reporter (unless you ask to remain anonymous).
 
 Please do not publicly disclose the issue until a fix has been released and the advisory is published. We aim to keep the embargo period as short as possible.
 

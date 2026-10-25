@@ -24,13 +24,13 @@ Moimio CE's code and documentation were substantially developed with [Claude Opu
 
 ## Reporting bugs
 
-Open a [bug report](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md). The template asks for the information we need: what happened, what you expected, how to reproduce, and the versions involved.
+Open a [bug report](https://github.com/pistio/moimio/issues/new?template=bug_report.md). The template asks for the information we need: what happened, what you expected, how to reproduce, and the versions involved.
 
-If you found a **security issue**, please do *not* open a public issue. Use [GitHub's private vulnerability reporting](https://github.com/jc-universe87/moimio/security/advisories/new) — see [SECURITY.md](SECURITY.md).
+If you found a **security issue**, please do *not* open a public issue. Use [GitHub's private vulnerability reporting](https://github.com/pistio/moimio/security/advisories/new) — see [SECURITY.md](SECURITY.md).
 
 ## Suggesting features
 
-Open a [feature request](https://github.com/jc-universe87/moimio/issues/new?template=feature_request.md). Describe the problem first, then your proposed solution. Tell us which kind of organiser this helps — the more concrete the use case, the easier it is to scope the work.
+Open a [feature request](https://github.com/pistio/moimio/issues/new?template=feature_request.md). Describe the problem first, then your proposed solution. Tell us which kind of organiser this helps — the more concrete the use case, the easier it is to scope the work.
 
 ## Sending pull requests
 
@@ -53,7 +53,7 @@ We'll review as time allows. Moimio CE is maintained by one person in spare time
 The fastest way to get a working dev environment:
 
 ```bash
-git clone https://github.com/jc-universe87/moimio.git
+git clone https://github.com/pistio/moimio.git
 cd moimio
 cp .env.example .env
 docker compose up -d --build

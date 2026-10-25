@@ -31,7 +31,7 @@ Si `docker compose version` échoue, vous avez l’ancien Compose autonome. Inst
 ## 1. Cloner et configurer
 
 ```bash
-git clone https://github.com/jc-universe87/moimio.git
+git clone https://github.com/pistio/moimio.git
 cd moimio
 cp .env.example .env
 ```
@@ -197,7 +197,7 @@ Les migrations s’exécutent automatiquement au démarrage du backend : aucune
 
 ### Images de conteneur
 
-Ce guide construit les images à partir des sources. Chaque version est aussi publiée sous `ghcr.io/jc-universe87/moimio-backend:<tag>` et `ghcr.io/jc-universe87/moimio-frontend:<tag>` (par exemple `v1.0.6`). Si vous les utilisez, fixez toujours un tag de version : `:latest` est figé sur v1.0.6, n’évolue plus et n’est pas pris en charge. `backend/deploy/production.yml` est le modèle du service hébergé, pas un fichier compose pour l’auto-hébergement ; utilisez le `docker-compose.yml` à la racine.
+Ce guide construit les images à partir des sources. Chaque version est aussi publiée sous `ghcr.io/pistio/moimio-backend:<tag>` et `ghcr.io/pistio/moimio-frontend:<tag>` (par exemple `v1.0.6`). Si vous les utilisez, fixez toujours un tag de version : `:latest` est figé sur v1.0.6, n’évolue plus et n’est pas pris en charge. `backend/deploy/production.yml` est le modèle du service hébergé, pas un fichier compose pour l’auto-hébergement ; utilisez le `docker-compose.yml` à la racine.
 
 ---
 
@@ -301,7 +301,7 @@ Le conteneur frontend sert la page et relaie `/api/*` vers le conteneur backend.
 `POSTGRES_PASSWORD` a été modifié après la création initiale du volume de la base de données ; Postgres conserve le mot de passe d’origine. Remettez l’ancien mot de passe dans `.env`, ou changez-le dans la base de données (`docker compose exec db psql -U moimio -c "ALTER USER moimio PASSWORD '<new>'"`) et redémarrez.
 
 **Tout autre problème.**
-Ouvrez un [rapport de bug](https://github.com/jc-universe87/moimio/issues/new?template=bug_report.md) avec les journaux pertinents (en masquant d’abord toute donnée de participant).
+Ouvrez un [rapport de bug](https://github.com/pistio/moimio/issues/new?template=bug_report.md) avec les journaux pertinents (en masquant d’abord toute donnée de participant).
 
 ---
 
